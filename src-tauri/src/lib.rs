@@ -146,6 +146,45 @@ struct AddWorkspacePayload {
     path: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFilesPayload {
+    workspace_path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFileContentPayload {
+    workspace_path: String,
+    file_path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveWorkspaceFilePayload {
+    workspace_path: String,
+    file_path: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFileEntry {
+    id: String,
+    name: String,
+    path: String,
+    kind: String,
+    has_children: bool,
+    children: Vec<WorkspaceFileEntry>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFileContent {
+    path: String,
+    content: String,
+}
+
 #[tauri::command]
 fn list_workspaces(app: AppHandle) -> Result<Vec<WorkspaceSummary>, String> {
     let mut roots = vec![];
@@ -306,6 +345,39 @@ fn get_git_status(payload: GitStatusPayload) -> Result<GitStatusResponse, String
         ahead,
         changed_files,
     })
+}
+
+#[tauri::command]
+fn list_workspace_files(payload: WorkspaceFilesPayload) -> Result<Vec<WorkspaceFileEntry>, String> {
+    let workspace_path = PathBuf::from(&payload.workspace_path);
+    if !workspace_path.is_dir() {
+        return Err("workspace path does not exist".to_string());
+    }
+
+    read_workspace_tree(&workspace_path, &workspace_path, 0)
+}
+
+#[tauri::command]
+fn read_workspace_file(payload: WorkspaceFileContentPayload) -> Result<WorkspaceFileContent, String> {
+    let workspace_path = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_child(&workspace_path, &payload.file_path)?;
+
+    let content = fs::read_to_string(&file_path)
+        .map_err(|error| format!("failed to read file {}: {error}", file_path.display()))?;
+
+    Ok(WorkspaceFileContent {
+        path: payload.file_path,
+        content,
+    })
+}
+
+#[tauri::command]
+fn save_workspace_file(payload: SaveWorkspaceFilePayload) -> Result<(), String> {
+    let workspace_path = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_child(&workspace_path, &payload.file_path)?;
+
+    fs::write(&file_path, payload.content)
+        .map_err(|error| format!("failed to save file {}: {error}", file_path.display()))
 }
 
 #[tauri::command]
@@ -741,6 +813,93 @@ fn write_workspace_store(app: &AppHandle, store: &WorkspaceStore) -> Result<(), 
         .map_err(|error| format!("failed to write workspace store: {error}"))
 }
 
+fn read_workspace_tree(
+    root: &Path,
+    current: &Path,
+    depth: usize,
+) -> Result<Vec<WorkspaceFileEntry>, String> {
+    if depth > 4 {
+        return Ok(vec![]);
+    }
+
+    let entries = fs::read_dir(current)
+        .map_err(|error| format!("failed to read {}: {error}", current.display()))?;
+    let mut results = vec![];
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+
+        if should_skip_file_entry(name) {
+            continue;
+        }
+
+        let relative_path = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .display()
+            .to_string();
+
+        if path.is_dir() {
+            let should_lazy_load = should_lazy_load_dir(name);
+            let children = if should_lazy_load {
+                vec![]
+            } else {
+                read_workspace_tree(root, &path, depth + 1)?
+            };
+            results.push(WorkspaceFileEntry {
+                id: relative_path.replace('/', "-"),
+                name: name.to_string(),
+                path: relative_path,
+                kind: "directory".to_string(),
+                has_children: should_lazy_load || !children.is_empty(),
+                children,
+            });
+        } else {
+            results.push(WorkspaceFileEntry {
+                id: relative_path.replace('/', "-"),
+                name: name.to_string(),
+                path: relative_path,
+                kind: "file".to_string(),
+                has_children: false,
+                children: vec![],
+            });
+        }
+    }
+
+    results.sort_by(|left, right| match (left.kind.as_str(), right.kind.as_str()) {
+        ("directory", "file") => std::cmp::Ordering::Less,
+        ("file", "directory") => std::cmp::Ordering::Greater,
+        _ => left.name.cmp(&right.name),
+    });
+
+    Ok(results)
+}
+
+fn should_skip_file_entry(name: &str) -> bool {
+    matches!(name, ".DS_Store" | ".idea" | ".vscode")
+}
+
+fn safe_workspace_child(workspace_path: &Path, relative_path: &str) -> Result<PathBuf, String> {
+    let canonical_workspace = fs::canonicalize(workspace_path)
+        .map_err(|error| format!("invalid workspace path: {error}"))?;
+    let candidate = canonical_workspace.join(relative_path);
+    let canonical_candidate = fs::canonicalize(&candidate)
+        .map_err(|error| format!("invalid file path {}: {error}", candidate.display()))?;
+
+    if !canonical_candidate.starts_with(&canonical_workspace) {
+        return Err("file path escapes workspace".to_string());
+    }
+
+    Ok(canonical_candidate)
+}
+
+fn should_lazy_load_dir(name: &str) -> bool {
+    matches!(name, ".git" | "node_modules" | "dist" | "target" | "gen")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -749,6 +908,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_workspaces,
             add_workspace,
+            list_workspace_files,
+            read_workspace_file,
+            save_workspace_file,
             get_git_status,
             commit_git_changes,
             push_git_changes,

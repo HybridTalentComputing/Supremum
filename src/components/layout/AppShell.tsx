@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
   getWorkspaceContext,
-  tabs,
   workspaceTasks,
   type WorkspaceTask
 } from "../../lib/mock-data/workbench";
@@ -10,20 +9,40 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { TopTabsBar } from "./TopTabsBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { ChangesPanel } from "../git/ChangesPanel";
+import { CodeEditorPanel } from "../editors/CodeEditorPanel";
 
 export function AppShell() {
   const [workspaces, setWorkspaces] = useState<WorkspaceTask[]>(workspaceTasks);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [activeTabId, setActiveTabId] = useState(
-    tabs.find((tab) => tab.active)?.id ?? tabs[0]?.id ?? ""
-  );
+  const [activeTabId, setActiveTabId] = useState("terminal");
+  const [openFileTabs, setOpenFileTabs] = useState<string[]>([]);
+  const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({});
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState(
     workspaceTasks.find((task) => task.selected)?.id ?? workspaceTasks[0]?.id ?? ""
   );
 
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === selectedTaskId) ?? workspaces[0];
+  const topTabs = useMemo(
+    () => [
+      {
+        id: "terminal",
+        label: "terminal",
+        icon: "•",
+        closable: false
+      },
+      ...openFileTabs.map((filePath) => ({
+        id: filePath,
+        label: filePath.split("/").pop() ?? filePath,
+        icon: "◧",
+        dirty: Boolean(dirtyFiles[filePath]),
+        closable: true
+      }))
+    ],
+    [dirtyFiles, openFileTabs]
+  );
 
   async function loadWorkspaces() {
     try {
@@ -51,6 +70,59 @@ export function AppShell() {
   useEffect(() => {
     void loadWorkspaces();
   }, []);
+
+  useEffect(() => {
+    setSelectedFilePath(null);
+    setOpenFileTabs([]);
+    setDirtyFiles({});
+    setActiveTabId("terminal");
+  }, [selectedTaskId]);
+
+  useEffect(() => {
+    if (activeTabId === "terminal") {
+      setSelectedFilePath(null);
+      return;
+    }
+
+    setSelectedFilePath(activeTabId);
+  }, [activeTabId]);
+
+  const handleSelectFile = useEffectEvent((filePath: string) => {
+    setOpenFileTabs((current) =>
+      current.includes(filePath) ? current : [...current, filePath]
+    );
+    setActiveTabId(filePath);
+    setSelectedFilePath(filePath);
+  });
+
+  const handleCloseTab = useEffectEvent((tabId: string) => {
+    if (tabId === "terminal") {
+      return;
+    }
+
+    setOpenFileTabs((current) => {
+      const remaining = current.filter((filePath) => filePath !== tabId);
+      if (activeTabId === tabId) {
+        const nextActive = remaining.length > 0 ? remaining[remaining.length - 1] : "terminal";
+        setActiveTabId(nextActive);
+        setSelectedFilePath(nextActive === "terminal" ? null : nextActive);
+      }
+      return remaining;
+    });
+
+    setDirtyFiles((current) => {
+      const next = { ...current };
+      delete next[tabId];
+      return next;
+    });
+  });
+
+  const handleDirtyChange = useEffectEvent((filePath: string, dirty: boolean) => {
+    setDirtyFiles((current) => ({
+      ...current,
+      [filePath]: dirty
+    }));
+  });
 
   async function handleAddWorkspace() {
     const path = window.prompt("Enter an absolute workspace path");
@@ -85,18 +157,33 @@ export function AppShell() {
         />
         <section className="app-main">
           <TopTabsBar
+            tabs={topTabs}
             activeTabId={activeTabId}
             onSelectTab={setActiveTabId}
+            onCloseTab={handleCloseTab}
           />
           {selectedWorkspace ? (
-            <TerminalPanel
-              activeTabId={activeTabId}
-              workspace={getWorkspaceContext(selectedWorkspace)}
-            />
+            selectedFilePath ? (
+              <CodeEditorPanel
+                workspace={getWorkspaceContext(selectedWorkspace)}
+                filePath={selectedFilePath}
+                onClose={() => handleCloseTab(selectedFilePath)}
+                onDirtyChange={handleDirtyChange}
+              />
+            ) : (
+              <TerminalPanel
+                activeTabId={activeTabId}
+                workspace={getWorkspaceContext(selectedWorkspace)}
+              />
+            )
           ) : null}
         </section>
         {selectedWorkspace ? (
-          <ChangesPanel workspace={getWorkspaceContext(selectedWorkspace)} />
+          <ChangesPanel
+            workspace={getWorkspaceContext(selectedWorkspace)}
+            activeFilePath={selectedFilePath}
+            onSelectFile={handleSelectFile}
+          />
         ) : null}
       </div>
     </main>

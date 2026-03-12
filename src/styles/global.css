@@ -355,10 +355,19 @@ button {
 .tab-item-label {
   font-size: 13px;
   font-weight: 500;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-item-close {
   color: var(--text-muted);
+}
+
+.tab-item-dirty {
+  color: #f6c661;
+  font-size: 10px;
 }
 
 .tabs-actions {
@@ -391,6 +400,13 @@ button {
 }
 
 .terminal-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-panel {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -458,6 +474,83 @@ button {
   background:
     linear-gradient(180deg, rgba(1, 7, 11, 0.3), transparent 12%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0));
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.editor-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editor-file-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.editor-file-path,
+.editor-message,
+.editor-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.editor-save-button {
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: rgba(15, 22, 33, 0.86);
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.editor-save-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.editor-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.codemirror-root {
+  height: 100%;
+}
+
+.codemirror-root .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+
+.codemirror-root .cm-scroller {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+}
+
+.codemirror-root .cm-content,
+.codemirror-root .cm-line {
+  color: #d7e3ee;
+  caret-color: #1fd8ff;
+}
+
+.codemirror-root .cm-cursor,
+.codemirror-root .cm-dropCursor {
+  border-left-color: #1fd8ff;
+}
+
+.codemirror-root .cm-activeLine {
+  background: rgba(18, 31, 46, 0.42);
 }
 
 .terminal-session {
@@ -581,6 +674,7 @@ button {
 .changes-toolbar,
 .changes-panel-header,
 .changes-workspace-path,
+.changes-search-shell,
 .changes-input-shell,
 .push-button,
 .changes-feedback,
@@ -681,6 +775,12 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.changes-search-shell {
+  display: block;
+  padding-top: 12px;
+  padding-bottom: 8px;
 }
 
 .changes-input-shell {
@@ -830,6 +930,14 @@ button {
   padding-bottom: 8px;
 }
 
+.changes-tree-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
 .changes-tree-main {
   display: flex;
   align-items: center;
@@ -856,6 +964,18 @@ button {
   background: rgba(12, 19, 29, 0.68);
 }
 
+.changes-tree-file-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.changes-tree-file-button.is-active {
+  background: rgba(20, 33, 48, 0.86);
+}
+
 .changes-file-status {
   display: inline-flex;
   align-items: center;
@@ -874,6 +994,44 @@ button {
 
 .changes-file-status-modified {
   color: #f1c85a;
+}
+
+.changes-file-glyph {
+  color: rgba(31, 216, 255, 0.88);
+  font-size: 11px;
+}
+
+.changes-file-glyph.is-typescript {
+  color: #40b7ff;
+}
+
+.changes-file-glyph.is-rust {
+  color: #e8843d;
+}
+
+.changes-file-glyph.is-json {
+  color: #f2c55c;
+}
+
+.changes-file-glyph.is-markdown {
+  color: #7aa6ff;
+}
+
+.changes-file-glyph.is-package {
+  color: #8fd14f;
+}
+
+.changes-file-glyph.is-dotfile {
+  color: #ff8f66;
+}
+
+.changes-folder-icon {
+  color: #b7e26c;
+  font-size: 12px;
+}
+
+.changes-folder-icon.is-open {
+  color: #7fd6ff;
 }
 
 .changes-file-name {
