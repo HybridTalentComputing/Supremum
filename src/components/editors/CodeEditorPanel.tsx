@@ -68,6 +68,8 @@ export function CodeEditorPanel({
   const currentWorkspacePathRef = useRef(workspace.path);
   const currentDocumentRef = useRef("");
   const isApplyingExternalChangeRef = useRef(false);
+  const isLoadingRef = useRef(true);
+  const isSavingRef = useRef(false);
   const languageCompartmentRef = useRef(new Compartment());
   const onDirtyChangeRef = useRef(onDirtyChange);
   const onSavedRef = useRef(onSaved);
@@ -79,11 +81,13 @@ export function CodeEditorPanel({
   currentWorkspacePathRef.current = workspace.path;
   onDirtyChangeRef.current = onDirtyChange;
   onSavedRef.current = onSaved;
+  isLoadingRef.current = isLoading;
+  isSavingRef.current = isSaving;
 
   async function saveCurrentFile() {
     const view = editorViewRef.current;
     const activeFilePath = currentFilePathRef.current;
-    if (!view || !activeFilePath || isLoading || isSaving) {
+    if (!view || !activeFilePath || isLoadingRef.current || isSavingRef.current) {
       return false;
     }
 
