@@ -790,6 +790,17 @@ button {
   margin-bottom: 12px;
 }
 
+.diff-loading-state {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: #050b11;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .diff-mode-button {
   border: 1px solid var(--border-soft);
   border-radius: 7px;

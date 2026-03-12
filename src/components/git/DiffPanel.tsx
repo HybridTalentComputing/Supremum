@@ -1,7 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
-import { PatchDiff } from "@pierre/diffs/react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { formatWorkspacePath, type WorkspaceContext } from "../../lib/mock-data/workbench";
+
+const LazyPatchDiff = lazy(async () => {
+  const module = await import("@pierre/diffs/react");
+  return { default: module.PatchDiff };
+});
 
 type DiffPanelProps = {
   workspace: WorkspaceContext;
@@ -125,18 +129,20 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
               Unified
             </button>
           </div>
-          <PatchDiff
-            patch={diffText}
-            className="pierre-diff-root"
-            options={{
-              diffStyle,
-              themeType: "dark",
-              overflow: "scroll",
-              diffIndicators: "bars",
-              lineDiffType: "word",
-              disableFileHeader: true
-            }}
-          />
+          <Suspense fallback={<div className="diff-loading-state">Loading diff viewer...</div>}>
+            <LazyPatchDiff
+              patch={diffText}
+              className="pierre-diff-root"
+              options={{
+                diffStyle,
+                themeType: "dark",
+                overflow: "scroll",
+                diffIndicators: "bars",
+                lineDiffType: "word",
+                disableFileHeader: true
+              }}
+            />
+          </Suspense>
         </div>
       )}
     </section>
