@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { PatchDiff } from "@pierre/diffs/react";
 import { formatWorkspacePath, type WorkspaceContext } from "../../lib/mock-data/workbench";
 
 type DiffPanelProps = {
@@ -19,6 +20,7 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
   const [isGitRepo, setIsGitRepo] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [diffStyle, setDiffStyle] = useState<"split" | "unified">("split");
 
   useEffect(() => {
     if (!filePath) {
@@ -100,9 +102,41 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
           <p className="editor-empty-title">Unable to load diff</p>
           <p className="editor-empty-copy">{errorMessage}</p>
         </div>
+      ) : !diffText ? (
+        <div className="editor-empty-state">
+          <p className="editor-empty-title">No diff available</p>
+          <p className="editor-empty-copy">This file currently has no visible patch in the working tree.</p>
+        </div>
       ) : (
         <div className="diff-surface">
-          <pre className="diff-code">{diffText || "No diff available for this file."}</pre>
+          <div className="diff-controls">
+            <button
+              type="button"
+              className={`diff-mode-button${diffStyle === "split" ? " is-active" : ""}`}
+              onClick={() => setDiffStyle("split")}
+            >
+              Split
+            </button>
+            <button
+              type="button"
+              className={`diff-mode-button${diffStyle === "unified" ? " is-active" : ""}`}
+              onClick={() => setDiffStyle("unified")}
+            >
+              Unified
+            </button>
+          </div>
+          <PatchDiff
+            patch={diffText}
+            className="pierre-diff-root"
+            options={{
+              diffStyle,
+              themeType: "dark",
+              overflow: "scroll",
+              diffIndicators: "bars",
+              lineDiffType: "word",
+              disableFileHeader: true
+            }}
+          />
         </div>
       )}
     </section>

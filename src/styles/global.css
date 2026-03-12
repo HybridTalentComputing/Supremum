@@ -780,18 +780,81 @@ button {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 18px;
+  padding: 16px 18px 18px;
   border-top: 1px solid var(--border-soft);
 }
 
-.diff-code {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+.diff-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.diff-mode-button {
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: rgba(10, 17, 25, 0.86);
+  color: var(--text-secondary);
+  padding: 6px 10px;
   font-size: 12px;
-  line-height: 1.65;
-  color: #d7e3ee;
+  cursor: pointer;
+}
+
+.diff-mode-button:hover {
+  background: rgba(15, 24, 35, 0.96);
+  color: var(--text-primary);
+}
+
+.diff-mode-button.is-active {
+  border-color: rgba(31, 216, 255, 0.25);
+  background: rgba(31, 216, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.pierre-diff-root {
+  display: block;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #050b11;
+  --diffs-font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  --diffs-gap-fallback: 10px;
+  --diffs-gap-inline: 10px;
+  --diffs-gap-block: 10px;
+  --diffs-bg: #050b11;
+  --diffs-fg: #d7e3ee;
+  --diffs-fg-number: rgba(179, 196, 215, 0.56);
+  --diffs-bg-context: rgba(8, 14, 22, 0.88);
+  --diffs-bg-hover: rgba(17, 28, 40, 0.92);
+  --diffs-bg-separator: rgba(11, 18, 27, 0.98);
+  --diffs-bg-buffer: rgba(13, 22, 32, 0.98);
+  --diffs-addition-base: #34f5a4;
+  --diffs-deletion-base: #ff5f73;
+  --diffs-modified-base: #1fd8ff;
+}
+
+.pierre-diff-root [data-diffs-header] {
+  border-bottom: 1px solid rgba(118, 148, 178, 0.08);
+  min-height: 42px;
+}
+
+.pierre-diff-root [data-code] {
+  max-height: calc(100vh - 290px);
+}
+
+.pierre-diff-root [data-code]::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pierre-diff-root [data-code]::-webkit-scrollbar-thumb {
+  background-color: rgba(112, 132, 153, 0.26);
+  border-radius: 8px;
+}
+
+.pierre-diff-root [data-line] {
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .terminal-line {
