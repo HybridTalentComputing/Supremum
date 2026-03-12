@@ -26,6 +26,8 @@ struct TerminalSession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     child: Arc<Mutex<Box<dyn portable_pty::Child + Send>>>,
+    buffer: Arc<Mutex<Vec<u8>>>,
+    output_seq: Arc<AtomicU64>,
 }
 
 #[derive(Serialize)]
@@ -74,12 +76,26 @@ struct TerminalClosePayload {
 struct TerminalEvent {
     session_id: String,
     data: String,
+    seq: u64,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TerminalCreated {
     session_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalSnapshotPayload {
+    session_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalSnapshot {
+    data: String,
+    seq: u64,
 }
 
 #[derive(Deserialize)]
@@ -603,6 +619,9 @@ fn create_terminal(
     let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut command = CommandBuilder::new(shell);
     command.cwd(payload.workspace_path);
+    command.env("TERM", "xterm-256color");
+    command.env("COLORTERM", "truecolor");
+    command.arg("-i");
 
     let child = pair
         .slave
@@ -619,11 +638,16 @@ fn create_terminal(
         .map_err(|error| format!("failed to create PTY writer: {error}"))?;
 
     let session_id = format!("term-{}", TERMINAL_ID.fetch_add(1, Ordering::Relaxed));
+    let session_buffer = Arc::new(Mutex::new(Vec::new()));
     let session = TerminalSession {
         writer: Arc::new(Mutex::new(writer)),
         master: Arc::new(Mutex::new(pair.master)),
         child: Arc::new(Mutex::new(child)),
+        buffer: Arc::clone(&session_buffer),
+        output_seq: Arc::new(AtomicU64::new(0)),
     };
+
+    let session_seq = Arc::clone(&session.output_seq);
 
     {
         let mut sessions = state
@@ -633,9 +657,39 @@ fn create_terminal(
         sessions.insert(session_id.clone(), session);
     }
 
-    spawn_reader_thread(app, session_id.clone(), reader);
+    spawn_reader_thread(
+        app,
+        session_id.clone(),
+        reader,
+        session_buffer,
+        session_seq,
+    );
 
     Ok(TerminalCreated { session_id })
+}
+
+#[tauri::command]
+fn read_terminal_snapshot(
+    payload: TerminalSnapshotPayload,
+    state: State<TerminalState>,
+) -> Result<TerminalSnapshot, String> {
+    let sessions = state
+        .sessions
+        .lock()
+        .map_err(|_| "failed to lock terminal state".to_string())?;
+    let session = sessions
+        .get(&payload.session_id)
+        .ok_or_else(|| "terminal session not found".to_string())?;
+
+    let buffer = session
+        .buffer
+        .lock()
+        .map_err(|_| "failed to lock terminal buffer".to_string())?;
+
+    Ok(TerminalSnapshot {
+        data: String::from_utf8_lossy(&buffer).to_string(),
+        seq: session.output_seq.load(Ordering::Relaxed),
+    })
 }
 
 #[tauri::command]
@@ -720,20 +774,36 @@ fn close_terminal(
     Ok(())
 }
 
-fn spawn_reader_thread(app: AppHandle, session_id: String, mut reader: Box<dyn Read + Send>) {
+fn spawn_reader_thread(
+    app: AppHandle,
+    session_id: String,
+    mut reader: Box<dyn Read + Send>,
+    snapshot_buffer: Arc<Mutex<Vec<u8>>>,
+    output_seq: Arc<AtomicU64>,
+) {
     thread::spawn(move || {
-        let mut buffer = [0u8; 4096];
+        let mut read_buffer = [0u8; 4096];
 
         loop {
-            match reader.read(&mut buffer) {
+            match reader.read(&mut read_buffer) {
                 Ok(0) => break,
                 Ok(size) => {
-                    let data = String::from_utf8_lossy(&buffer[..size]).to_string();
+                    let seq = output_seq.fetch_add(1, Ordering::Relaxed) + 1;
+                    if let Ok(mut snapshot) = snapshot_buffer.lock() {
+                        snapshot.extend_from_slice(&read_buffer[..size]);
+                        if snapshot.len() > 128 * 1024 {
+                            let overflow = snapshot.len() - 128 * 1024;
+                            snapshot.drain(0..overflow);
+                        }
+                    }
+
+                    let data = String::from_utf8_lossy(&read_buffer[..size]).to_string();
                     let _ = app.emit(
                         "terminal-output",
                         TerminalEvent {
                             session_id: session_id.clone(),
                             data,
+                            seq,
                         },
                     );
                 }
@@ -992,6 +1062,7 @@ pub fn run() {
             push_git_changes,
             read_git_diff,
             create_terminal,
+            read_terminal_snapshot,
             write_terminal,
             resize_terminal,
             close_terminal
