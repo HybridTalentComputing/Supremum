@@ -9,8 +9,10 @@ import { useEffect, useMemo, useState } from "react";
 
 type ChangesPanelProps = {
   workspace: WorkspaceContext;
-  activeFilePath: string | null;
-  onSelectFile: (filePath: string) => void;
+  activeEditorFilePath: string | null;
+  activeDiffFilePath: string | null;
+  onSelectEditorFile: (filePath: string) => void;
+  onSelectDiffFile: (filePath: string) => void;
 };
 
 type GitStatusResponse = {
@@ -327,8 +329,10 @@ function FileTreeRow({
 
 export function ChangesPanel({
   workspace,
-  activeFilePath,
-  onSelectFile
+  activeEditorFilePath,
+  activeDiffFilePath,
+  onSelectEditorFile,
+  onSelectDiffFile
 }: ChangesPanelProps) {
   const [activeTab, setActiveTab] = useState<"changes" | "files">("changes");
   const [fileSearch, setFileSearch] = useState("");
@@ -584,8 +588,8 @@ export function ChangesPanel({
                 <TreeRow
                   key={node.id}
                   node={node}
-                  activeFilePath={activeFilePath}
-                  onSelectFile={onSelectFile}
+                  activeFilePath={activeDiffFilePath}
+                  onSelectFile={onSelectDiffFile}
                 />
               ))}
             </div>
@@ -649,8 +653,8 @@ export function ChangesPanel({
                   entry={entry}
                   expandedDirectories={expandedDirectories}
                   onToggleDirectory={toggleDirectory}
-                  activeFilePath={activeFilePath}
-                  onSelectFile={onSelectFile}
+                  activeFilePath={activeEditorFilePath}
+                  onSelectFile={onSelectEditorFile}
                 />
               ))}
           </div>

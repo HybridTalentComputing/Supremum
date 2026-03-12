@@ -13,7 +13,7 @@ import { formatWorkspacePath, type WorkspaceContext } from "../../lib/mock-data/
 
 type CodeEditorPanelProps = {
   workspace: WorkspaceContext;
-  filePath: string;
+  filePath: string | null;
   onClose: () => void;
   onDirtyChange: (filePath: string, dirty: boolean) => void;
 };
@@ -61,19 +61,33 @@ export function CodeEditorPanel({
   const [content, setContent] = useState("");
 
   useEffect(() => {
+    if (!filePath) {
+      setContent("");
+      setIsDirty(false);
+      setSaveMessage(null);
+      setIsLoading(false);
+    }
+  }, [filePath]);
+
+  useEffect(() => {
+    if (!filePath) {
+      return;
+    }
+
+    const currentFilePath = filePath;
     let isMounted = true;
 
     async function loadFile() {
       setIsLoading(true);
       setSaveMessage(null);
       setIsDirty(false);
-      onDirtyChange(filePath, false);
+      onDirtyChange(currentFilePath, false);
 
       try {
         const file = await invoke<WorkspaceFileContent>("read_workspace_file", {
           payload: {
             workspacePath: workspace.path,
-            filePath
+            filePath: currentFilePath
           }
         });
 
@@ -106,7 +120,7 @@ export function CodeEditorPanel({
   }, [filePath, workspace.path]);
 
   useEffect(() => {
-    if (!editorRootRef.current || isLoading) {
+    if (!editorRootRef.current || isLoading || !filePath) {
       return;
     }
 
@@ -195,12 +209,25 @@ export function CodeEditorPanel({
     };
   }, [content, filePath, isLoading, onDirtyChange, workspace.path]);
 
+  if (!filePath) {
+    return (
+      <section className="editor-panel">
+        <div className="editor-empty-state">
+          <p className="editor-empty-title">No file selected</p>
+          <p className="editor-empty-copy">Choose a file from the Files panel to open it in CodeMirror.</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="editor-panel">
-      <div className="sub-toolbar">
-        <div className="sub-toolbar-left">
-          <span className="sub-toolbar-dot" />
-          <span className="sub-toolbar-title">Editor</span>
+      <div className="editor-header">
+        <div className="editor-title-row">
+          <span className="editor-file-name">{filePath.split("/").pop()}</span>
+          <span className="editor-file-path">
+            {formatWorkspacePath(`${workspace.path}/${filePath}`)}
+          </span>
         </div>
         <div className="sub-toolbar-actions">
           <span className="editor-status">
@@ -244,16 +271,7 @@ export function CodeEditorPanel({
           <button type="button" onClick={onClose}>×</button>
         </div>
       </div>
-
-      <div className="editor-header">
-        <div className="editor-title-row">
-          <span className="editor-file-name">{filePath.split("/").pop()}</span>
-          <span className="editor-file-path">
-            {formatWorkspacePath(`${workspace.path}/${filePath}`)}
-          </span>
-        </div>
-        {saveMessage ? <div className="editor-message">{saveMessage}</div> : null}
-      </div>
+      {saveMessage ? <div className="editor-inline-message">{saveMessage}</div> : null}
 
       <div className="editor-surface">
         <div ref={editorRootRef} className="codemirror-root" />

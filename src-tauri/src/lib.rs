@@ -134,6 +134,21 @@ struct GitPushResponse {
     summary: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitDiffPayload {
+    workspace_path: String,
+    file_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitDiffResponse {
+    path: String,
+    diff: String,
+    is_git_repo: bool,
+}
+
 #[derive(Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceStore {
@@ -506,6 +521,67 @@ fn push_git_changes(payload: GitPushPayload) -> Result<GitPushResponse, String> 
         .to_string();
 
     Ok(GitPushResponse { summary })
+}
+
+#[tauri::command]
+fn read_git_diff(payload: GitDiffPayload) -> Result<GitDiffResponse, String> {
+    let workspace_path = PathBuf::from(&payload.workspace_path);
+    if !workspace_path.is_dir() {
+        return Err("workspace path does not exist".to_string());
+    }
+
+    let repo_check = Command::new("git")
+        .arg("-C")
+        .arg(&workspace_path)
+        .arg("rev-parse")
+        .arg("--is-inside-work-tree")
+        .output()
+        .map_err(|error| format!("failed to run git: {error}"))?;
+
+    if !repo_check.status.success() {
+        return Ok(GitDiffResponse {
+            path: payload.file_path,
+            diff: String::new(),
+            is_git_repo: false,
+        });
+    }
+
+    let file_path = safe_workspace_child(&workspace_path, &payload.file_path)?;
+    let status_output = Command::new("git")
+        .arg("-C")
+        .arg(&workspace_path)
+        .args(["status", "--porcelain", "--untracked-files=all", "--", payload.file_path.as_str()])
+        .output()
+        .map_err(|error| format!("failed to inspect git file status: {error}"))?;
+
+    let is_untracked = String::from_utf8_lossy(&status_output.stdout)
+        .lines()
+        .any(|line| line.starts_with("?? "));
+
+    let diff_output = if is_untracked {
+        Command::new("git")
+            .args(["diff", "--no-index", "--", "/dev/null"])
+            .arg(&file_path)
+            .output()
+            .map_err(|error| format!("failed to read git diff: {error}"))?
+    } else {
+        Command::new("git")
+            .arg("-C")
+            .arg(&workspace_path)
+            .args(["diff", "--", payload.file_path.as_str()])
+            .output()
+            .map_err(|error| format!("failed to read git diff: {error}"))?
+    };
+
+    if !diff_output.status.success() && !is_untracked {
+        return Err(stderr_or_default(&diff_output.stderr, "failed to read git diff"));
+    }
+
+    Ok(GitDiffResponse {
+        path: payload.file_path,
+        diff: String::from_utf8_lossy(&diff_output.stdout).to_string(),
+        is_git_repo: true,
+    })
 }
 
 #[tauri::command]
@@ -914,6 +990,7 @@ pub fn run() {
             get_git_status,
             commit_git_changes,
             push_git_changes,
+            read_git_diff,
             create_terminal,
             write_terminal,
             resize_terminal,

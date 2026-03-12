@@ -197,20 +197,6 @@ export function TerminalPanel({ activeTabId, workspace }: TerminalPanelProps) {
 
   return (
     <section className="terminal-panel">
-      <div className="sub-toolbar">
-        <div className="sub-toolbar-left">
-          <span className="sub-toolbar-dot" />
-          <span className="sub-toolbar-title">Terminal</span>
-        </div>
-        <div className="sub-toolbar-actions">
-          <span className={`terminal-status terminal-status-${terminalStatus}`}>
-            {terminalStatus}
-          </span>
-          <button type="button">□</button>
-          <button type="button">×</button>
-        </div>
-      </div>
-
       <div className="terminal-content">
         <div className="terminal-session">
           <div className="terminal-avatar">
@@ -222,6 +208,9 @@ export function TerminalPanel({ activeTabId, workspace }: TerminalPanelProps) {
                 {workspace.name} Code
               </span>
               <span className="terminal-session-version">v2.0.74</span>
+              <span className={`terminal-status terminal-status-${terminalStatus}`}>
+                {terminalStatus}
+              </span>
             </div>
             <div className="terminal-session-subtitle">
               <span>{activeTabId}</span>

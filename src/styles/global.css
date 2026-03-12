@@ -352,10 +352,27 @@ button {
   color: rgba(180, 198, 217, 0.62);
 }
 
+.tab-item-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
+}
+
 .tab-item-label {
   font-size: 13px;
   font-weight: 500;
   max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-item-meta {
+  max-width: 140px;
+  font-size: 10px;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -399,6 +416,85 @@ button {
   color: var(--text-primary);
 }
 
+.pane-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.pane-tabs-list {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.pane-tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pane-tab-item:hover:not(:disabled) {
+  background: rgba(11, 18, 27, 0.52);
+}
+
+.pane-tab-item.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+  background: linear-gradient(180deg, rgba(7, 14, 22, 0.58), rgba(4, 9, 15, 0.12));
+}
+
+.pane-tab-item.is-placeholder {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+.pane-tab-icon,
+.pane-tab-dirty {
+  font-size: 12px;
+}
+
+.pane-tab-dirty {
+  color: #f6c661;
+}
+
+.pane-tab-label {
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.pane-tab-close {
+  color: var(--text-muted);
+}
+
+.pane-tabs-meta,
+.pane-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pane-tabs-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .terminal-panel {
   display: flex;
   flex: 1;
@@ -407,6 +503,13 @@ button {
 }
 
 .editor-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diff-panel {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -469,7 +572,7 @@ button {
   flex: 1;
   flex-direction: column;
   gap: 22px;
-  padding: 42px 30px 24px;
+  padding: 30px 30px 24px;
   min-height: 0;
   background:
     linear-gradient(180deg, rgba(1, 7, 11, 0.3), transparent 12%),
@@ -505,6 +608,12 @@ button {
   color: var(--text-muted);
 }
 
+.editor-inline-message {
+  padding: 0 18px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .editor-save-button {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
@@ -523,6 +632,33 @@ button {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.editor-empty-state {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.editor-empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.editor-empty-copy {
+  max-width: 42ch;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .codemirror-root {
@@ -638,6 +774,24 @@ button {
 
 .xterm-root .xterm-viewport {
   overflow-y: auto !important;
+}
+
+.diff-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.diff-code {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #d7e3ee;
 }
 
 .terminal-line {

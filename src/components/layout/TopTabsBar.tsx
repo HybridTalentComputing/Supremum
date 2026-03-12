@@ -1,22 +1,26 @@
+type WorkspacePane = "terminal" | "editor" | "diff";
+
 type TopTabsBarProps = {
-  tabs: Array<{
-    id: string;
-    label: string;
-    icon: string;
-    dirty?: boolean;
-    closable?: boolean;
-  }>;
-  activeTabId: string;
-  onSelectTab: (tabId: string) => void;
-  onCloseTab: (tabId: string) => void;
+  activePane: WorkspacePane;
+  editorLabel: string;
+  diffLabel: string;
+  editorDirty: boolean;
+  onSelectPane: (pane: WorkspacePane) => void;
 };
 
 export function TopTabsBar({
-  tabs,
-  activeTabId,
-  onSelectTab,
-  onCloseTab
+  activePane,
+  editorLabel,
+  diffLabel,
+  editorDirty,
+  onSelectPane
 }: TopTabsBarProps) {
+  const tabs = [
+    { id: "terminal" as const, label: "terminal", icon: "•", meta: "session" },
+    { id: "editor" as const, label: "editor", icon: "◧", meta: editorLabel },
+    { id: "diff" as const, label: "diff", icon: "≋", meta: diffLabel }
+  ];
+
   return (
     <header className="top-tabs">
       <div className="brand-strip" data-tauri-drag-region>
@@ -25,28 +29,20 @@ export function TopTabsBar({
       <div className="tabs-row">
         <div className="tabs-list">
           {tabs.map((tab) => {
-            const active = tab.id === activeTabId;
+            const active = tab.id === activePane;
             return (
               <button
                 key={tab.id}
                 type="button"
                 className={`tab-item${active ? " is-active" : ""}`}
-                onClick={() => onSelectTab(tab.id)}
+                onClick={() => onSelectPane(tab.id)}
               >
                 <span className="tab-item-icon">{tab.icon}</span>
-                <span className="tab-item-label">{tab.label}</span>
-                {tab.dirty ? <span className="tab-item-dirty">●</span> : null}
-                {tab.closable ? (
-                  <span
-                    className="tab-item-close"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCloseTab(tab.id);
-                    }}
-                  >
-                    ×
-                  </span>
-                ) : null}
+                <span className="tab-item-copy">
+                  <span className="tab-item-label">{tab.label}</span>
+                  <span className="tab-item-meta">{tab.meta}</span>
+                </span>
+                {tab.id === "editor" && editorDirty ? <span className="tab-item-dirty">●</span> : null}
               </button>
             );
           })}

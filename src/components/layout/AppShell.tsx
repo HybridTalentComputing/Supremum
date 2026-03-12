@@ -7,42 +7,39 @@ import {
 } from "../../lib/mock-data/workbench";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { TopTabsBar } from "./TopTabsBar";
+import { PaneTabsBar } from "./PaneTabsBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { ChangesPanel } from "../git/ChangesPanel";
 import { CodeEditorPanel } from "../editors/CodeEditorPanel";
+import { DiffPanel } from "../git/DiffPanel";
+
+type WorkspacePane = "terminal" | "editor" | "diff";
 
 export function AppShell() {
   const [workspaces, setWorkspaces] = useState<WorkspaceTask[]>(workspaceTasks);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [activeTabId, setActiveTabId] = useState("terminal");
-  const [openFileTabs, setOpenFileTabs] = useState<string[]>([]);
+  const [activePane, setActivePane] = useState<WorkspacePane>("terminal");
   const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({});
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [editorTabs, setEditorTabs] = useState<string[]>([]);
+  const [diffTabs, setDiffTabs] = useState<string[]>([]);
+  const [selectedEditorFilePath, setSelectedEditorFilePath] = useState<string | null>(null);
+  const [selectedDiffFilePath, setSelectedDiffFilePath] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState(
     workspaceTasks.find((task) => task.selected)?.id ?? workspaceTasks[0]?.id ?? ""
   );
 
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === selectedTaskId) ?? workspaces[0];
-  const topTabs = useMemo(
-    () => [
-      {
-        id: "terminal",
-        label: "terminal",
-        icon: "•",
-        closable: false
-      },
-      ...openFileTabs.map((filePath) => ({
-        id: filePath,
-        label: filePath.split("/").pop() ?? filePath,
-        icon: "◧",
-        dirty: Boolean(dirtyFiles[filePath]),
-        closable: true
-      }))
-    ],
-    [dirtyFiles, openFileTabs]
+  const editorLabel = useMemo(
+    () => selectedEditorFilePath?.split("/").pop() ?? "no file",
+    [selectedEditorFilePath]
   );
+  const diffLabel = useMemo(
+    () => selectedDiffFilePath?.split("/").pop() ?? "no diff",
+    [selectedDiffFilePath]
+  );
+  const editorDirty = selectedEditorFilePath ? Boolean(dirtyFiles[selectedEditorFilePath]) : false;
 
   async function loadWorkspaces() {
     try {
@@ -72,48 +69,54 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    setSelectedFilePath(null);
-    setOpenFileTabs([]);
+    setSelectedEditorFilePath(null);
+    setSelectedDiffFilePath(null);
+    setEditorTabs([]);
+    setDiffTabs([]);
     setDirtyFiles({});
-    setActiveTabId("terminal");
+    setActivePane("terminal");
   }, [selectedTaskId]);
 
-  useEffect(() => {
-    if (activeTabId === "terminal") {
-      setSelectedFilePath(null);
-      return;
-    }
-
-    setSelectedFilePath(activeTabId);
-  }, [activeTabId]);
-
-  const handleSelectFile = useEffectEvent((filePath: string) => {
-    setOpenFileTabs((current) =>
-      current.includes(filePath) ? current : [...current, filePath]
-    );
-    setActiveTabId(filePath);
-    setSelectedFilePath(filePath);
+  const handleSelectEditorFile = useEffectEvent((filePath: string) => {
+    setEditorTabs((current) => (current.includes(filePath) ? current : [...current, filePath]));
+    setSelectedEditorFilePath(filePath);
+    setActivePane("editor");
   });
 
-  const handleCloseTab = useEffectEvent((tabId: string) => {
-    if (tabId === "terminal") {
-      return;
-    }
+  const handleSelectDiffFile = useEffectEvent((filePath: string) => {
+    setDiffTabs((current) => (current.includes(filePath) ? current : [...current, filePath]));
+    setSelectedDiffFilePath(filePath);
+    setActivePane("diff");
+  });
 
-    setOpenFileTabs((current) => {
-      const remaining = current.filter((filePath) => filePath !== tabId);
-      if (activeTabId === tabId) {
-        const nextActive = remaining.length > 0 ? remaining[remaining.length - 1] : "terminal";
-        setActiveTabId(nextActive);
-        setSelectedFilePath(nextActive === "terminal" ? null : nextActive);
+  const handleCloseEditorTab = useEffectEvent((filePath: string) => {
+    setEditorTabs((current) => {
+      const remaining = current.filter((item) => item !== filePath);
+      if (selectedEditorFilePath === filePath) {
+        setSelectedEditorFilePath(remaining.length > 0 ? remaining[remaining.length - 1] : null);
+      }
+      if (remaining.length === 0 && activePane === "editor") {
+        setActivePane("terminal");
       }
       return remaining;
     });
-
     setDirtyFiles((current) => {
       const next = { ...current };
-      delete next[tabId];
+      delete next[filePath];
       return next;
+    });
+  });
+
+  const handleCloseDiffTab = useEffectEvent((filePath: string) => {
+    setDiffTabs((current) => {
+      const remaining = current.filter((item) => item !== filePath);
+      if (selectedDiffFilePath === filePath) {
+        setSelectedDiffFilePath(remaining.length > 0 ? remaining[remaining.length - 1] : null);
+      }
+      if (remaining.length === 0 && activePane === "diff") {
+        setActivePane("terminal");
+      }
+      return remaining;
     });
   });
 
@@ -157,22 +160,105 @@ export function AppShell() {
         />
         <section className="app-main">
           <TopTabsBar
-            tabs={topTabs}
-            activeTabId={activeTabId}
-            onSelectTab={setActiveTabId}
-            onCloseTab={handleCloseTab}
+            activePane={activePane}
+            editorLabel={editorLabel}
+            diffLabel={diffLabel}
+            editorDirty={editorDirty}
+            onSelectPane={setActivePane}
+          />
+          <PaneTabsBar
+            title={
+              activePane === "terminal"
+                ? "Terminal"
+                : activePane === "editor"
+                  ? "Editor"
+                  : "Diff"
+            }
+            tabs={
+              activePane === "terminal"
+                ? [
+                    {
+                      id: selectedWorkspace?.id ?? "terminal",
+                      label: selectedWorkspace?.name ?? "terminal",
+                      icon: "•"
+                    }
+                  ]
+                : activePane === "editor"
+                  ? editorTabs.length > 0
+                    ? editorTabs.map((filePath) => ({
+                        id: filePath,
+                        label: filePath.split("/").pop() ?? filePath,
+                        icon: "◧",
+                        dirty: Boolean(dirtyFiles[filePath]),
+                        closable: true
+                      }))
+                    : [
+                        {
+                          id: "editor-empty",
+                          label: "No file open",
+                          icon: "◧",
+                          placeholder: true
+                        }
+                      ]
+                  : diffTabs.length > 0
+                    ? diffTabs.map((filePath) => ({
+                        id: filePath,
+                        label: filePath.split("/").pop() ?? filePath,
+                        icon: "≋",
+                        closable: true
+                      }))
+                    : [
+                        {
+                          id: "diff-empty",
+                          label: "No diff open",
+                          icon: "≋",
+                          placeholder: true
+                        }
+                      ]
+            }
+            activeTabId={
+              activePane === "terminal"
+                ? selectedWorkspace?.id ?? null
+                : activePane === "editor"
+                  ? selectedEditorFilePath
+                  : selectedDiffFilePath
+            }
+            onSelectTab={
+              activePane === "terminal"
+                ? undefined
+                : activePane === "editor"
+                  ? handleSelectEditorFile
+                  : handleSelectDiffFile
+            }
+            onCloseTab={
+              activePane === "terminal"
+                ? undefined
+                : activePane === "editor"
+                  ? handleCloseEditorTab
+                  : handleCloseDiffTab
+            }
           />
           {selectedWorkspace ? (
-            selectedFilePath ? (
+            activePane === "editor" ? (
               <CodeEditorPanel
                 workspace={getWorkspaceContext(selectedWorkspace)}
-                filePath={selectedFilePath}
-                onClose={() => handleCloseTab(selectedFilePath)}
+                filePath={selectedEditorFilePath}
+                onClose={() => {
+                  if (selectedEditorFilePath) {
+                    handleCloseEditorTab(selectedEditorFilePath);
+                  }
+                }}
                 onDirtyChange={handleDirtyChange}
+              />
+            ) : activePane === "diff" ? (
+              <DiffPanel
+                workspace={getWorkspaceContext(selectedWorkspace)}
+                filePath={selectedDiffFilePath}
+                onOpenEditor={handleSelectEditorFile}
               />
             ) : (
               <TerminalPanel
-                activeTabId={activeTabId}
+                activeTabId={activePane}
                 workspace={getWorkspaceContext(selectedWorkspace)}
               />
             )
@@ -181,8 +267,10 @@ export function AppShell() {
         {selectedWorkspace ? (
           <ChangesPanel
             workspace={getWorkspaceContext(selectedWorkspace)}
-            activeFilePath={selectedFilePath}
-            onSelectFile={handleSelectFile}
+            activeEditorFilePath={selectedEditorFilePath}
+            activeDiffFilePath={selectedDiffFilePath}
+            onSelectEditorFile={handleSelectEditorFile}
+            onSelectDiffFile={handleSelectDiffFile}
           />
         ) : null}
       </div>
