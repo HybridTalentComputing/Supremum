@@ -1,21 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { indentWithTab } from "@codemirror/commands";
-import { oneDark } from "@codemirror/theme-one-dark";
-import { javascript } from "@codemirror/lang-javascript";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { json } from "@codemirror/lang-json";
+import { javascript } from "@codemirror/lang-javascript";
 import { markdown } from "@codemirror/lang-markdown";
 import { rust } from "@codemirror/lang-rust";
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension
+} from "@codemirror/state";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+import { useEffect, useRef, useState } from "react";
 import { formatWorkspacePath, type WorkspaceContext } from "../../lib/mock-data/workbench";
 
 type CodeEditorPanelProps = {
   workspace: WorkspaceContext;
   filePath: string | null;
+  revealLine?: number;
+  revealNonce?: number;
   onClose: () => void;
   onDirtyChange: (filePath: string, dirty: boolean) => void;
+  onSaved?: (filePath: string) => void;
 };
 
 type WorkspaceFileContent = {
@@ -23,7 +30,7 @@ type WorkspaceFileContent = {
   content: string;
 };
 
-function extensionForFile(filePath: string) {
+function extensionForFile(filePath: string): Extension {
   if (filePath.endsWith(".ts")) {
     return javascript({ typescript: true });
   }
@@ -49,138 +56,93 @@ function extensionForFile(filePath: string) {
 export function CodeEditorPanel({
   workspace,
   filePath,
+  revealLine,
+  revealNonce,
   onClose,
-  onDirtyChange
+  onDirtyChange,
+  onSaved
 }: CodeEditorPanelProps) {
   const editorRootRef = useRef<HTMLDivElement | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const currentFilePathRef = useRef<string | null>(null);
+  const currentWorkspacePathRef = useRef(workspace.path);
+  const currentDocumentRef = useRef("");
+  const isApplyingExternalChangeRef = useRef(false);
+  const languageCompartmentRef = useRef(new Compartment());
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  const onSavedRef = useRef(onSaved);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
-  const [content, setContent] = useState("");
 
-  useEffect(() => {
-    if (!filePath) {
-      setContent("");
-      setIsDirty(false);
-      setSaveMessage(null);
-      setIsLoading(false);
+  currentWorkspacePathRef.current = workspace.path;
+  onDirtyChangeRef.current = onDirtyChange;
+  onSavedRef.current = onSaved;
+
+  async function saveCurrentFile() {
+    const view = editorViewRef.current;
+    const activeFilePath = currentFilePathRef.current;
+    if (!view || !activeFilePath || isLoading || isSaving) {
+      return false;
     }
-  }, [filePath]);
+
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const content = view.state.doc.toString();
+      await invoke("save_workspace_file", {
+        payload: {
+          workspacePath: currentWorkspacePathRef.current,
+          filePath: activeFilePath,
+          content
+        }
+      });
+      currentDocumentRef.current = content;
+      setIsDirty(false);
+      onDirtyChangeRef.current(activeFilePath, false);
+      setSaveMessage("Saved");
+      onSavedRef.current?.(activeFilePath);
+      return true;
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error ? error.message : "Unable to save file."
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   useEffect(() => {
-    if (!filePath) {
+    if (!editorRootRef.current || editorViewRef.current) {
       return;
     }
-
-    const currentFilePath = filePath;
-    let isMounted = true;
-
-    async function loadFile() {
-      setIsLoading(true);
-      setSaveMessage(null);
-      setIsDirty(false);
-      onDirtyChange(currentFilePath, false);
-
-      try {
-        const file = await invoke<WorkspaceFileContent>("read_workspace_file", {
-          payload: {
-            workspacePath: workspace.path,
-            filePath: currentFilePath
-          }
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setContent(file.content);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setContent("");
-        setSaveMessage(
-          error instanceof Error ? error.message : "Unable to load file."
-        );
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadFile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [filePath, workspace.path]);
-
-  useEffect(() => {
-    if (!editorRootRef.current || isLoading || !filePath) {
-      return;
-    }
-
-    editorViewRef.current?.destroy();
-
-    const saveFile = async () => {
-      const view = editorViewRef.current;
-      if (!view) {
-        return true;
-      }
-
-      setIsSaving(true);
-      setSaveMessage(null);
-
-      try {
-        await invoke("save_workspace_file", {
-          payload: {
-            workspacePath: workspace.path,
-            filePath,
-            content: view.state.doc.toString()
-          }
-        });
-        setIsDirty(false);
-        onDirtyChange(filePath, false);
-        setSaveMessage("Saved");
-        return true;
-      } catch (error) {
-        setSaveMessage(
-          error instanceof Error ? error.message : "Unable to save file."
-        );
-        return false;
-      } finally {
-        setIsSaving(false);
-      }
-    };
 
     const updateListener = EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        setIsDirty(true);
-        onDirtyChange(filePath, true);
+      if (!update.docChanged || isApplyingExternalChangeRef.current) {
+        return;
       }
-    });
 
-    const saveKeymap = keymap.of([
-      {
-        key: "Mod-s",
-        run: () => {
-          void saveFile();
-          return true;
-        }
-      },
-      indentWithTab
-    ]);
+      const activeFilePath = currentFilePathRef.current;
+      if (!activeFilePath) {
+        return;
+      }
+
+      const currentContent = update.state.doc.toString();
+      const dirty = currentContent !== currentDocumentRef.current;
+      setIsDirty(dirty);
+      onDirtyChangeRef.current(activeFilePath, dirty);
+    });
 
     const view = new EditorView({
       state: EditorState.create({
-        doc: content,
+        doc: "",
         extensions: [
           lineNumbers(),
           history(),
+          languageCompartmentRef.current.of([]),
           EditorState.readOnly.of(false),
           EditorView.editable.of(true),
           EditorView.contentAttributes.of({
@@ -189,12 +151,21 @@ export function CodeEditorPanel({
             autocapitalize: "off",
             "data-editor": "codemirror"
           }),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
-          saveKeymap,
+          keymap.of([
+            ...defaultKeymap,
+            ...historyKeymap,
+            indentWithTab,
+            {
+              key: "Mod-s",
+              run: () => {
+                void saveCurrentFile();
+                return true;
+              }
+            }
+          ]),
           EditorView.lineWrapping,
           oneDark,
-          updateListener,
-          extensionForFile(filePath)
+          updateListener
         ]
       }),
       parent: editorRootRef.current
@@ -207,7 +178,123 @@ export function CodeEditorPanel({
       view.destroy();
       editorViewRef.current = null;
     };
-  }, [content, filePath, isLoading, onDirtyChange, workspace.path]);
+  }, []);
+
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+
+    if (!filePath) {
+      currentFilePathRef.current = null;
+      currentDocumentRef.current = "";
+      isApplyingExternalChangeRef.current = true;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: ""
+        }
+      });
+      isApplyingExternalChangeRef.current = false;
+      setIsDirty(false);
+      setSaveMessage(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const activeFilePath = filePath;
+
+    async function loadFile() {
+      setIsLoading(true);
+      setSaveMessage(null);
+
+      try {
+        const file = await invoke<WorkspaceFileContent>("read_workspace_file", {
+          payload: {
+            workspacePath: workspace.path,
+            filePath: activeFilePath
+          }
+        });
+
+        if (!isMounted || !editorViewRef.current) {
+          return;
+        }
+
+        currentFilePathRef.current = activeFilePath;
+        currentDocumentRef.current = file.content;
+
+        isApplyingExternalChangeRef.current = true;
+        editorViewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: editorViewRef.current.state.doc.length,
+            insert: file.content
+          },
+          selection: EditorSelection.cursor(0),
+          effects: languageCompartmentRef.current.reconfigure(extensionForFile(activeFilePath))
+        });
+        isApplyingExternalChangeRef.current = false;
+
+        setIsDirty(false);
+        onDirtyChangeRef.current(activeFilePath, false);
+      } catch (error) {
+        if (!isMounted || !editorViewRef.current) {
+          return;
+        }
+
+        currentFilePathRef.current = activeFilePath;
+        currentDocumentRef.current = "";
+        isApplyingExternalChangeRef.current = true;
+        editorViewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: editorViewRef.current.state.doc.length,
+            insert: ""
+          },
+          selection: EditorSelection.cursor(0),
+          effects: languageCompartmentRef.current.reconfigure(extensionForFile(activeFilePath))
+        });
+        isApplyingExternalChangeRef.current = false;
+
+        setIsDirty(false);
+        onDirtyChangeRef.current(activeFilePath, false);
+        setSaveMessage(
+          error instanceof Error ? error.message : "Unable to load file."
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          editorViewRef.current?.focus();
+        }
+      }
+    }
+
+    void loadFile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filePath, workspace.path]);
+
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view || !filePath || !revealLine) {
+      return;
+    }
+
+    const lastLine = Math.max(view.state.doc.lines, 1);
+    const targetLineNumber = Math.min(Math.max(revealLine, 1), lastLine);
+    const targetLine = view.state.doc.line(targetLineNumber);
+
+    view.dispatch({
+      selection: EditorSelection.cursor(targetLine.from),
+      scrollIntoView: true
+    });
+    view.focus();
+  }, [filePath, revealLine, revealNonce]);
 
   if (!filePath) {
     return (
@@ -238,32 +325,7 @@ export function CodeEditorPanel({
             className="editor-save-button"
             disabled={isLoading || isSaving || !isDirty}
             onClick={() => {
-              void (async () => {
-                const view = editorViewRef.current;
-                if (!view) {
-                  return;
-                }
-                setIsSaving(true);
-                setSaveMessage(null);
-                try {
-                  await invoke("save_workspace_file", {
-                    payload: {
-                      workspacePath: workspace.path,
-                      filePath,
-                      content: view.state.doc.toString()
-                    }
-                  });
-                  setIsDirty(false);
-                  onDirtyChange(filePath, false);
-                  setSaveMessage("Saved");
-                } catch (error) {
-                  setSaveMessage(
-                    error instanceof Error ? error.message : "Unable to save file."
-                  );
-                } finally {
-                  setIsSaving(false);
-                }
-              })();
+              void saveCurrentFile();
             }}
           >
             Save

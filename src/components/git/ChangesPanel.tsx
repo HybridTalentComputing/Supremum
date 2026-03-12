@@ -13,6 +13,7 @@ type ChangesPanelProps = {
   activeDiffFilePath: string | null;
   onSelectEditorFile: (filePath: string) => void;
   onSelectDiffFile: (filePath: string) => void;
+  refreshNonce?: number;
 };
 
 type GitStatusResponse = {
@@ -25,6 +26,7 @@ type GitStatusResponse = {
 type GitCommitResponse = {
   summary: string;
 };
+
 
 type GitPushResponse = {
   summary: string;
@@ -332,7 +334,8 @@ export function ChangesPanel({
   activeEditorFilePath,
   activeDiffFilePath,
   onSelectEditorFile,
-  onSelectDiffFile
+  onSelectDiffFile,
+  refreshNonce
 }: ChangesPanelProps) {
   const [activeTab, setActiveTab] = useState<"changes" | "files">("changes");
   const [fileSearch, setFileSearch] = useState("");
@@ -381,7 +384,7 @@ export function ChangesPanel({
 
   useEffect(() => {
     void loadGitStatus();
-  }, [workspace.path]);
+  }, [refreshNonce, workspace.path]);
 
   useEffect(() => {
     async function loadWorkspaceFiles() {

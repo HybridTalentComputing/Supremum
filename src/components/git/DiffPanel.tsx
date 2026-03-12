@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { lazy, Suspense, useEffect, useState } from "react";
+import type { SelectedLineRange } from "@pierre/diffs";
 import { formatWorkspacePath, type WorkspaceContext } from "../../lib/mock-data/workbench";
 
 const LazyPatchDiff = lazy(async () => {
@@ -10,7 +11,8 @@ const LazyPatchDiff = lazy(async () => {
 type DiffPanelProps = {
   workspace: WorkspaceContext;
   filePath: string | null;
-  onOpenEditor: (filePath: string) => void;
+  onOpenEditor: (filePath: string, line?: number) => void;
+  refreshNonce?: number;
 };
 
 type GitDiffResponse = {
@@ -19,18 +21,32 @@ type GitDiffResponse = {
   isGitRepo: boolean;
 };
 
-export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps) {
+function getFirstChangedLine(diffText: string) {
+  const match = diffText.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/m);
+  if (!match) {
+    return undefined;
+  }
+
+  const line = Number.parseInt(match[1], 10);
+  return Number.isFinite(line) && line > 0 ? line : undefined;
+}
+
+export function DiffPanel({ workspace, filePath, onOpenEditor, refreshNonce }: DiffPanelProps) {
   const [diffText, setDiffText] = useState("");
   const [isGitRepo, setIsGitRepo] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">("split");
+  const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
+  const [selectedJumpLine, setSelectedJumpLine] = useState<number | null>(null);
 
   useEffect(() => {
     if (!filePath) {
       setDiffText("");
       setErrorMessage(null);
       setIsLoading(false);
+      setSelectedLines(null);
+      setSelectedJumpLine(null);
       return;
     }
 
@@ -54,12 +70,15 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
 
         setIsGitRepo(result.isGitRepo);
         setDiffText(result.diff);
+        setSelectedLines(null);
+        setSelectedJumpLine(null);
       } catch (error) {
         if (!isMounted) {
           return;
         }
 
         setDiffText("");
+        setSelectedJumpLine(null);
         setErrorMessage(error instanceof Error ? error.message : "Unable to load diff.");
       } finally {
         if (isMounted) {
@@ -73,7 +92,7 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
     return () => {
       isMounted = false;
     };
-  }, [filePath, workspace.path]);
+  }, [filePath, refreshNonce, workspace.path]);
 
   return (
     <section className="diff-panel">
@@ -89,8 +108,12 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
             <div className="editor-message">
               {isLoading ? "loading diff" : isGitRepo ? "git diff" : "not a git repository"}
             </div>
-            <button type="button" className="editor-save-button" onClick={() => onOpenEditor(filePath)}>
-              Open in Editor
+            <button
+              type="button"
+              className="editor-save-button"
+              onClick={() => onOpenEditor(filePath, selectedJumpLine ?? getFirstChangedLine(diffText))}
+            >
+              {selectedJumpLine ? `Open line ${selectedJumpLine}` : "Open in Editor"}
             </button>
           </div>
         </div>
@@ -133,13 +156,24 @@ export function DiffPanel({ workspace, filePath, onOpenEditor }: DiffPanelProps)
             <LazyPatchDiff
               patch={diffText}
               className="pierre-diff-root"
+              selectedLines={selectedLines}
               options={{
                 diffStyle,
                 themeType: "dark",
                 overflow: "scroll",
                 diffIndicators: "bars",
                 lineDiffType: "word",
-                disableFileHeader: true
+                disableFileHeader: true,
+                onLineClick: (props) => {
+                  const line = props.lineNumber;
+                  setSelectedLines({
+                    start: line,
+                    end: line,
+                    side: props.annotationSide,
+                    endSide: props.annotationSide
+                  });
+                  setSelectedJumpLine(line);
+                }
               }}
             />
           </Suspense>

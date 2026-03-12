@@ -25,6 +25,12 @@ export function AppShell() {
   const [diffTabs, setDiffTabs] = useState<string[]>([]);
   const [selectedEditorFilePath, setSelectedEditorFilePath] = useState<string | null>(null);
   const [selectedDiffFilePath, setSelectedDiffFilePath] = useState<string | null>(null);
+  const [editorRevealTarget, setEditorRevealTarget] = useState<{
+    filePath: string;
+    line: number;
+    nonce: number;
+  } | null>(null);
+  const [gitRefreshNonce, setGitRefreshNonce] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState(
     workspaceTasks.find((task) => task.selected)?.id ?? workspaceTasks[0]?.id ?? ""
   );
@@ -71,15 +77,24 @@ export function AppShell() {
   useEffect(() => {
     setSelectedEditorFilePath(null);
     setSelectedDiffFilePath(null);
+    setEditorRevealTarget(null);
+    setGitRefreshNonce(0);
     setEditorTabs([]);
     setDiffTabs([]);
     setDirtyFiles({});
     setActivePane("terminal");
   }, [selectedTaskId]);
 
-  const handleSelectEditorFile = useEffectEvent((filePath: string) => {
+  const handleSelectEditorFile = useEffectEvent((filePath: string, line?: number) => {
     setEditorTabs((current) => (current.includes(filePath) ? current : [...current, filePath]));
     setSelectedEditorFilePath(filePath);
+    if (line && line > 0) {
+      setEditorRevealTarget({
+        filePath,
+        line,
+        nonce: Date.now()
+      });
+    }
     setActivePane("editor");
   });
 
@@ -125,6 +140,10 @@ export function AppShell() {
       ...current,
       [filePath]: dirty
     }));
+  });
+
+  const handleEditorSaved = useEffectEvent(() => {
+    setGitRefreshNonce((current) => current + 1);
   });
 
   async function handleAddWorkspace() {
@@ -243,18 +262,30 @@ export function AppShell() {
               <CodeEditorPanel
                 workspace={getWorkspaceContext(selectedWorkspace)}
                 filePath={selectedEditorFilePath}
+                revealLine={
+                  editorRevealTarget?.filePath === selectedEditorFilePath
+                    ? editorRevealTarget.line
+                    : undefined
+                }
+                revealNonce={
+                  editorRevealTarget?.filePath === selectedEditorFilePath
+                    ? editorRevealTarget.nonce
+                    : undefined
+                }
                 onClose={() => {
                   if (selectedEditorFilePath) {
                     handleCloseEditorTab(selectedEditorFilePath);
                   }
                 }}
                 onDirtyChange={handleDirtyChange}
+                onSaved={handleEditorSaved}
               />
             ) : activePane === "diff" ? (
               <DiffPanel
                 workspace={getWorkspaceContext(selectedWorkspace)}
                 filePath={selectedDiffFilePath}
                 onOpenEditor={handleSelectEditorFile}
+                refreshNonce={gitRefreshNonce}
               />
             ) : (
               <TerminalPanel
@@ -271,6 +302,7 @@ export function AppShell() {
             activeDiffFilePath={selectedDiffFilePath}
             onSelectEditorFile={handleSelectEditorFile}
             onSelectDiffFile={handleSelectDiffFile}
+            refreshNonce={gitRefreshNonce}
           />
         ) : null}
       </div>
