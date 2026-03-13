@@ -3,19 +3,55 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     env,
+    sync::atomic::{AtomicU64, Ordering},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
 };
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{ipc::Channel, AppHandle, Manager, State};
 
 static TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
+
+/// UTF-8 split point to avoid corrupting multi-byte chars at read boundaries.
+fn utf8_split_point(bytes: &[u8]) -> usize {
+    let len = bytes.len();
+    if len == 0 {
+        return 0;
+    }
+    let check = std::cmp::min(3, len);
+    for back in 1..=check {
+        let i = len - back;
+        let b = bytes[i];
+        if b & 0x80 == 0 {
+            return len;
+        }
+        if b & 0xC0 != 0x80 {
+            let expected = if b & 0xF8 == 0xF0 {
+                4
+            } else if b & 0xF0 == 0xE0 {
+                3
+            } else {
+                2
+            };
+            let actual = len - i;
+            if actual >= expected {
+                return len;
+            }
+            return i;
+        }
+    }
+    len
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalOutput {
+    session_id: String,
+    data: String,
+}
 
 #[derive(Default)]
 struct TerminalState {
@@ -26,8 +62,6 @@ struct TerminalSession {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     child: Arc<Mutex<Box<dyn portable_pty::Child + Send>>>,
-    buffer: Arc<Mutex<Vec<u8>>>,
-    output_seq: Arc<AtomicU64>,
 }
 
 #[derive(Serialize)]
@@ -71,31 +105,10 @@ struct TerminalClosePayload {
     session_id: String,
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct TerminalEvent {
-    session_id: String,
-    data: String,
-    seq: u64,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TerminalCreated {
     session_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TerminalSnapshotPayload {
-    session_id: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TerminalSnapshot {
-    data: String,
-    seq: u64,
 }
 
 #[derive(Deserialize)]
@@ -602,9 +615,9 @@ fn read_git_diff(payload: GitDiffPayload) -> Result<GitDiffResponse, String> {
 
 #[tauri::command]
 fn create_terminal(
-    payload: CreateTerminalPayload,
-    app: AppHandle,
     state: State<TerminalState>,
+    payload: CreateTerminalPayload,
+    on_output: Channel<TerminalOutput>,
 ) -> Result<TerminalCreated, String> {
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -638,16 +651,11 @@ fn create_terminal(
         .map_err(|error| format!("failed to create PTY writer: {error}"))?;
 
     let session_id = format!("term-{}", TERMINAL_ID.fetch_add(1, Ordering::Relaxed));
-    let session_buffer = Arc::new(Mutex::new(Vec::new()));
     let session = TerminalSession {
         writer: Arc::new(Mutex::new(writer)),
         master: Arc::new(Mutex::new(pair.master)),
         child: Arc::new(Mutex::new(child)),
-        buffer: Arc::clone(&session_buffer),
-        output_seq: Arc::new(AtomicU64::new(0)),
     };
-
-    let session_seq = Arc::clone(&session.output_seq);
 
     {
         let mut sessions = state
@@ -657,39 +665,9 @@ fn create_terminal(
         sessions.insert(session_id.clone(), session);
     }
 
-    spawn_reader_thread(
-        app,
-        session_id.clone(),
-        reader,
-        session_buffer,
-        session_seq,
-    );
+    spawn_reader_thread(session_id.clone(), reader, on_output);
 
     Ok(TerminalCreated { session_id })
-}
-
-#[tauri::command]
-fn read_terminal_snapshot(
-    payload: TerminalSnapshotPayload,
-    state: State<TerminalState>,
-) -> Result<TerminalSnapshot, String> {
-    let sessions = state
-        .sessions
-        .lock()
-        .map_err(|_| "failed to lock terminal state".to_string())?;
-    let session = sessions
-        .get(&payload.session_id)
-        .ok_or_else(|| "terminal session not found".to_string())?;
-
-    let buffer = session
-        .buffer
-        .lock()
-        .map_err(|_| "failed to lock terminal buffer".to_string())?;
-
-    Ok(TerminalSnapshot {
-        data: String::from_utf8_lossy(&buffer).to_string(),
-        seq: session.output_seq.load(Ordering::Relaxed),
-    })
 }
 
 #[tauri::command]
@@ -775,40 +753,39 @@ fn close_terminal(
 }
 
 fn spawn_reader_thread(
-    app: AppHandle,
     session_id: String,
     mut reader: Box<dyn Read + Send>,
-    snapshot_buffer: Arc<Mutex<Vec<u8>>>,
-    output_seq: Arc<AtomicU64>,
+    on_output: Channel<TerminalOutput>,
 ) {
     thread::spawn(move || {
-        let mut read_buffer = [0u8; 4096];
+        let mut buf = [0u8; 4096];
+        let mut carry: Vec<u8> = Vec::new();
 
         loop {
-            match reader.read(&mut read_buffer) {
+            match reader.read(&mut buf) {
                 Ok(0) => break,
-                Ok(size) => {
-                    let seq = output_seq.fetch_add(1, Ordering::Relaxed) + 1;
-                    if let Ok(mut snapshot) = snapshot_buffer.lock() {
-                        snapshot.extend_from_slice(&read_buffer[..size]);
-                        if snapshot.len() > 128 * 1024 {
-                            let overflow = snapshot.len() - 128 * 1024;
-                            snapshot.drain(0..overflow);
-                        }
-                    }
-
-                    let data = String::from_utf8_lossy(&read_buffer[..size]).to_string();
-                    let _ = app.emit(
-                        "terminal-output",
-                        TerminalEvent {
+                Ok(n) => {
+                    carry.extend_from_slice(&buf[..n]);
+                    let split = utf8_split_point(&carry);
+                    if split > 0 {
+                        let data = String::from_utf8_lossy(&carry[..split]).to_string();
+                        let _ = on_output.send(TerminalOutput {
                             session_id: session_id.clone(),
                             data,
-                            seq,
-                        },
-                    );
+                        });
+                    }
+                    carry.drain(..split);
                 }
                 Err(_) => break,
             }
+        }
+
+        if !carry.is_empty() {
+            let data = String::from_utf8_lossy(&carry).to_string();
+            let _ = on_output.send(TerminalOutput {
+                session_id: session_id.clone(),
+                data,
+            });
         }
     });
 }
@@ -1062,7 +1039,6 @@ pub fn run() {
             push_git_changes,
             read_git_diff,
             create_terminal,
-            read_terminal_snapshot,
             write_terminal,
             resize_terminal,
             close_terminal
