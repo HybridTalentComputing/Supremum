@@ -361,6 +361,11 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     return node?.data ?? null;
   }, []);
 
+  // Get container element for drag boundary detection
+  const getContainerElement = useCallback((): HTMLElement | null => {
+    return containerRef.current;
+  }, []);
+
   // ─── Custom drag-drop handler (separate from react-arborist's onMove) ───────
 
   const handleCustomDragMove = useCallback(async ({
@@ -396,6 +401,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     getVisibleNodeIds,
     getNodeElement,
     getNodeData,
+    getContainerElement,
     rowHeight: 24,
   });
 

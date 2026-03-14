@@ -335,6 +335,14 @@ body {
 .file-tree-row[data-dragging="true"] {
   opacity: 0.4;
 }
+
+/* 禁用拖动时的文本选择 */
+body.file-tree-dragging,
+body.file-tree-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .file-tree-drag-preview {
   transform: translateX(20px);
 }

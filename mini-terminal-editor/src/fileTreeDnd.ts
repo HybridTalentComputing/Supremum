@@ -40,6 +40,7 @@ interface FileTreeDndOptions {
   getVisibleNodeIds: () => string[];
   getNodeElement: (id: string) => HTMLElement | null;
   getNodeData: (id: string) => FileNode | null;
+  getContainerElement: () => HTMLElement | null;
   rowHeight: number;
 }
 
@@ -48,6 +49,7 @@ export function useFileTreeDnd({
   getVisibleNodeIds,
   getNodeElement,
   getNodeData,
+  getContainerElement,
   rowHeight,
 }: FileTreeDndOptions) {
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -57,6 +59,8 @@ export function useFileTreeDnd({
   const startDrag = useCallback(
     (dragIds: string[], clientY: number) => {
       dragIdsRef.current = new Set(dragIds);
+      // 禁用文本选择，防止拖动时选中文字
+      document.body.classList.add("file-tree-dragging");
       setDragState({
         dragIds,
         startY: clientY,
@@ -76,12 +80,14 @@ export function useFileTreeDnd({
 
       // 计算放置目标
       const visibleIds = getVisibleNodeIds();
+      const container = getContainerElement();
       const dropTarget = computeDropTarget(
         clientY,
         visibleIds,
         getNodeElement,
         getNodeData,
-        rowHeight
+        rowHeight,
+        container
       );
 
       setDragState((prev) =>
@@ -96,7 +102,7 @@ export function useFileTreeDnd({
           : null
       );
     },
-    [dragState, getVisibleNodeIds, getNodeElement, getNodeData, rowHeight]
+    [dragState, getVisibleNodeIds, getNodeElement, getNodeData, getContainerElement, rowHeight]
   );
 
   // 结束拖拽
@@ -118,12 +124,16 @@ export function useFileTreeDnd({
       }
     }
 
+    // 恢复文本选择
+    document.body.classList.remove("file-tree-dragging");
     setDragState(null);
     dragIdsRef.current.clear();
   }, [dragState, onMove]);
 
   // 取消拖拽
   const cancelDrag = useCallback(() => {
+    // 恢复文本选择
+    document.body.classList.remove("file-tree-dragging");
     setDragState(null);
     dragIdsRef.current.clear();
   }, []);
@@ -176,8 +186,19 @@ function computeDropTarget(
   visibleIds: string[],
   getNodeElement: (id: string) => HTMLElement | null,
   getNodeData: (id: string) => FileNode | null,
-  rowHeight: number
+  rowHeight: number,
+  container: HTMLElement | null
 ): DropTarget {
+  // 检查鼠标是否在容器边界内（如果容器存在）
+  let isBelowContainer = false;
+  if (container) {
+    const containerRect = container.getBoundingClientRect();
+    // 如果鼠标在容器底部下方，标记为在容器下方
+    if (clientY > containerRect.bottom) {
+      isBelowContainer = true;
+    }
+  }
+
   // 遍历可见节点，找到鼠标位置对应的行
   for (let i = 0; i < visibleIds.length; i++) {
     const id = visibleIds[i];
@@ -215,9 +236,16 @@ function computeDropTarget(
     }
   }
 
-  // 鼠标在所有节点下方 → 揾取到最后一个节点的父节点
+  // 鼠标在所有节点下方或在容器下方 → 揾取到最后一个可见节点的父节点
   if (visibleIds.length > 0) {
     const lastId = visibleIds[visibleIds.length - 1];
+    const lastNodeData = getNodeData(lastId);
+    // 如果最后一个节点是文件夹，默认放入文件夹内；否则作为兄弟节点
+    if (lastNodeData?.isDir && !isBelowContainer) {
+      // 如果是文件夹且鼠标在容器内，放入文件夹内
+      return { id: lastId, index: 0, isFolder: true };
+    }
+    // 否则作为兄弟节点，放在最后一个节点之后
     return { id: getParentId(lastId), index: visibleIds.length, isFolder: false };
   }
 
