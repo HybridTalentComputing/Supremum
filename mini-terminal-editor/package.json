@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "generate:icons": "tsx scripts/generate-file-icons.ts",
+    "predev": "npm run generate:icons",
+    "prebuild": "npm run generate:icons",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -46,6 +49,8 @@
     "@types/react-dom": "^19.0.5",
     "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^5.0.4",
+    "material-icon-theme": "^5.32.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.2",
     "vite": "^7.1.7"
   }

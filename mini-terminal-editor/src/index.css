@@ -363,7 +363,14 @@ body.file-tree-dragging * {
 }
 .file-tree-icon {
   flex-shrink: 0;
-  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-tree-icon-img {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 .file-tree-icon-svg {
   stroke-width: 1.6;

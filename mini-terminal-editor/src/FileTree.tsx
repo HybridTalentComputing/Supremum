@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "./fileTreeTypes";
-import { getFileIcon } from "./fileTreeTypes";
+import { getFileIconUrl } from "./fileTreeTypes";
 import { useTreeData } from "./fileTreeUtils";
 import {
   invokeReadFile,
@@ -159,18 +159,52 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
   );
 }
 
+// ─── File Icon Component (JetBrains-style SVG icons) ───────────────────────
+
+function FileIcon({ fileName, isOpen }: { fileName: string; isOpen?: boolean }) {
+  const iconUrl = getFileIconUrl(fileName, false, isOpen);
+
+  if (!iconUrl) {
+    // Show placeholder while loading
+    return <div className="size-3.5" style={{ width: 14, height: 14 }} />;
+  }
+
+  return (
+    <img
+      src={iconUrl}
+      alt=""
+      className="size-3.5 file-tree-icon-img"
+      draggable={false}
+      style={{ width: 14, height: 14 }}
+    />
+  );
+}
+
+function FolderIcon({ folderName, isOpen }: { folderName: string; isOpen: boolean }) {
+  const iconUrl = getFileIconUrl(folderName, true, isOpen);
+
+  if (!iconUrl) {
+    // Show placeholder while loading
+    return <div className="size-3.5" style={{ width: 14, height: 14 }} />;
+  }
+
+  return (
+    <img
+      src={iconUrl}
+      alt=""
+      className="size-3.5 file-tree-icon-img"
+      draggable={false}
+      style={{ width: 14, height: 14 }}
+    />
+  );
+}
+
 // ─── Node renderer ────────────────────────────────────────────────────────────
 
 function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
   const ctx = useContext(FileTreeContext);
   const rowRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
-
-  const { Icon, color } = node.data.isDir
-    ? node.isOpen
-      ? { Icon: FolderOpen, color: "#f5a623" }
-      : { Icon: Folder, color: "#f5a623" }
-    : getFileIcon(node.data.name);
 
   const isBeingDragged = ctx.isDragging(node.id);
   const isDropTarget = ctx.dragState?.dropTargetId === node.id && node.data.isDir;
@@ -254,8 +288,11 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
       )}
 
       {/* Icon */}
-      <span className="file-tree-icon" style={{ color }}>
-        <Icon className="size-3.5 file-tree-icon-svg" />
+      <span className="file-tree-icon">
+        {node.data.isDir
+          ? <FolderIcon folderName={node.data.name} isOpen={node.isOpen} />
+          : <FileIcon fileName={node.data.name} />
+        }
       </span>
 
       {/* Name or rename input */}
