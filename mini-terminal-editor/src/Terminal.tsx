@@ -48,7 +48,6 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const statusRef = useRef<"connecting" | "connected" | "error">("connecting");
-  const fitTimeoutsRef = useRef<number[]>([]);
 
   const fit = useCallback(() => {
     const fitAddon = fitAddonRef.current;
@@ -98,19 +97,9 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    const scheduleFit = () => {
-      requestAnimationFrame(() => fit());
-      fitTimeoutsRef.current.push(window.setTimeout(() => fit(), 50));
-      fitTimeoutsRef.current.push(window.setTimeout(() => fit(), 150));
-      fitTimeoutsRef.current.push(window.setTimeout(() => fit(), 320));
-      if ("fonts" in document) {
-        void document.fonts.ready.then(() => fit());
-      }
-    };
-
     // Defer fit + PTY creation to next frame so container has layout
     const rafId = requestAnimationFrame(() => {
-      scheduleFit();
+      fit();
 
       const channel = new Channel<TerminalOutputPayload>();
       channel.onmessage = (msg) => {
@@ -126,7 +115,7 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
       })
         .then(() => {
           statusRef.current = "connected";
-          scheduleFit();
+          fit();
         })
         .catch((err) => {
           xterm.writeln(`\r\nError: ${err}\r\n`);
@@ -149,8 +138,6 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
 
     return () => {
       cancelAnimationFrame(rafId);
-      fitTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
-      fitTimeoutsRef.current = [];
       dataDisposable.dispose();
       resizeDisposable.dispose();
       invoke("close_terminal", { terminalId: TERMINAL_ID }).catch(() => {});
@@ -171,16 +158,15 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
   }, [fit]);
 
   useEffect(() => {
-    const handleWindowResize = () => fit();
-    const handleVisibilityChange = () => {
-      if (!document.hidden) fit();
-    };
+    if (!("fonts" in document)) return;
+    let cancelled = false;
 
-    window.addEventListener("resize", handleWindowResize);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void document.fonts.ready.then(() => {
+      if (!cancelled) fit();
+    });
+
     return () => {
-      window.removeEventListener("resize", handleWindowResize);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cancelled = true;
     };
   }, [fit]);
 
