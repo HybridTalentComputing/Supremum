@@ -22,6 +22,8 @@ html,
 body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  height: 100%;
   background: #02070c;
   color: #c9d8e6;
   font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
@@ -29,10 +31,17 @@ body {
   color-scheme: dark;
 }
 
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
   background: #02070c;
 }
 
@@ -40,16 +49,24 @@ body {
   position: relative;
   flex: 1;
   min-height: 0;
+  height: 100%;
   background: #02070c;
 }
 
 .xterm-root {
   height: 100%;
-  min-height: 320px;
+  min-height: 0;
 }
 
 .xterm-root .xterm {
   height: 100%;
+  background: #02070c;
+}
+
+.xterm-root .xterm-screen,
+.xterm-root .xterm-helpers,
+.xterm-root .xterm-helper-textarea {
+  background: #02070c;
 }
 
 /* 完全隐藏 xterm 滚动条，消除右侧白条（滚动仍可通过触控板/滚轮实现） */
@@ -152,13 +169,16 @@ body {
 .main-layout {
   display: flex;
   flex: 1;
+  height: 100%;
   min-height: 0;
   width: 100%;
 }
 
 .main-layout-terminal {
   flex: 1;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -166,6 +186,7 @@ body {
 
 .main-layout-editor {
   flex: 1;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -203,7 +224,7 @@ body {
   position: absolute;
   inset: 0;
   z-index: 20;
-  background: rgba(2, 7, 12, 0.98);
+  background: #1e1e1e;
   display: flex;
   flex-direction: column;
 }
@@ -224,11 +245,9 @@ body {
 .editor-tabs-bar {
   display: flex;
   align-items: stretch;
-  min-height: 28px;
+  min-height: 42px;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
-    rgba(3, 10, 18, 0.96);
+  background: #02070c;
 }
 
 .editor-tabs-list {
@@ -239,32 +258,42 @@ body {
 .editor-tab {
   width: fit-content;
   min-width: 0;
-  max-width: 11rem;
-  height: 28px;
-  font-size: 0.8125rem;
-  color: rgba(201, 216, 230, 0.72);
-  background: transparent;
-  box-shadow: inset -1px 0 0 rgba(201, 216, 230, 0.04);
+  max-width: 15rem;
+  height: 42px;
+  font-size: 0.9rem;
+  color: rgba(196, 202, 210, 0.78);
+  background: #02070c;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .editor-tab-label {
   min-width: 0;
   max-width: 100%;
+  font-weight: 600;
+}
+
+.editor-tab-icon-img,
+.editor-tab-icon-svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.editor-tab-icon-svg {
+  color: rgba(203, 209, 216, 0.76);
 }
 
 .editor-tab:hover {
-  background: rgba(88, 223, 196, 0.14);
-  color: rgba(234, 255, 250, 0.98);
+  background: #0a1118;
+  color: rgba(223, 230, 236, 0.95);
 }
 
 .editor-tab[data-active] {
-  background: linear-gradient(135deg, rgba(82, 240, 197, 0.22), rgba(72, 170, 255, 0.3));
-  color: #f2fffd;
+  background: #252526;
+  color: #9cdcfe;
   box-shadow:
-    inset 0 1px 0 rgba(214, 255, 245, 0.2),
-    inset -1px 0 0 rgba(203, 247, 255, 0.1),
-    0 0 0 1px rgba(93, 216, 226, 0.2),
-    0 8px 18px rgba(40, 169, 209, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset -1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 .editor-tab-close {
@@ -272,10 +301,10 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 999px;
-  color: rgba(201, 216, 230, 0.5);
+  color: rgba(196, 202, 210, 0.54);
   opacity: 0;
   transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
 }
@@ -288,7 +317,7 @@ body {
 
 .editor-tab-close:hover,
 .editor-tab-close:focus-visible {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: rgba(244, 251, 255, 0.95);
   outline: none;
 }
@@ -297,13 +326,13 @@ body {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 0 0.125rem 0 0.25rem;
+  padding: 0 0.375rem;
   border-left: 1px solid rgba(201, 216, 230, 0.08);
-  background: rgba(3, 10, 18, 0.92);
+  background: #02070c;
 }
 
 .editor-overlay-close {
-  color: rgba(201, 216, 230, 0.6);
+  color: rgba(196, 202, 210, 0.66);
 }
 
 .editor-overlay-close:hover {
@@ -311,21 +340,85 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.editor-path-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 34px;
+  padding: 0 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #252526;
+  color: rgba(170, 170, 170, 0.92);
+  font-size: 0.82rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.terminal-editor-overlay-inner > [data-slot="tabs"] {
+  background: #252526;
+}
+
+.editor-path-segment,
+.editor-path-file {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.editor-path-separator {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: rgba(130, 130, 130, 0.78);
+}
+
+.editor-path-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-path-text-active {
+  color: rgba(224, 230, 236, 0.96);
+}
+
 .editor-tabs-bar [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
-  height: 5px;
-  padding: 0 3px 1px;
+  height: 4px;
+  padding: 0 3px 0;
 }
 
 .editor-tabs-bar [data-slot="scroll-area-thumb"] {
-  background: linear-gradient(90deg, rgba(95, 245, 205, 0.95), rgba(92, 187, 255, 0.96));
+  background: rgba(120, 130, 142, 0.7);
   border-radius: 999px;
-  box-shadow:
-    0 0 0 1px rgba(173, 250, 236, 0.18),
-    0 0 14px rgba(79, 197, 255, 0.2);
 }
 
 .editor-tabs-bar [data-slot="scroll-area-thumb"]:hover {
-  background: linear-gradient(90deg, rgba(132, 255, 222, 1), rgba(122, 206, 255, 1));
+  background: rgba(154, 164, 177, 0.88);
+}
+
+.terminal-editor-overlay .cm-editor,
+.terminal-editor-overlay .cm-scroller,
+.terminal-editor-overlay .cm-gutters,
+.terminal-editor-overlay .cm-activeLine,
+.terminal-editor-overlay .cm-activeLineGutter {
+  background-color: #252526 !important;
+}
+
+.terminal-editor-overlay .cm-editor {
+  height: 100%;
+}
+
+.terminal-editor-overlay .cm-theme,
+.terminal-editor-overlay .cm-focused,
+.terminal-editor-overlay .cm-scroller,
+.terminal-editor-overlay .cm-content {
+  min-height: 100%;
+}
+
+.terminal-editor-overlay .cm-content,
+.terminal-editor-overlay .cm-line {
+  background-color: transparent !important;
 }
 
 /* FileTree */
@@ -421,11 +514,11 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 .file-tree-row[data-selected="true"] {
-  background: linear-gradient(135deg, rgba(73, 228, 192, 0.2), rgba(68, 164, 255, 0.24));
-  box-shadow: inset 0 0 0 1px rgba(164, 243, 228, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .file-tree-row[data-focused="true"] {
-  outline: 1px solid rgba(120, 230, 224, 0.36);
+  outline: 1px solid rgba(130, 190, 255, 0.22);
   outline-offset: -1px;
 }
 .file-tree-row[data-drop-target="true"] {

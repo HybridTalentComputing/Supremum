@@ -10,6 +10,7 @@ import { TerminalComponent } from "./Terminal";
 import { EditorPanel } from "./EditorPanel";
 import { useWorkspace } from "./WorkspaceContext";
 import { CodeEditor } from "./CodeEditor";
+import { useFileIconUrl } from "./fileIcons";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { Circle, X } from "lucide-react";
+import { ChevronRight, Circle, FileText, X } from "lucide-react";
 
 type EditorTab = {
   path: string;
@@ -32,6 +33,42 @@ type EditorTab = {
 function getTabName(path: string) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
+}
+
+function getTabDir(path: string) {
+  const parts = path.split("/");
+  return parts.slice(0, -1);
+}
+
+function EditorFileIcon({ path }: { path: string }) {
+  const iconUrl = useFileIconUrl(getTabName(path), false, false);
+
+  if (!iconUrl) {
+    return <FileText className="editor-tab-icon-svg" />;
+  }
+
+  return <img src={iconUrl} alt="" className="editor-tab-icon-img" draggable={false} />;
+}
+
+function ActivePathBar({ path }: { path: string }) {
+  const parts = getTabDir(path);
+  const fileName = getTabName(path);
+
+  return (
+    <div className="editor-path-bar">
+      {parts.map((part, index) => (
+        <div key={`${part}-${index}`} className="editor-path-segment">
+          {index > 0 && <ChevronRight className="editor-path-separator" />}
+          <span className="editor-path-text">{part}</span>
+        </div>
+      ))}
+      {parts.length > 0 && <ChevronRight className="editor-path-separator" />}
+      <div className="editor-path-file">
+        <EditorFileIcon path={path} />
+        <span className="editor-path-text editor-path-text-active">{fileName}</span>
+      </div>
+    </div>
+  );
 }
 
 export function MainLayout() {
@@ -102,7 +139,7 @@ export function MainLayout() {
       orientation="horizontal"
       className="main-layout"
     >
-      <ResizablePanel defaultSize={30} minSize={20}>
+      <ResizablePanel defaultSize={30} minSize={20} className="flex min-h-0 flex-col">
         <div className="main-layout-editor">
           <EditorPanel
             workspacePath={workspacePath!}
@@ -111,7 +148,7 @@ export function MainLayout() {
         </div>
       </ResizablePanel>
       <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={70} minSize={30}>
+      <ResizablePanel defaultSize={70} minSize={30} className="flex min-h-0 flex-col">
         <div className="main-layout-terminal">
           <TerminalComponent cwd={workspacePath ?? undefined} />
           {editorVisible && activeTab && (
@@ -137,10 +174,11 @@ export function MainLayout() {
                                   render={
                                     <TabsTrigger
                                       value={tab.path}
-                                      className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-1.5 after:hidden"
+                                      className="editor-tab group !flex-none justify-start gap-2 rounded-none border-0 px-3 py-2 after:hidden"
                                     >
+                                      <EditorFileIcon path={tab.path} />
                                       {isDirty && (
-                                        <Circle className="size-2 fill-current stroke-none text-sky-400" />
+                                        <Circle className="size-2 fill-current stroke-none text-cyan-300" />
                                       )}
                                       <span className="editor-tab-label truncate">{getTabName(tab.path)}</span>
                                       <span
@@ -185,7 +223,8 @@ export function MainLayout() {
                         </Button>
                       </div>
                     </div>
-                    <div className="flex-1 min-h-0">
+                    <div className="flex flex-1 min-h-0 flex-col bg-[#252526]">
+                      <ActivePathBar path={activeTab.path} />
                       <CodeEditor
                         path={activeTab.path}
                         content={activeTab.content}
