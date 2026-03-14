@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
 type ListDirEntry = {
@@ -29,6 +37,11 @@ type FileTreeProps = {
   onSelectFile: (path: string, content: string) => void;
 };
 
+type ContextTarget =
+  | { type: "file"; path: string; name: string }
+  | { type: "folder"; path: string; name: string }
+  | { type: "blank" };
+
 function TreeEntry({
   workspacePath,
   entry,
@@ -36,12 +49,20 @@ function TreeEntry({
   collapseSignal,
   refreshSignal,
   activeDirPath,
+  activePath,
   onActivateDir,
+  onActivatePath,
+  onContextTarget,
   createDraft,
   createName,
   setCreateName,
   submitCreate,
   cancelCreate,
+  renamingPath,
+  renamingValue,
+  setRenamingValue,
+  submitRename,
+  cancelRename,
 }: {
   workspacePath: string;
   entry: ListDirEntry;
@@ -49,12 +70,20 @@ function TreeEntry({
   collapseSignal: number;
   refreshSignal: number;
   activeDirPath: string;
+  activePath: string;
   onActivateDir: (path: string) => void;
+  onActivatePath: (path: string) => void;
+  onContextTarget: (target: ContextTarget) => void;
   createDraft: { type: "file" | "dir"; parentPath: string } | null;
   createName: string;
   setCreateName: (value: string) => void;
   submitCreate: () => void;
   cancelCreate: () => void;
+  renamingPath: string | null;
+  renamingValue: string;
+  setRenamingValue: (value: string) => void;
+  submitRename: () => void;
+  cancelRename: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<ListDirEntry[] | null>(null);
@@ -105,14 +134,19 @@ function TreeEntry({
     }
   };
 
+  const isRenaming = renamingPath === entry.path;
+
   const handleClick = async () => {
+    if (isRenaming) return;
     if (entry.isDir) {
       onActivateDir(entry.path);
+      onActivatePath(entry.path);
       handleToggle();
     } else {
       try {
         const parentPath = entry.path.split("/").slice(0, -1).join("/");
         onActivateDir(parentPath);
+        onActivatePath(entry.path);
         const content = (await invoke("read_file", {
           payload: { workspacePath, path: entry.path },
         })) as string;
@@ -131,46 +165,82 @@ function TreeEntry({
 
   return (
     <div className="file-tree-entry">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={cn(
           "file-tree-row",
           !entry.isDir && "file-tree-row-file",
-          entry.isDir && activeDirPath === entry.path && "file-tree-row-active"
+          activePath === entry.path && "file-tree-row-active"
         )}
         onClick={handleClick}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleClick();
+          }
+        }}
+        onContextMenu={(event) => {
+          onActivatePath(entry.path);
+          onActivateDir(
+            entry.isDir
+              ? entry.path
+              : entry.path.split("/").slice(0, -1).join("/")
+          );
+          onContextTarget({
+            type: entry.isDir ? "folder" : "file",
+            path: entry.path,
+            name: entry.name,
+          });
+        }}
       >
-        {entry.isDir ? (
-          <span className="file-tree-chevron file-tree-icon-chevron">
-            {expanded ? (
-              <ChevronDown className="size-3.5 file-tree-icon-svg" />
+            {entry.isDir ? (
+              <span className="file-tree-chevron file-tree-icon-chevron">
+                {expanded ? (
+                  <ChevronDown className="size-3.5 file-tree-icon-svg" />
+                ) : (
+                  <ChevronRight className="size-3.5 file-tree-icon-svg" />
+                )}
+              </span>
             ) : (
-              <ChevronRight className="size-3.5 file-tree-icon-svg" />
+              <span className="file-tree-spacer" />
             )}
-          </span>
-        ) : (
-          <span className="file-tree-spacer" />
-        )}
-        <span
-          className={cn(
-            "file-tree-icon",
-            entry.isDir ? "file-tree-icon-folder" : "file-tree-icon-file"
-          )}
-        >
-          {entry.isDir ? (
-            loading ? (
-              "…"
-            ) : expanded ? (
-              <FolderOpen className="size-3.5 file-tree-icon-svg" />
+            <span
+              className={cn(
+                "file-tree-icon",
+                entry.isDir ? "file-tree-icon-folder" : "file-tree-icon-file"
+              )}
+            >
+              {entry.isDir ? (
+                loading ? (
+                  "…"
+                ) : expanded ? (
+                  <FolderOpen className="size-3.5 file-tree-icon-svg" />
+                ) : (
+                  <Folder className="size-3.5 file-tree-icon-svg" />
+                )
+              ) : (
+                <FileText className="size-3.5 file-tree-icon-svg" />
+              )}
+            </span>
+            {isRenaming ? (
+              <input
+                value={renamingValue}
+                onChange={(event) => setRenamingValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    submitRename();
+                  } else if (event.key === "Escape") {
+                    cancelRename();
+                  }
+                }}
+                onBlur={cancelRename}
+                className="file-tree-rename-input"
+              />
             ) : (
-              <Folder className="size-3.5 file-tree-icon-svg" />
-            )
-          ) : (
-            <FileText className="size-3.5 file-tree-icon-svg" />
-          )}
-        </span>
-        <span className="file-tree-name truncate">{entry.name}</span>
-      </button>
+              <span className="file-tree-name truncate">{entry.name}</span>
+            )}
+      </div>
       {entry.isDir && expanded && children && (
         <div className="file-tree-children">
           {createDraft?.parentPath === entry.path && (
@@ -239,11 +309,17 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const [collapseSignal, setCollapseSignal] = useState(0);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [activeDirPath, setActiveDirPath] = useState("");
+  const [activePath, setActivePath] = useState("");
+  const [contextTarget, setContextTarget] = useState<ContextTarget>({
+    type: "blank",
+  });
   const [createDraft, setCreateDraft] = useState<{
     type: "file" | "dir";
     parentPath: string;
   } | null>(null);
   const [createName, setCreateName] = useState("");
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renamingValue, setRenamingValue] = useState("");
 
   const loadRoot = useCallback(() => {
     let cancelled = false;
@@ -275,6 +351,8 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     setRefreshSignal((value) => value + 1);
     setCreateDraft(null);
     setCreateName("");
+    setRenamingPath(null);
+    setRenamingValue("");
     loadRoot();
   };
 
@@ -282,22 +360,23 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     setCollapseSignal((value) => value + 1);
     setCreateDraft(null);
     setCreateName("");
+    setRenamingPath(null);
+    setRenamingValue("");
+  };
+
+  const startCreate = (type: "file" | "dir", parentPath: string) => {
+    setRenamingPath(null);
+    setRenamingValue("");
+    setCreateName("");
+    setCreateDraft({ type, parentPath });
   };
 
   const handleCreateFile = async () => {
-    setCreateName("");
-    setCreateDraft({
-      type: "file",
-      parentPath: activeDirPath,
-    });
+    startCreate("file", activeDirPath);
   };
 
   const handleCreateDir = async () => {
-    setCreateName("");
-    setCreateDraft({
-      type: "dir",
-      parentPath: activeDirPath,
-    });
+    startCreate("dir", activeDirPath);
   };
 
   const cancelCreate = () => {
@@ -332,6 +411,96 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
       window.alert(String(err));
     } finally {
       cancelCreate();
+    }
+  };
+
+  const startRename = (path: string, name: string) => {
+    setCreateDraft(null);
+    setCreateName("");
+    setRenamingPath(path);
+    setRenamingValue(name);
+  };
+
+  const cancelRename = () => {
+    setRenamingPath(null);
+    setRenamingValue("");
+  };
+
+  const submitRename = async () => {
+    if (!renamingPath) return;
+    const trimmed = renamingValue.trim();
+    if (!trimmed) {
+      cancelRename();
+      return;
+    }
+    if (/[\\/]/.test(trimmed)) {
+      window.alert("名称不能包含 / 或 \\");
+      return;
+    }
+    try {
+      await invoke("rename_entry", {
+        payload: {
+          workspacePath,
+          oldPath: renamingPath,
+          newName: trimmed,
+        },
+      });
+      handleRefresh();
+      const parentPath = renamingPath.split("/").slice(0, -1).join("/");
+      const newPath = parentPath ? `${parentPath}/${trimmed}` : trimmed;
+      setActivePath(newPath);
+      setActiveDirPath(parentPath);
+    } catch (err) {
+      console.error("Failed to rename entry:", err);
+      window.alert(String(err));
+    } finally {
+      cancelRename();
+    }
+  };
+
+  const deleteEntry = async (path: string, isDir: boolean) => {
+    const message = isDir
+      ? "删除文件夹（将递归删除）？"
+      : "删除文件？";
+    if (!window.confirm(message)) return;
+    try {
+      await invoke("delete_entry", {
+        payload: { workspacePath, path, isDir },
+      });
+      handleRefresh();
+    } catch (err) {
+      console.error("Failed to delete entry:", err);
+      window.alert(String(err));
+    }
+  };
+
+  const openFile = async (path: string) => {
+    try {
+      const content = (await invoke("read_file", {
+        payload: { workspacePath, path },
+      })) as string;
+      onSelectFile(path, content);
+    } catch (err) {
+      console.error("Failed to read file:", err);
+      window.alert(String(err));
+    }
+  };
+
+  const copyRelativePath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+    } catch (err) {
+      window.alert(String(err));
+    }
+  };
+
+  const revealInFinder = async (path: string) => {
+    try {
+      await invoke("reveal_in_file_manager", {
+        payload: { workspacePath, path },
+      });
+    } catch (err) {
+      window.alert(String(err));
     }
   };
 
@@ -403,63 +572,179 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
           </Button>
         </div>
       </div>
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="file-tree">
-          {createDraft?.parentPath === "" && (
-            <div className="file-tree-create-row">
-              <span className="file-tree-spacer" />
-              <span
-                className={cn(
-                  "file-tree-icon",
-                  createDraft.type === "dir"
-                    ? "file-tree-icon-folder"
-                    : "file-tree-icon-file"
+      <ContextMenu>
+        <ContextMenuTrigger
+          asChild
+          onContextMenu={(event) => {
+            if ((event.target as HTMLElement)?.closest(".file-tree-row")) return;
+            setContextTarget({ type: "blank" });
+          }}
+        >
+          <div className="flex-1 min-h-0">
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="file-tree">
+                {createDraft?.parentPath === "" && (
+                  <div className="file-tree-create-row">
+                    <span className="file-tree-spacer" />
+                    <span
+                      className={cn(
+                        "file-tree-icon",
+                        createDraft.type === "dir"
+                          ? "file-tree-icon-folder"
+                          : "file-tree-icon-file"
+                      )}
+                    >
+                      {createDraft.type === "dir" ? (
+                        <FolderOpen className="size-3.5 file-tree-icon-svg" />
+                      ) : (
+                        <FileText className="size-3.5 file-tree-icon-svg" />
+                      )}
+                    </span>
+                    <input
+                      autoFocus
+                      value={createName}
+                      onChange={(event) => setCreateName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          submitCreate();
+                        } else if (event.key === "Escape") {
+                          cancelCreate();
+                        }
+                      }}
+                      onBlur={cancelCreate}
+                      className="file-tree-create-input"
+                      placeholder={
+                        createDraft.type === "dir"
+                          ? "新建文件夹"
+                          : "新建文件"
+                      }
+                    />
+                  </div>
                 )}
-              >
-                {createDraft.type === "dir" ? (
-                  <FolderOpen className="size-3.5 file-tree-icon-svg" />
-                ) : (
-                  <FileText className="size-3.5 file-tree-icon-svg" />
-                )}
-              </span>
-              <input
-                autoFocus
-                value={createName}
-                onChange={(event) => setCreateName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    submitCreate();
-                  } else if (event.key === "Escape") {
-                    cancelCreate();
-                  }
-                }}
-                onBlur={cancelCreate}
-                className="file-tree-create-input"
-                placeholder={
-                  createDraft.type === "dir" ? "新建文件夹" : "新建文件"
+                {entries.map((entry) => (
+                  <TreeEntry
+                    key={entry.path}
+                    workspacePath={workspacePath}
+                    entry={entry}
+                    onSelectFile={onSelectFile}
+                    collapseSignal={collapseSignal}
+                    refreshSignal={refreshSignal}
+                    activeDirPath={activeDirPath}
+                    activePath={activePath}
+                    onActivateDir={setActiveDirPath}
+                    onActivatePath={setActivePath}
+                    createDraft={createDraft}
+                    createName={createName}
+                    setCreateName={setCreateName}
+                    submitCreate={submitCreate}
+                    cancelCreate={cancelCreate}
+                    onContextTarget={setContextTarget}
+                    renamingPath={renamingPath}
+                    renamingValue={renamingValue}
+                    setRenamingValue={setRenamingValue}
+                    submitRename={submitRename}
+                    cancelRename={cancelRename}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {contextTarget.type === "file" && (
+            <>
+              <ContextMenuLabel>文件</ContextMenuLabel>
+              <ContextMenuItem onSelect={() => openFile(contextTarget.path)}>
+                打开
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onSelect={() =>
+                  startRename(contextTarget.path, contextTarget.name)
                 }
-              />
-            </div>
+              >
+                重命名
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => deleteEntry(contextTarget.path, false)}
+              >
+                删除
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onSelect={() => copyRelativePath(contextTarget.path)}
+              >
+                复制相对路径
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => revealInFinder(contextTarget.path)}
+              >
+                Reveal in Finder
+              </ContextMenuItem>
+            </>
           )}
-          {entries.map((entry) => (
-            <TreeEntry
-              key={entry.path}
-              workspacePath={workspacePath}
-              entry={entry}
-              onSelectFile={onSelectFile}
-              collapseSignal={collapseSignal}
-              refreshSignal={refreshSignal}
-              activeDirPath={activeDirPath}
-              onActivateDir={setActiveDirPath}
-              createDraft={createDraft}
-              createName={createName}
-              setCreateName={setCreateName}
-              submitCreate={submitCreate}
-              cancelCreate={cancelCreate}
-            />
-          ))}
-        </div>
-      </ScrollArea>
+          {contextTarget.type === "folder" && (
+            <>
+              <ContextMenuLabel>文件夹</ContextMenuLabel>
+              <ContextMenuItem
+                onSelect={() => startCreate("file", contextTarget.path)}
+              >
+                新建文件
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => startCreate("dir", contextTarget.path)}
+              >
+                新建文件夹
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onSelect={() =>
+                  startRename(contextTarget.path, contextTarget.name)
+                }
+              >
+                重命名
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => deleteEntry(contextTarget.path, true)}
+              >
+                删除
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onSelect={() => copyRelativePath(contextTarget.path)}
+              >
+                复制相对路径
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => revealInFinder(contextTarget.path)}
+              >
+                Reveal in Finder
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={handleRefresh}>刷新</ContextMenuItem>
+              <ContextMenuItem onSelect={handleCollapseAll}>
+                折叠所有文件夹
+              </ContextMenuItem>
+            </>
+          )}
+          {contextTarget.type === "blank" && (
+            <>
+              <ContextMenuLabel>空白区域</ContextMenuLabel>
+              <ContextMenuItem onSelect={() => startCreate("file", "")}>
+                新建文件
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => startCreate("dir", "")}>
+                新建文件夹
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={handleRefresh}>刷新</ContextMenuItem>
+              <ContextMenuItem onSelect={handleCollapseAll}>
+                折叠所有文件夹
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
     </div>
   );
 }

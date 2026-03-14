@@ -327,6 +327,21 @@ body {
   color: inherit;
   outline: none;
 }
+.file-tree-rename-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8125rem;
+  color: inherit;
+  outline: none;
+}
+.file-tree-rename-input:focus {
+  border-color: rgba(31, 216, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);
+}
 .file-tree-create-input:focus {
   border-color: rgba(31, 216, 255, 0.5);
   box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);

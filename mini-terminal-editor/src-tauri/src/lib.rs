@@ -8,7 +8,8 @@ use std::{
     collections::HashMap,
     env, fs,
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
+    process::Command,
     sync::{Arc, Mutex},
     thread,
 };
@@ -48,6 +49,29 @@ struct CreateFilePayload {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateDirPayload {
+    workspace_path: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameEntryPayload {
+    workspace_path: String,
+    old_path: String,
+    new_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteEntryPayload {
+    workspace_path: String,
+    path: String,
+    is_dir: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RevealInFileManagerPayload {
     workspace_path: String,
     path: String,
 }
@@ -177,6 +201,81 @@ fn create_dir(payload: CreateDirPayload) -> Result<(), String> {
     let dir_path = safe_workspace_path_for_create(&workspace, &payload.path)?;
     fs::create_dir_all(&dir_path)
         .map_err(|e| format!("failed to create directory: {e}"))
+}
+
+#[tauri::command]
+fn rename_entry(payload: RenameEntryPayload) -> Result<(), String> {
+    if payload.new_name.contains('/') || payload.new_name.contains('\\') {
+        return Err("invalid new name".to_string());
+    }
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let old_path = safe_workspace_child(&workspace, &payload.old_path)?;
+    let parent = old_path
+        .parent()
+        .ok_or_else(|| "invalid parent path".to_string())?;
+    let parent_rel = parent
+        .strip_prefix(&workspace)
+        .map_err(|_| "invalid parent path".to_string())?;
+    let new_rel = parent_rel.join(&payload.new_name);
+    let new_path =
+        safe_workspace_path_for_create(&workspace, new_rel.to_string_lossy().as_ref())?;
+    fs::rename(&old_path, &new_path)
+        .map_err(|e| format!("failed to rename entry: {e}"))
+}
+
+#[tauri::command]
+fn delete_entry(payload: DeleteEntryPayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let path = safe_workspace_child(&workspace, &payload.path)?;
+    if payload.is_dir {
+        fs::remove_dir_all(&path).map_err(|e| format!("failed to delete directory: {e}"))
+    } else {
+        fs::remove_file(&path).map_err(|e| format!("failed to delete file: {e}"))
+    }
+}
+
+#[tauri::command]
+fn reveal_in_file_manager(payload: RevealInFileManagerPayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let path = safe_workspace_child(&workspace, &payload.path)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .status()
+            .map_err(|e| format!("failed to open in Finder: {e}"))?;
+        if !status.success() {
+            return Err("failed to reveal in Finder".to_string());
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let target = format!("/select,{}", path.display());
+        let status = Command::new("explorer")
+            .arg(target)
+            .status()
+            .map_err(|e| format!("failed to open in Explorer: {e}"))?;
+        if !status.success() {
+            return Err("failed to reveal in Explorer".to_string());
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = path.parent().unwrap_or(&path);
+        let status = Command::new("xdg-open")
+            .arg(parent)
+            .status()
+            .map_err(|e| format!("failed to open in file manager: {e}"))?;
+        if !status.success() {
+            return Err("failed to reveal in file manager".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -404,7 +503,10 @@ pub fn run() {
             write_file,
             list_dir,
             create_file,
-            create_dir
+            create_dir,
+            rename_entry,
+            delete_entry,
+            reveal_in_file_manager
         ])
         .setup(|app| {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)
