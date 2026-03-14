@@ -161,6 +161,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .main-layout-editor {
@@ -196,6 +197,30 @@ body {
   align-items: center;
   justify-content: center;
   background: #02070c;
+}
+
+.terminal-editor-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(2, 7, 12, 0.98);
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-editor-overlay-inner {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-editor-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
 }
 
 .editor-panel-placeholder {

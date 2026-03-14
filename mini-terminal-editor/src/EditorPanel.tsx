@@ -7,12 +7,15 @@ import { FileTree } from "./FileTree";
 
 type EditorPanelProps = {
   workspacePath: string;
+  onOpenFile: (path: string, content: string) => void;
 };
 
-export function EditorPanel({ workspacePath }: EditorPanelProps) {
+export function EditorPanel({ workspacePath, onOpenFile }: EditorPanelProps) {
   const [activeTab, setActiveTab] = useState<"changes" | "files">("files");
 
-  const handleSelectFile = (_path: string, _content: string) => {};
+  const handleSelectFile = (path: string, content: string) => {
+    onOpenFile(path, content);
+  };
 
   return (
     <Tabs
