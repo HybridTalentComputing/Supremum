@@ -269,6 +269,7 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
 function RenameInput({ node }: { node: NodeApi<FileNode> }) {
   const ref = useRef<HTMLInputElement>(null);
   const submitted = useRef(false);
+  const cancelled = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -290,6 +291,7 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
   const reset = () => {
     if (submitted.current) return;
     submitted.current = true;
+    cancelled.current = true;
     node.reset();
   };
 
@@ -303,7 +305,12 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
         if (e.key === "Escape") reset();
         else if (e.key === "Enter") submit(e.currentTarget.value);
       }}
-      onBlur={(e) => reset()}
+      onBlur={(e) => {
+        // 如果不是通过 Escape 键取消的，则自动保存
+        if (!cancelled.current) {
+          submit(e.currentTarget.value);
+        }
+      }}
       onClick={(e) => e.stopPropagation()}
     />
   );
