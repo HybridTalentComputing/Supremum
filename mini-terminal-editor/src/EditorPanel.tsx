@@ -28,16 +28,16 @@ export function EditorPanel({ workspacePath }: EditorPanelProps) {
         className="w-full flex shrink-0 rounded-none border-b border-border/50 bg-transparent px-0 h-9 min-w-0"
       >
         <TabsTrigger
-          value="changes"
-          className="flex-1 min-w-0 basis-0 rounded-none border-b-2 border-transparent data-active:border-primary px-3"
-        >
-          Changes
-        </TabsTrigger>
-        <TabsTrigger
           value="files"
           className="flex-1 min-w-0 basis-0 rounded-none border-b-2 border-transparent data-active:border-primary px-3"
         >
           Files
+        </TabsTrigger>
+        <TabsTrigger
+          value="changes"
+          className="flex-1 min-w-0 basis-0 rounded-none border-b-2 border-transparent data-active:border-primary px-3"
+        >
+          Changes
         </TabsTrigger>
       </TabsList>
       {/* 下方：侧栏 + CodeEditor */}

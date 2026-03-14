@@ -18,15 +18,15 @@ export function MainLayout() {
       orientation="horizontal"
       className="main-layout"
     >
-      <ResizablePanel defaultSize={50} minSize={25}>
-        <div className="main-layout-terminal">
-          <TerminalComponent cwd={workspacePath ?? undefined} />
+      <ResizablePanel defaultSize={30} minSize={20}>
+        <div className="main-layout-editor">
+          <EditorPanel workspacePath={workspacePath!} />
         </div>
       </ResizablePanel>
       <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={50} minSize={25}>
-        <div className="main-layout-editor">
-          <EditorPanel workspacePath={workspacePath!} />
+      <ResizablePanel defaultSize={70} minSize={30}>
+        <div className="main-layout-terminal">
+          <TerminalComponent cwd={workspacePath ?? undefined} />
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
