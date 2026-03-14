@@ -1,12 +1,9 @@
 /**
  * FileTree: react-arborist powered file tree
  *
- * Key react-arborist architecture facts (from source):
- * - RowContainer renders each row with absolute position via DefaultRow attrs
- * - NodeRenderer receives: style = { paddingLeft: indent }, dragHandle = ConnectDragSource
- * - Both style and dragHandle go on the SAME root div of the NodeRenderer
- * - canDrop() passes parentNode = get(parentId) ?? root (never null, but root.data = undefined)
- * - disableDrop must handle root node (where parentNode.data === undefined)
+ * DRAG-DROP NOTE: react-arborist uses react-dnd with HTML5Backend, which is
+ * BROKEN in Tauri/WKWebView on macOS. We implement a custom pointer-events-based
+ * drag-drop system that works on all platforms.
  */
 import {
   useCallback,
@@ -51,6 +48,7 @@ import {
   invokeMove,
   invokeReveal,
 } from "./fileTreeOps";
+import { useFileTreeDnd, type DragState } from "./fileTreeDnd";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,8 +66,18 @@ type CreateState = { parentDir: string; type: "file" | "dir" } | null;
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-type FileTreeCtx = { setContextTarget: (t: ContextTarget) => void };
-const FileTreeContext = createContext<FileTreeCtx>({ setContextTarget: () => {} });
+type FileTreeCtx = {
+  setContextTarget: (t: ContextTarget) => void;
+  dragState: DragState | null;
+  isDragging: (id: string) => boolean;
+  startDrag: (ids: string[], clientY: number) => void;
+};
+const FileTreeContext = createContext<FileTreeCtx>({
+  setContextTarget: () => {},
+  dragState: null,
+  isDragging: () => false,
+  startDrag: () => {},
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -153,8 +161,10 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
 
 // ─── Node renderer ────────────────────────────────────────────────────────────
 
-function FileNodeRenderer({ node, style, dragHandle }: NodeRendererProps<FileNode>) {
+function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
   const ctx = useContext(FileTreeContext);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
   const { Icon, color } = node.data.isDir
     ? node.isOpen
@@ -162,21 +172,62 @@ function FileNodeRenderer({ node, style, dragHandle }: NodeRendererProps<FileNod
       : { Icon: Folder, color: "#f5a623" }
     : getFileIcon(node.data.name);
 
+  const isBeingDragged = ctx.isDragging(node.id);
+  const isDropTarget = ctx.dragState?.dropTargetId === node.id && node.data.isDir;
+
+  // Pointer events for custom drag system
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only start drag on left button
+    if (e.button !== 0) return;
+    // Don't start drag on checkbox/chevron
+    if ((e.target as HTMLElement).closest(".file-tree-chevron")) return;
+
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!dragStartPos.current) return;
+      const dx = moveEvent.clientX - dragStartPos.current.x;
+      const dy = moveEvent.clientY - dragStartPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Start drag after moving 5px
+      if (distance > 5) {
+        // Get selected node IDs (or just this node if not selected)
+        const dragIds = node.isSelected
+          ? Array.from(node.tree.selectedNodes).map((n: NodeApi<FileNode>) => n.id)
+          : [node.id];
+
+        ctx.startDrag(dragIds, moveEvent.clientY);
+        cleanup();
+      }
+    };
+
+    const handlePointerUp = () => {
+      cleanup();
+    };
+
+    const cleanup = () => {
+      dragStartPos.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, [ctx, node]);
+
   return (
-    /*
-     * style = { paddingLeft: indent } from RowContainer (nodeStyle).
-     * dragHandle = ConnectDragSource ref from useDragHook.
-     * Both MUST be on the same root element — this is the react-arborist contract.
-     * The absolute positioning lives in DefaultRow's attrs (applied outside this renderer).
-     */
     <div
-      ref={dragHandle}
+      ref={rowRef}
       style={style}
       className="file-tree-row"
+      data-node-id={node.id}
       data-selected={node.isSelected ? "true" : undefined}
-      data-drop-target={node.willReceiveDrop ? "true" : undefined}
+      data-drop-target={isDropTarget ? "true" : undefined}
       data-focused={node.isFocused ? "true" : undefined}
+      data-dragging={isBeingDragged ? "true" : undefined}
       onClick={(e) => node.handleClick(e)}
+      onPointerDown={handlePointerDown}
       onContextMenu={() => {
         ctx.setContextTarget(
           node.data.isDir
@@ -229,7 +280,7 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
     } else {
       el.select();
     }
-  }, []); // run once on mount
+  }, []);
 
   const submit = (value: string) => {
     if (submitted.current) return;
@@ -252,7 +303,7 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
         if (e.key === "Escape") reset();
         else if (e.key === "Enter") submit(e.currentTarget.value);
       }}
-      onBlur={(e) => reset()}  // cancel on blur; Enter already called submit
+      onBlur={(e) => reset()}
       onClick={(e) => e.stopPropagation()}
     />
   );
@@ -272,6 +323,79 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const { treeData, loading, error, loadDir, loadRoot, refreshDir } = useTreeData(workspacePath);
 
   useEffect(() => { loadRoot(); }, [loadRoot]);
+
+  // ─── Custom drag-drop helpers ─────────────────────────────────────────────
+
+  // Get all visible node IDs from the tree
+  const getVisibleNodeIds = useCallback((): string[] => {
+    const tree = treeRef.current;
+    if (!tree) return [];
+
+    const visibleIds: string[] = [];
+    const traverse = (node: NodeApi<FileNode>) => {
+      visibleIds.push(node.id);
+      if (node.isOpen && node.children) {
+        node.children.forEach((child: NodeApi<FileNode>) => traverse(child));
+      }
+    };
+
+    // Use tree.root (not roots) which returns the root nodes
+    const rootNodes = tree.root;
+    if (Array.isArray(rootNodes)) {
+      rootNodes.forEach((rootNode: NodeApi<FileNode>) => traverse(rootNode));
+    } else if (rootNodes) {
+      traverse(rootNodes as NodeApi<FileNode>);
+    }
+    return visibleIds;
+  }, []);
+
+  // Get DOM element for a node ID
+  const getNodeElement = useCallback((id: string): HTMLElement | null => {
+    return containerRef.current?.querySelector(`[data-node-id="${id}"]`) as HTMLElement | null;
+  }, []);
+
+  // Get node data for a node ID
+  const getNodeData = useCallback((id: string): FileNode | null => {
+    const node = treeRef.current?.get(id) as NodeApi<FileNode> | null;
+    return node?.data ?? null;
+  }, []);
+
+  // ─── Custom drag-drop handler (separate from react-arborist's onMove) ───────
+
+  const handleCustomDragMove = useCallback(async ({
+    dragIds,
+    parentId,
+  }: {
+    dragIds: string[];
+    parentId: string | null;
+    index: number;
+  }) => {
+    const destDir = parentId ?? "";
+    try {
+      for (const srcId of dragIds) {
+        await invokeMove(workspacePath, srcId, destDir);
+      }
+      const parents = new Set([...dragIds.map(parentOf), destDir]);
+      for (const p of parents) await refreshDir(p);
+    } catch (err) {
+      window.alert(String(err));
+    }
+  }, [workspacePath, refreshDir]);
+
+  // ─── Custom drag-drop system ──────────────────────────────────────────────
+
+  const {
+    dragState,
+    startDrag,
+    cancelDrag,
+    isDragging,
+  } = useFileTreeDnd({
+    onMove: handleCustomDragMove,
+    getVisibleNodeIds,
+    getNodeElement,
+    getNodeData,
+    rowHeight: 24,
+  });
 
   // Track container height for react-window virtualisation
   useEffect(() => {
@@ -311,7 +435,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
   // ─── Tree handlers ─────────────────────────────────────────────────────────
 
-  // onActivate fires only on single-click (no metaKey/shiftKey) — safe for multi-select
   const handleActivate = useCallback(async (node: NodeApi<FileNode>) => {
     if (!node.data.isDir) {
       try {
@@ -323,7 +446,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     }
   }, [workspacePath, onSelectFile]);
 
-  // onToggle: lazy-load directory children when first opened
   const handleToggle = useCallback(async (id: string) => {
     const node = treeRef.current?.get(id) as NodeApi<FileNode> | null;
     if (node?.data.isDir && node.data.children === null) {
@@ -386,9 +508,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   }, [workspacePath, refreshDir]);
 
   // ─── disableDrop ───────────────────────────────────────────────────────────
-  // CRITICAL: parentNode comes from canDrop() as `get(parentId) ?? root`.
-  // When dropping at root level, parentNode IS the synthetic root node whose
-  // data field is undefined. We must guard against that.
   const disableDrop = useCallback(({
     parentNode,
   }: {
@@ -396,9 +515,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     dragNodes: NodeApi<FileNode>[];
     index: number;
   }): boolean => {
-    // parentNode.data is undefined for the synthetic root — always allow drop there
-    if (!parentNode.data) return false;
-    // Disallow dropping onto file nodes
+    if (parentNode.level < 0) return false;
     return !parentNode.data.isDir;
   }, []);
 
@@ -457,7 +574,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   if (error)   return <div className="file-tree-error"><span>{error}</span></div>;
 
   return (
-    <FileTreeContext.Provider value={{ setContextTarget }}>
+    <FileTreeContext.Provider value={{ setContextTarget, dragState, isDragging, startDrag }}>
       <div className="file-tree-panel">
 
         {/* Toolbar */}
@@ -526,15 +643,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
                 ref={treeRef}
                 data={treeData}
                 idAccessor="id"
-                /*
-                 * childrenAccessor contract:
-                 *   return null        → leaf node (files, no expand arrow)
-                 *   return []          → internal node, children not yet loaded
-                 *   return FileNode[]  → internal node, children loaded
-                 *
-                 * react-arborist: `if (children)` — [] is truthy → treated as internal
-                 * null is falsy → treated as leaf (no chevron)
-                 */
                 childrenAccessor={(d: FileNode): readonly FileNode[] | null => {
                   if (!d.isDir) return null;
                   if (d.children === null) return [];
@@ -603,13 +711,33 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
           </ContextMenuContent>
         </ContextMenu>
 
-        {/* Inline create dialog — replaces unreliable window.prompt in Tauri */}
+        {/* Inline create dialog */}
         {createState && (
           <CreateInputDialog
             type={createState.type}
             onSubmit={submitCreate}
             onCancel={cancelCreate}
           />
+        )}
+
+        {/* Drag preview */}
+        {dragState && (
+          <div
+            className="file-tree-drag-preview"
+            style={{
+              position: "fixed",
+              left: 0,
+              top: dragState.dragPreviewY - 12,
+              pointerEvents: "none",
+              zIndex: 9999,
+            }}
+          >
+            <div className="file-tree-drag-preview-content">
+              {dragState.dragIds.length === 1
+                ? dragState.dragIds[0].split("/").pop()
+                : `${dragState.dragIds.length} 个项目`}
+            </div>
+          </div>
         )}
 
       </div>

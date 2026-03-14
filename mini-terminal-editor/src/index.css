@@ -332,6 +332,22 @@ body {
   outline: 1px dashed rgba(31, 216, 255, 0.4);
   outline-offset: -1px;
 }
+.file-tree-row[data-dragging="true"] {
+  opacity: 0.4;
+}
+.file-tree-drag-preview {
+  transform: translateX(20px);
+}
+.file-tree-drag-preview-content {
+  background: rgba(31, 216, 255, 0.15);
+  border: 1px solid rgba(31, 216, 255, 0.4);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  color: #c9d8e6;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
 .file-tree-chevron,
 .file-tree-spacer {
   width: 1rem;
