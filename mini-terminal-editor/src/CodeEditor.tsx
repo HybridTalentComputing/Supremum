@@ -1,7 +1,7 @@
 /**
  * CodeEditor: CodeMirror 6 封装，支持多语言、深色主题、保存逻辑
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
@@ -14,9 +14,10 @@ import { xml } from "@codemirror/lang-xml";
 import type { Extension } from "@codemirror/state";
 
 type CodeEditorProps = {
-  path: string | null;
+  path: string;
   content: string;
-  workspacePath: string;
+  dirty?: boolean;
+  onChange: (path: string, content: string) => void;
   onSave: (path: string, content: string) => void | Promise<void>;
 };
 
@@ -43,56 +44,37 @@ function getLanguageExtension(path: string): Extension | null {
 export function CodeEditor({
   path,
   content,
-  workspacePath,
+  dirty = false,
+  onChange,
   onSave,
 }: CodeEditorProps) {
-  const [value, setValue] = useState(content);
-  const [dirty, setDirty] = useState(false);
-
-  // Sync content when switching files
-  useEffect(() => {
-    setValue(content);
-    setDirty(false);
-  }, [path, content]);
-
   const handleChange = useCallback((newValue: string) => {
-    setValue(newValue);
-    setDirty(true);
-  }, []);
+    onChange(path, newValue);
+  }, [onChange, path]);
 
   // Cmd/Ctrl+S to save
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        if (path && dirty) {
-          onSave(path, value);
-          setDirty(false);
+        if (dirty) {
+          void onSave(path, content);
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [path, dirty, value, onSave]);
-
-  if (!path) {
-    return <div className="flex flex-col h-full min-h-0" />;
-  }
+  }, [content, dirty, onSave, path]);
 
   const langExt = getLanguageExtension(path);
   const extensions = [oneDark, ...(langExt ? [langExt] : [])];
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-border/50 text-sm">
-        <span className="truncate text-foreground/90">{path}</span>
-        {dirty && (
-          <span className="text-amber-500 text-xs">(modified)</span>
-        )}
-      </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <CodeMirror
-          value={value}
+          key={path}
+          value={content}
           height="100%"
           theme="dark"
           extensions={extensions}

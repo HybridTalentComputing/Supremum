@@ -216,16 +216,116 @@ body {
   flex-direction: column;
 }
 
-.terminal-editor-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-}
-
 .editor-panel-placeholder {
   font-size: 0.8125rem;
   opacity: 0.4;
+}
+
+.editor-tabs-bar {
+  display: flex;
+  align-items: stretch;
+  min-height: 28px;
+  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(3, 10, 18, 0.96);
+}
+
+.editor-tabs-list {
+  display: flex;
+  align-items: stretch;
+}
+
+.editor-tab {
+  width: fit-content;
+  min-width: 0;
+  max-width: 11rem;
+  height: 28px;
+  font-size: 0.8125rem;
+  color: rgba(201, 216, 230, 0.72);
+  background: transparent;
+  box-shadow: inset -1px 0 0 rgba(201, 216, 230, 0.04);
+}
+
+.editor-tab-label {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.editor-tab:hover {
+  background: rgba(88, 223, 196, 0.14);
+  color: rgba(234, 255, 250, 0.98);
+}
+
+.editor-tab[data-active] {
+  background: linear-gradient(135deg, rgba(82, 240, 197, 0.22), rgba(72, 170, 255, 0.3));
+  color: #f2fffd;
+  box-shadow:
+    inset 0 1px 0 rgba(214, 255, 245, 0.2),
+    inset -1px 0 0 rgba(203, 247, 255, 0.1),
+    0 0 0 1px rgba(93, 216, 226, 0.2),
+    0 8px 18px rgba(40, 169, 209, 0.08);
+}
+
+.editor-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  color: rgba(201, 216, 230, 0.5);
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.editor-tab:hover .editor-tab-close,
+.editor-tab[data-active] .editor-tab-close,
+.editor-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.editor-tab-close:hover,
+.editor-tab-close:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(244, 251, 255, 0.95);
+  outline: none;
+}
+
+.editor-tabs-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 0.125rem 0 0.25rem;
+  border-left: 1px solid rgba(201, 216, 230, 0.08);
+  background: rgba(3, 10, 18, 0.92);
+}
+
+.editor-overlay-close {
+  color: rgba(201, 216, 230, 0.6);
+}
+
+.editor-overlay-close:hover {
+  color: rgba(244, 251, 255, 0.95);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.editor-tabs-bar [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  height: 5px;
+  padding: 0 3px 1px;
+}
+
+.editor-tabs-bar [data-slot="scroll-area-thumb"] {
+  background: linear-gradient(90deg, rgba(95, 245, 205, 0.95), rgba(92, 187, 255, 0.96));
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(173, 250, 236, 0.18),
+    0 0 14px rgba(79, 197, 255, 0.2);
+}
+
+.editor-tabs-bar [data-slot="scroll-area-thumb"]:hover {
+  background: linear-gradient(90deg, rgba(132, 255, 222, 1), rgba(122, 206, 255, 1));
 }
 
 /* FileTree */
@@ -321,10 +421,11 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 .file-tree-row[data-selected="true"] {
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(73, 228, 192, 0.2), rgba(68, 164, 255, 0.24));
+  box-shadow: inset 0 0 0 1px rgba(164, 243, 228, 0.18);
 }
 .file-tree-row[data-focused="true"] {
-  outline: 1px solid rgba(31, 216, 255, 0.25);
+  outline: 1px solid rgba(120, 230, 224, 0.36);
   outline-offset: -1px;
 }
 .file-tree-row[data-drop-target="true"] {
