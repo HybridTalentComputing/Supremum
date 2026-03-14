@@ -1,34 +1,27 @@
 /**
- * EditorPanel：Changes/Files 固定于右栏顶部横跨全宽；下方为文件树侧栏 + CodeEditor
+ * EditorPanel：Changes/Files 固定于右栏顶部横跨全宽；下方为对应面板内容（Files 为文件树）
  */
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileTree } from "./FileTree";
-import { CodeEditor } from "./CodeEditor";
 
 type EditorPanelProps = {
   workspacePath: string;
 };
 
 export function EditorPanel({ workspacePath }: EditorPanelProps) {
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [selectedContent, setSelectedContent] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"changes" | "files">("files");
 
-  const handleSelectFile = (path: string, content: string) => {
-    setSelectedPath(path);
-    setSelectedContent(content);
-  };
-
-  const handleSave = async (path: string, content: string) => {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("write_file", {
-      payload: { workspacePath, path, content },
-    });
-    setSelectedContent(content);
-  };
+  const handleSelectFile = (_path: string, _content: string) => {};
 
   return (
-    <Tabs defaultValue="files" className="flex flex-col flex-1 min-h-0 w-full">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) =>
+        setActiveTab(value === "changes" ? "changes" : "files")
+      }
+      className="flex flex-col flex-1 min-h-0 w-full"
+    >
       {/* Tabs 横跨整个右栏顶部，平分宽度，随窗口伸缩 */}
       <TabsList
         variant="line"
@@ -49,33 +42,25 @@ export function EditorPanel({ workspacePath }: EditorPanelProps) {
       </TabsList>
       {/* 下方：侧栏 + CodeEditor */}
       <div className="flex flex-1 min-h-0 min-w-0">
-        <div className="flex flex-col w-[220px] min-w-[180px] shrink-0 border-r border-border/50 overflow-hidden">
-          <TabsContent
-            value="changes"
-            className="flex-1 min-h-0 mt-0 p-2 overflow-auto data-[selected=false]:hidden"
-          >
-            <div className="text-muted-foreground text-sm" />
-          </TabsContent>
-          <TabsContent
-            value="files"
-            className="flex-1 min-h-0 mt-0 overflow-hidden flex flex-col data-[selected=false]:hidden"
-          >
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <FileTree
-                workspacePath={workspacePath}
-                onSelectFile={handleSelectFile}
-              />
-            </div>
-          </TabsContent>
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col">
-          <CodeEditor
-            path={selectedPath}
-            content={selectedContent}
-            workspacePath={workspacePath}
-            onSave={handleSave}
-          />
-        </div>
+        <TabsContent
+          value="files"
+          className="flex-1 min-h-0 mt-0 overflow-hidden flex flex-col data-[selected=false]:hidden"
+        >
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FileTree
+              workspacePath={workspacePath}
+              onSelectFile={handleSelectFile}
+            />
+          </div>
+        </TabsContent>
+        <TabsContent
+          value="changes"
+          className="flex-1 min-h-0 mt-0 p-2 overflow-auto data-[selected=false]:hidden"
+        >
+          <div className="text-muted-foreground text-sm">
+            Changes 面板待实现
+          </div>
+        </TabsContent>
       </div>
     </Tabs>
   );

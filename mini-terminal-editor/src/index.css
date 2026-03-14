@@ -204,6 +204,31 @@ body {
 }
 
 /* FileTree */
+.file-tree-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.file-tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+.file-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.file-tree-action {
+  color: rgba(255, 255, 255, 0.75);
+}
+.file-tree-action:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
 .file-tree {
   padding: 0.25rem 0;
 }
@@ -229,6 +254,9 @@ body {
 .file-tree-row-file:hover {
   background: rgba(31, 216, 255, 0.08);
 }
+.file-tree-row-active {
+  background: rgba(255, 255, 255, 0.08);
+}
 .file-tree-chevron,
 .file-tree-spacer {
   width: 1rem;
@@ -244,6 +272,27 @@ body {
 }
 .file-tree-children {
   padding-left: 1rem;
+}
+.file-tree-create-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+}
+.file-tree-create-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8125rem;
+  color: inherit;
+  outline: none;
+}
+.file-tree-create-input:focus {
+  border-color: rgba(31, 216, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);
 }
 .file-tree-loading,
 .file-tree-error {

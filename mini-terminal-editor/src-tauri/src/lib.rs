@@ -8,7 +8,7 @@ use std::{
     collections::HashMap,
     env, fs,
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
 };
@@ -38,6 +38,20 @@ struct ListDirPayload {
     path: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateFilePayload {
+    workspace_path: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateDirPayload {
+    workspace_path: String,
+    path: String,
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ListDirEntry {
@@ -56,6 +70,36 @@ fn safe_workspace_child(workspace_path: &Path, relative_path: &str) -> Result<Pa
         return Err("file path escapes workspace".to_string());
     }
     Ok(canonical_candidate)
+}
+
+/// Validate path is within workspace; allows non-existent paths (for create operations).
+fn safe_workspace_path_for_create(
+    workspace_path: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, String> {
+    use std::path::Component;
+    let canonical_workspace =
+        fs::canonicalize(workspace_path).map_err(|e| format!("invalid workspace path: {e}"))?;
+    let mut resolved = canonical_workspace.clone();
+    for component in Path::new(relative_path).components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => {
+                return Err("invalid path".to_string());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+                if !resolved.starts_with(&canonical_workspace) {
+                    return Err("file path escapes workspace".to_string());
+                }
+            }
+            Component::Normal(name) => resolved.push(name),
+        }
+    }
+    if !resolved.starts_with(&canonical_workspace) {
+        return Err("file path escapes workspace".to_string());
+    }
+    Ok(resolved)
 }
 
 #[tauri::command]
@@ -112,6 +156,27 @@ fn list_dir(payload: ListDirPayload) -> Result<Vec<ListDirEntry>, String> {
         a.name.to_lowercase().cmp(&b.name.to_lowercase())
     });
     Ok(entries)
+}
+
+#[tauri::command]
+fn create_file(payload: CreateFilePayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_path_for_create(&workspace, &payload.path)?;
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create parent dir: {e}"))?;
+    }
+    fs::File::create(&file_path)
+        .map_err(|e| format!("failed to create file: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn create_dir(payload: CreateDirPayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let dir_path = safe_workspace_path_for_create(&workspace, &payload.path)?;
+    fs::create_dir_all(&dir_path)
+        .map_err(|e| format!("failed to create directory: {e}"))
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -337,7 +402,9 @@ pub fn run() {
             close_terminal,
             read_file,
             write_file,
-            list_dir
+            list_dir,
+            create_file,
+            create_dir
         ])
         .setup(|app| {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)
