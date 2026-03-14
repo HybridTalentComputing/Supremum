@@ -8,6 +8,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   createContext,
@@ -63,6 +64,7 @@ type ContextTarget =
   | { type: "blank" };
 
 type CreateState = { parentDir: string; type: "file" | "dir" } | null;
+type OpenStateSnapshot = Record<string, boolean>;
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -358,7 +360,8 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
 export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const treeRef = useRef<TreeApi<FileNode> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(400);
+  const [containerSize, setContainerSize] = useState({ width: 320, height: 400 });
+  const [openStateSnapshot, setOpenStateSnapshot] = useState<OpenStateSnapshot>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [contextTarget, setContextTarget] = useState<ContextTarget>({ type: "blank" });
@@ -410,6 +413,27 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     return containerRef.current;
   }, []);
 
+  const syncOpenStateSnapshot = useCallback(() => {
+    setOpenStateSnapshot({ ...(treeRef.current?.openState ?? {}) });
+  }, []);
+
+  const updateContainerSize = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const nextSize = {
+      width: Math.max(0, Math.floor(rect.width)),
+      height: Math.max(0, Math.floor(rect.height)),
+    };
+
+    setContainerSize((currentSize) =>
+      currentSize.width === nextSize.width && currentSize.height === nextSize.height
+        ? currentSize
+        : nextSize
+    );
+  }, []);
+
   // ─── Custom drag-drop handler (separate from react-arborist's onMove) ───────
 
   const handleCustomDragMove = useCallback(async ({
@@ -453,12 +477,32 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      setContainerHeight(entries[0].contentRect.height);
+    const ro = new ResizeObserver(() => {
+      updateContainerSize();
     });
     ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    window.addEventListener("resize", updateContainerSize);
+    window.visualViewport?.addEventListener("resize", updateContainerSize);
+    updateContainerSize();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateContainerSize);
+      window.visualViewport?.removeEventListener("resize", updateContainerSize);
+    };
+  }, [updateContainerSize]);
+
+  useLayoutEffect(() => {
+    updateContainerSize();
+    const rafId = requestAnimationFrame(() => {
+      updateContainerSize();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [updateContainerSize, showSearch, treeVersion, treeData]);
+
+  useEffect(() => {
+    const list = treeRef.current?.list.current as { forceUpdate?: () => void } | null;
+    list?.forceUpdate?.();
+  }, [containerSize]);
 
   // ─── Create file/folder ────────────────────────────────────────────────────
 
@@ -503,7 +547,10 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     if (node?.data.isDir && node.data.children === null) {
       await loadDir(id);
     }
-  }, [loadDir]);
+    requestAnimationFrame(() => {
+      syncOpenStateSnapshot();
+    });
+  }, [loadDir, syncOpenStateSnapshot]);
 
   const handleRename = useCallback(async ({
     id, name,
@@ -607,7 +654,10 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     await refreshDir("");
     setTreeVersion((v) => v + 1);
   }, [refreshDir]);
-  const handleCollapseAll = useCallback(() => treeRef.current?.closeAll(), []);
+  const handleCollapseAll = useCallback(() => {
+    treeRef.current?.closeAll();
+    setOpenStateSnapshot({});
+  }, []);
 
   const toolbarNewFile = useCallback(() => {
     startCreate("file", resolveParentDir(treeRef.current));
@@ -622,6 +672,8 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
       node.data.name.toLowerCase().includes(term.toLowerCase()),
     [],
   );
+
+  const treeKey = `${treeVersion}:${containerSize.width}x${containerSize.height}`;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -695,7 +747,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
               }}
             >
               <Tree<FileNode>
-                key={treeVersion}
+                key={treeKey}
                 ref={treeRef}
                 data={treeData}
                 idAccessor="id"
@@ -713,10 +765,11 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
                 searchTerm={searchTerm || undefined}
                 searchMatch={searchMatch}
                 openByDefault={false}
+                initialOpenState={openStateSnapshot}
                 rowHeight={24}
                 indent={0}
-                width="100%"
-                height={containerHeight}
+                width={Math.max(containerSize.width, 1)}
+                height={Math.max(containerSize.height, 1)}
                 className="file-tree"
                 rowClassName="file-tree-row-wrapper"
               >

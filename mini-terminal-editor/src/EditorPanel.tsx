@@ -23,7 +23,7 @@ export function EditorPanel({ workspacePath, onOpenFile }: EditorPanelProps) {
       onValueChange={(value) =>
         setActiveTab(value === "changes" ? "changes" : "files")
       }
-      className="flex flex-col flex-1 min-h-0 w-full"
+      className="flex flex-col flex-1 min-h-0 w-full gap-0"
     >
       {/* Tabs 横跨整个右栏顶部，平分宽度，随窗口伸缩 */}
       <TabsList
