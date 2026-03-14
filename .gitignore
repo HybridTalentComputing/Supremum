@@ -10,5 +10,11 @@ mini-terminal/dist/
 mini-terminal/src-tauri/target/
 mini-terminal/src-tauri/gen/
 
+# mini-terminal-editor subproject
+mini-terminal-editor/node_modules/
+mini-terminal-editor/dist/
+mini-terminal-editor/src-tauri/target/
+mini-terminal-editor/src-tauri/gen/
+
 .DS_Store
 *.log
