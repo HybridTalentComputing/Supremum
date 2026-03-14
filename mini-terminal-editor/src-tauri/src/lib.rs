@@ -71,6 +71,14 @@ struct DeleteEntryPayload {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct MoveEntryPayload {
+    workspace_path: String,
+    source_path: String,
+    destination_dir_path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RevealInFileManagerPayload {
     workspace_path: String,
     path: String,
@@ -232,6 +240,32 @@ fn delete_entry(payload: DeleteEntryPayload) -> Result<(), String> {
     } else {
         fs::remove_file(&path).map_err(|e| format!("failed to delete file: {e}"))
     }
+}
+
+#[tauri::command]
+fn move_entry(payload: MoveEntryPayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let source = safe_workspace_child(&workspace, &payload.source_path)?;
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| "invalid source path".to_string())?;
+    let dest_rel = if payload.destination_dir_path.is_empty() {
+        file_name.to_string_lossy().to_string()
+    } else {
+        format!(
+            "{}/{}",
+            payload.destination_dir_path,
+            file_name.to_string_lossy()
+        )
+    };
+    let destination = safe_workspace_path_for_create(&workspace, &dest_rel)?;
+    if source == destination {
+        return Ok(());
+    }
+    if destination.exists() {
+        return Err("destination already exists".to_string());
+    }
+    fs::rename(&source, &destination).map_err(|e| format!("failed to move entry: {e}"))
 }
 
 #[tauri::command]
@@ -506,6 +540,7 @@ pub fn run() {
             create_dir,
             rename_entry,
             delete_entry,
+            move_entry,
             reveal_in_file_manager
         ])
         .setup(|app| {

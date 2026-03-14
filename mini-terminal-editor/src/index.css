@@ -234,6 +234,7 @@ body {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  position: relative;
 }
 .file-tree-toolbar {
   display: flex;
@@ -254,33 +255,82 @@ body {
 .file-tree-action:hover {
   color: rgba(255, 255, 255, 0.95);
 }
+/* Search bar */
+.file-tree-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+}
+.file-tree-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  font-size: 0.8125rem;
+  color: inherit;
+  outline: none;
+}
+.file-tree-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 0;
+}
+.file-tree-search-clear:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+/* Container for the tree (flex-1 to fill remaining space) */
+.file-tree-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* react-arborist tree root */
 .file-tree {
-  padding: 0.25rem 0;
+  outline: none;
 }
-.file-tree-entry {
-  line-height: 1.4;
+/* Row wrapper — react-arborist uses absolute positioning in react-window */
+.file-tree-row-wrapper {
+  /* no extra styles needed; react-window handles position */
 }
+/* Individual node row
+ * NOTE: style prop from react-arborist = { paddingLeft: indent }
+ * height comes from rowHeight prop (24px) via DefaultRow's attrs.style
+ * We set height:24px explicitly so the row fills its virtual slot */
 .file-tree-row {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   width: 100%;
-  padding: 0.2rem 0.5rem;
+  height: 24px;
+  padding: 0 0.5rem;
   font-size: 0.8125rem;
-  text-align: left;
   background: transparent;
-  border: none;
   color: inherit;
   cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
 }
 .file-tree-row:hover {
   background: rgba(255, 255, 255, 0.06);
 }
-.file-tree-row-file:hover {
-  background: rgba(31, 216, 255, 0.08);
-}
-.file-tree-row-active {
+.file-tree-row[data-selected="true"] {
   background: rgba(255, 255, 255, 0.08);
+}
+.file-tree-row[data-focused="true"] {
+  outline: 1px solid rgba(31, 216, 255, 0.25);
+  outline-offset: -1px;
+}
+.file-tree-row[data-drop-target="true"] {
+  background: rgba(31, 216, 255, 0.12);
+  outline: 1px dashed rgba(31, 216, 255, 0.4);
+  outline-offset: -1px;
 }
 .file-tree-chevron,
 .file-tree-spacer {
@@ -294,38 +344,12 @@ body {
 .file-tree-icon-svg {
   stroke-width: 1.6;
 }
-.file-tree-icon-folder {
-  color: #f5a623;
-}
-.file-tree-icon-file {
-  color: #50a4ff;
-}
 .file-tree-icon-chevron {
   color: #9aa6b2;
 }
 .file-tree-name {
   flex: 1;
   min-width: 0;
-}
-.file-tree-children {
-  padding-left: 1rem;
-}
-.file-tree-create-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.5rem;
-}
-.file-tree-create-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  padding: 0.15rem 0.4rem;
-  font-size: 0.8125rem;
-  color: inherit;
-  outline: none;
 }
 .file-tree-rename-input {
   flex: 1;
@@ -339,10 +363,6 @@ body {
   outline: none;
 }
 .file-tree-rename-input:focus {
-  border-color: rgba(31, 216, 255, 0.5);
-  box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);
-}
-.file-tree-create-input:focus {
   border-color: rgba(31, 216, 255, 0.5);
   box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);
 }
