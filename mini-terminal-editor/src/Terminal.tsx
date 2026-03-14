@@ -3,7 +3,7 @@
  * Uses Tauri Channel for PTY output streaming (dispatcher pattern).
  */
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 /* xterm.css 由 index.css 统一导入，确保覆盖样式生效 */
@@ -46,7 +46,7 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
   const terminalRootRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const statusRef = useRef<"connecting" | "connected" | "error">("connecting");
 
   const fit = useCallback(() => {
     fitAddonRef.current?.fit();
@@ -93,24 +93,26 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
         rows: xterm.rows,
         onOutput: channel,
       })
-        .then(() => setStatus("connected"))
+        .then(() => {
+          statusRef.current = "connected";
+        })
         .catch((err) => {
           xterm.writeln(`\r\nError: ${err}\r\n`);
-          setStatus("error");
+          statusRef.current = "error";
         });
     });
 
     // Forward xterm input to PTY
     const dataDisposable = xterm.onData((data) => {
-      invoke("write_terminal", { terminalId: TERMINAL_ID, data }).catch(() =>
-        setStatus("error")
-      );
+      invoke("write_terminal", { terminalId: TERMINAL_ID, data }).catch(() => {
+        statusRef.current = "error";
+      });
     });
 
     const resizeDisposable = xterm.onResize(({ cols, rows }) => {
-      invoke("resize_terminal", { terminalId: TERMINAL_ID, cols, rows }).catch(() =>
-        setStatus("error")
-      );
+      invoke("resize_terminal", { terminalId: TERMINAL_ID, cols, rows }).catch(() => {
+        statusRef.current = "error";
+      });
     });
 
     return () => {
@@ -142,7 +144,6 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
       onMouseDown={() => xtermRef.current?.focus()}
     >
       <div ref={terminalRootRef} className="xterm-root" />
-      <div className="terminal-status">{status}</div>
     </div>
   );
 }
