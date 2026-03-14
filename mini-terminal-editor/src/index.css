@@ -237,6 +237,22 @@ body {
   flex-direction: column;
 }
 
+.editor-header {
+  flex: none;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.editor-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #252526;
+}
+
 .editor-panel-placeholder {
   font-size: 0.8125rem;
   opacity: 0.4;
@@ -245,14 +261,34 @@ body {
 .editor-tabs-bar {
   display: flex;
   align-items: stretch;
+  flex: none;
+  height: 42px;
   min-height: 42px;
+  overflow: hidden;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
   background: #02070c;
+}
+
+.editor-tabs-scroll {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.editor-tabs-scroll [data-slot="scroll-area-viewport"] {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
 }
 
 .editor-tabs-list {
   display: flex;
   align-items: stretch;
+  flex: none;
+  min-height: 100%;
 }
 
 .editor-tab {
@@ -397,6 +433,32 @@ body {
   background: rgba(154, 164, 177, 0.88);
 }
 
+.code-editor-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #252526;
+}
+
+.code-editor-container {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #252526;
+}
+
+.code-editor-instance {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .terminal-editor-overlay .cm-editor,
 .terminal-editor-overlay .cm-scroller,
 .terminal-editor-overlay .cm-gutters,
@@ -405,15 +467,65 @@ body {
   background-color: #252526 !important;
 }
 
+.terminal-editor-overlay .code-editor-instance .cm-editor {
+  display: flex;
+  flex: 1;
+  width: 100%;
+}
+
 .terminal-editor-overlay .cm-editor {
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .terminal-editor-overlay .cm-theme,
-.terminal-editor-overlay .cm-focused,
+.terminal-editor-overlay .cm-focused {
+  height: 100%;
+}
+
 .terminal-editor-overlay .cm-scroller,
 .terminal-editor-overlay .cm-content {
   min-height: 100%;
+}
+
+.terminal-editor-overlay .cm-scroller {
+  overflow: auto !important;
+  width: 100%;
+}
+
+.terminal-editor-overlay .cm-scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.terminal-editor-overlay .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-editor-overlay .cm-scroller::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.terminal-editor-overlay .cm-scroller {
+  scrollbar-width: auto;
+  scrollbar-color: transparent transparent;
+}
+
+.code-editor-shell:hover .cm-scroller::-webkit-scrollbar-track,
+.code-editor-shell:focus-within .cm-scroller::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.code-editor-shell:hover .cm-scroller::-webkit-scrollbar-thumb,
+.code-editor-shell:focus-within .cm-scroller::-webkit-scrollbar-thumb {
+  background: rgba(120, 130, 142, 0.85);
+}
+
+.code-editor-shell:hover .cm-scroller,
+.code-editor-shell:focus-within .cm-scroller {
+  scrollbar-color: rgba(120, 130, 142, 0.85) #1e1e1e;
 }
 
 .terminal-editor-overlay .cm-content,

@@ -70,12 +70,14 @@ export function CodeEditor({
   const extensions = [oneDark, ...(langExt ? [langExt] : [])];
 
   return (
-    <div className="flex h-full flex-col bg-[#252526]">
-      <div className="flex-1 min-h-0 overflow-hidden bg-[#252526]">
+    <div className="code-editor-shell">
+      <div className="code-editor-container">
         <CodeMirror
           key={path}
+          className="code-editor-instance"
           value={content}
           height="100%"
+          width="100%"
           theme="dark"
           extensions={extensions}
           onChange={handleChange}
