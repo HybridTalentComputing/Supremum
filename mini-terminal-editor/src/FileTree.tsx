@@ -319,6 +319,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [contextTarget, setContextTarget] = useState<ContextTarget>({ type: "blank" });
   const [createState, setCreateState] = useState<CreateState>(null);
+  const [treeVersion, setTreeVersion] = useState(0);
 
   const { treeData, loading, error, loadDir, loadRoot, refreshDir } = useTreeData(workspacePath);
 
@@ -375,8 +376,9 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
       for (const srcId of dragIds) {
         await invokeMove(workspacePath, srcId, destDir);
       }
-      const parents = new Set([...dragIds.map(parentOf), destDir]);
-      for (const p of parents) await refreshDir(p);
+      // 强制刷新根目录并递增版本号以触发 Tree 重新渲染
+      await refreshDir("");
+      setTreeVersion((v) => v + 1);
     } catch (err) {
       window.alert(String(err));
     }
@@ -551,7 +553,10 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     catch (err) { window.alert(String(err)); }
   }, [workspacePath]);
 
-  const handleRefresh = useCallback(() => refreshDir(""), [refreshDir]);
+  const handleRefresh = useCallback(async () => {
+    await refreshDir("");
+    setTreeVersion((v) => v + 1);
+  }, [refreshDir]);
   const handleCollapseAll = useCallback(() => treeRef.current?.closeAll(), []);
 
   const toolbarNewFile = useCallback(() => {
@@ -640,6 +645,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
               }}
             >
               <Tree<FileNode>
+                key={treeVersion}
                 ref={treeRef}
                 data={treeData}
                 idAccessor="id"
