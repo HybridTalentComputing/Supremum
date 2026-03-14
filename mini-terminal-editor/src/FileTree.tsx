@@ -2,7 +2,7 @@
  * FileTree: 递归展示 list_dir 结果，点击文件时调用 read_file 并传给 CodeEditor
  */
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   FilePlus,
   FolderPlus,
@@ -229,8 +229,10 @@ function TreeEntry({
                 onChange={(event) => setRenamingValue(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
+                    event.stopPropagation();
                     submitRename();
                   } else if (event.key === "Escape") {
+                    event.stopPropagation();
                     cancelRename();
                   }
                 }}
@@ -266,8 +268,10 @@ function TreeEntry({
                 onChange={(event) => setCreateName(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
+                    event.stopPropagation();
                     submitCreate();
                   } else if (event.key === "Escape") {
+                    event.stopPropagation();
                     cancelCreate();
                   }
                 }}
@@ -320,6 +324,10 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const [createName, setCreateName] = useState("");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState("");
+
+  // 跟踪是否正在提交，防止onBlur重复取消
+  const isSubmittingCreate = useRef(false);
+  const isSubmittingRename = useRef(false);
 
   const loadRoot = useCallback(() => {
     let cancelled = false;
@@ -380,12 +388,14 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   };
 
   const cancelCreate = () => {
+    // 如果正在提交，不要取消（防止onBlur竞态条件）
+    if (isSubmittingCreate.current) return;
     setCreateDraft(null);
     setCreateName("");
   };
 
   const submitCreate = async () => {
-    if (!createDraft) return;
+    if (!createDraft || isSubmittingCreate.current) return;
     const trimmed = createName.trim();
     if (!trimmed) {
       cancelCreate();
@@ -394,6 +404,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     const fullPath = createDraft.parentPath
       ? `${createDraft.parentPath}/${trimmed}`
       : trimmed;
+    isSubmittingCreate.current = true;
     try {
       if (createDraft.type === "dir") {
         await invoke("create_dir", {
@@ -404,12 +415,18 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
           payload: { workspacePath, path: fullPath },
         });
       }
+      // 先刷新，让子组件保持在展开状态
       setRefreshSignal((value) => value + 1);
-      loadRoot();
+      await loadRoot();
+      // 延迟清除createDraft，确保刷新完成
+      setTimeout(() => {
+        isSubmittingCreate.current = false;
+        cancelCreate();
+      }, 100);
     } catch (err) {
       console.error("Failed to create entry:", err);
       window.alert(String(err));
-    } finally {
+      isSubmittingCreate.current = false;
       cancelCreate();
     }
   };
@@ -422,12 +439,14 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   };
 
   const cancelRename = () => {
+    // 如果正在提交，不要取消（防止onBlur竞态条件）
+    if (isSubmittingRename.current) return;
     setRenamingPath(null);
     setRenamingValue("");
   };
 
   const submitRename = async () => {
-    if (!renamingPath) return;
+    if (!renamingPath || isSubmittingRename.current) return;
     const trimmed = renamingValue.trim();
     if (!trimmed) {
       cancelRename();
@@ -437,6 +456,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
       window.alert("名称不能包含 / 或 \\");
       return;
     }
+    isSubmittingRename.current = true;
     try {
       await invoke("rename_entry", {
         payload: {
@@ -445,15 +465,21 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
           newName: trimmed,
         },
       });
-      handleRefresh();
       const parentPath = renamingPath.split("/").slice(0, -1).join("/");
       const newPath = parentPath ? `${parentPath}/${trimmed}` : trimmed;
       setActivePath(newPath);
       setActiveDirPath(parentPath);
+      // 先刷新
+      handleRefresh();
+      // 延迟清除renamingPath，确保刷新完成
+      setTimeout(() => {
+        isSubmittingRename.current = false;
+        cancelRename();
+      }, 100);
     } catch (err) {
       console.error("Failed to rename entry:", err);
       window.alert(String(err));
-    } finally {
+      isSubmittingRename.current = false;
       cancelRename();
     }
   };
@@ -606,8 +632,10 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
                       onChange={(event) => setCreateName(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
+                          event.stopPropagation();
                           submitCreate();
                         } else if (event.key === "Escape") {
+                          event.stopPropagation();
                           cancelCreate();
                         }
                       }}
