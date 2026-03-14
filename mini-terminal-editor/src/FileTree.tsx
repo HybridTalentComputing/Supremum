@@ -3,7 +3,17 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { FilePlus, FolderPlus, ChevronsUp, RefreshCw } from "lucide-react";
+import {
+  FilePlus,
+  FolderPlus,
+  ChevronsUp,
+  RefreshCw,
+  Folder,
+  FolderOpen,
+  FileText,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -131,12 +141,33 @@ function TreeEntry({
         onClick={handleClick}
       >
         {entry.isDir ? (
-          <span className="file-tree-chevron">{expanded ? "▾" : "▸"}</span>
+          <span className="file-tree-chevron file-tree-icon-chevron">
+            {expanded ? (
+              <ChevronDown className="size-3.5 file-tree-icon-svg" />
+            ) : (
+              <ChevronRight className="size-3.5 file-tree-icon-svg" />
+            )}
+          </span>
         ) : (
           <span className="file-tree-spacer" />
         )}
-        <span className="file-tree-icon">
-          {entry.isDir ? (loading ? "…" : "📁") : "📄"}
+        <span
+          className={cn(
+            "file-tree-icon",
+            entry.isDir ? "file-tree-icon-folder" : "file-tree-icon-file"
+          )}
+        >
+          {entry.isDir ? (
+            loading ? (
+              "…"
+            ) : expanded ? (
+              <FolderOpen className="size-3.5 file-tree-icon-svg" />
+            ) : (
+              <Folder className="size-3.5 file-tree-icon-svg" />
+            )
+          ) : (
+            <FileText className="size-3.5 file-tree-icon-svg" />
+          )}
         </span>
         <span className="file-tree-name truncate">{entry.name}</span>
       </button>
@@ -145,8 +176,19 @@ function TreeEntry({
           {createDraft?.parentPath === entry.path && (
             <div className="file-tree-create-row">
               <span className="file-tree-spacer" />
-              <span className="file-tree-icon">
-                {createDraft.type === "dir" ? "📁" : "📄"}
+              <span
+                className={cn(
+                  "file-tree-icon",
+                  createDraft.type === "dir"
+                    ? "file-tree-icon-folder"
+                    : "file-tree-icon-file"
+                )}
+              >
+                {createDraft.type === "dir" ? (
+                  <FolderOpen className="size-3.5 file-tree-icon-svg" />
+                ) : (
+                  <FileText className="size-3.5 file-tree-icon-svg" />
+                )}
               </span>
               <input
                 autoFocus
@@ -366,8 +408,19 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
           {createDraft?.parentPath === "" && (
             <div className="file-tree-create-row">
               <span className="file-tree-spacer" />
-              <span className="file-tree-icon">
-                {createDraft.type === "dir" ? "📁" : "📄"}
+              <span
+                className={cn(
+                  "file-tree-icon",
+                  createDraft.type === "dir"
+                    ? "file-tree-icon-folder"
+                    : "file-tree-icon-file"
+                )}
+              >
+                {createDraft.type === "dir" ? (
+                  <FolderOpen className="size-3.5 file-tree-icon-svg" />
+                ) : (
+                  <FileText className="size-3.5 file-tree-icon-svg" />
+                )}
               </span>
               <input
                 autoFocus

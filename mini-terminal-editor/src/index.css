@@ -291,6 +291,18 @@ body {
   flex-shrink: 0;
   font-size: 0.75rem;
 }
+.file-tree-icon-svg {
+  stroke-width: 1.6;
+}
+.file-tree-icon-folder {
+  color: #f5a623;
+}
+.file-tree-icon-file {
+  color: #50a4ff;
+}
+.file-tree-icon-chevron {
+  color: #9aa6b2;
+}
 .file-tree-name {
   flex: 1;
   min-width: 0;
