@@ -1,21 +1,16 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect } from "react";
-import { TerminalComponent } from "./Terminal";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { WorkspaceProvider } from "./WorkspaceContext";
+import { WorkspaceGate } from "./WorkspaceGate";
 import "./index.css";
 
-// Terminal theme background
-const THEME_BG = { r: 2, g: 7, b: 12 };
-
 export function App() {
-  useEffect(() => {
-    getCurrentWindow()
-      .setBackgroundColor(THEME_BG)
-      .catch(() => {});
-  }, []);
-
   return (
-    <div className="app">
-      <TerminalComponent />
-    </div>
+    <TooltipProvider>
+      <WorkspaceProvider>
+        <div className="app">
+          <WorkspaceGate />
+        </div>
+      </WorkspaceProvider>
+    </TooltipProvider>
   );
 }

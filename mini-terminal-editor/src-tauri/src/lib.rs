@@ -1,15 +1,118 @@
 // Minimal terminal backend: PTY with Tauri Channel for output streaming.
 // Based on dispatcher pattern: Channel instead of emit, UTF-8 safety.
+// File operations: read_file, write_file, list_dir, path-constrained to workspace.
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use serde::Deserialize;
 use std::{
     collections::HashMap,
-    env,
+    env, fs,
     io::{Read, Write},
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
 };
 use tauri::{ipc::Channel, Manager, State};
+
+// ----- File operations (path-constrained to workspace) -----
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadFilePayload {
+    workspace_path: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WriteFilePayload {
+    workspace_path: String,
+    path: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListDirPayload {
+    workspace_path: String,
+    path: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ListDirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+}
+
+fn safe_workspace_child(workspace_path: &Path, relative_path: &str) -> Result<PathBuf, String> {
+    let canonical_workspace =
+        fs::canonicalize(workspace_path).map_err(|e| format!("invalid workspace path: {e}"))?;
+    let candidate = canonical_workspace.join(relative_path);
+    let canonical_candidate = fs::canonicalize(&candidate)
+        .map_err(|e| format!("invalid file path {}: {e}", candidate.display()))?;
+    if !canonical_candidate.starts_with(&canonical_workspace) {
+        return Err("file path escapes workspace".to_string());
+    }
+    Ok(canonical_candidate)
+}
+
+#[tauri::command]
+fn read_file(payload: ReadFilePayload) -> Result<String, String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_child(&workspace, &payload.path)?;
+    if !file_path.is_file() {
+        return Err("path is not a file".to_string());
+    }
+    fs::read_to_string(&file_path).map_err(|e| format!("failed to read file: {e}"))
+}
+
+#[tauri::command]
+fn write_file(payload: WriteFilePayload) -> Result<(), String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_child(&workspace, &payload.path)?;
+    fs::write(&file_path, payload.content).map_err(|e| format!("failed to write file: {e}"))
+}
+
+#[tauri::command]
+fn list_dir(payload: ListDirPayload) -> Result<Vec<ListDirEntry>, String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let dir_path = if payload.path.is_empty() {
+        workspace.clone()
+    } else {
+        safe_workspace_child(&workspace, &payload.path)?
+    };
+    if !dir_path.is_dir() {
+        return Err("path is not a directory".to_string());
+    }
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(&dir_path).map_err(|e| format!("failed to list dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "." || name == ".." {
+            continue;
+        }
+        let path = entry.path();
+        let is_dir = path.is_dir();
+        let rel = path
+            .strip_prefix(&workspace)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| path.to_string_lossy().to_string());
+        entries.push(ListDirEntry {
+            name,
+            path: rel,
+            is_dir,
+        });
+    }
+    entries.sort_by(|a, b| {
+        if a.is_dir != b.is_dir {
+            return a.is_dir.cmp(&b.is_dir).reverse();
+        }
+        a.name.to_lowercase().cmp(&b.name.to_lowercase())
+    });
+    Ok(entries)
+}
 
 #[derive(Clone, serde::Serialize)]
 struct TerminalOutput {
@@ -208,10 +311,7 @@ fn resize_terminal(
 }
 
 #[tauri::command]
-fn close_terminal(
-    state: State<TerminalState>,
-    terminal_id: String,
-) -> Result<(), String> {
+fn close_terminal(state: State<TerminalState>, terminal_id: String) -> Result<(), String> {
     let mut sessions = state
         .sessions
         .lock()
@@ -228,12 +328,16 @@ fn close_terminal(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             create_terminal,
             write_terminal,
             resize_terminal,
-            close_terminal
+            close_terminal,
+            read_file,
+            write_file,
+            list_dir
         ])
         .setup(|app| {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)

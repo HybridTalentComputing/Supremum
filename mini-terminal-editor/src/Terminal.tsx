@@ -38,7 +38,11 @@ function disposeWriteBatch() {
   writeBuffer = [];
 }
 
-export function TerminalComponent() {
+type TerminalComponentProps = {
+  cwd?: string;
+};
+
+export function TerminalComponent({ cwd }: TerminalComponentProps) {
   const terminalRootRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -84,7 +88,7 @@ export function TerminalComponent() {
 
       invoke("create_terminal", {
         terminalId: TERMINAL_ID,
-        cwd: null,
+        cwd: cwd || null,
         cols: xterm.cols,
         rows: xterm.rows,
         onOutput: channel,
