@@ -151,7 +151,10 @@ body {
   gap: 1.25rem;
   text-align: center;
   padding: 2.5rem 2rem 1.5rem;
-  width: min(46rem, calc(100vw - 4rem));
+  width: min(72rem, calc(100% - 4rem));
+  max-width: calc(100% - 4rem);
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .workspace-gate-visual {
