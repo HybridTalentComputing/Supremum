@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Circle,
   FileText,
+  FolderOpen,
   FolderClosed,
   PanelLeft,
   Plus,
@@ -94,13 +95,13 @@ function ActivePathBar({ path }: { path: string }) {
 }
 
 function WorkspaceEmptyState({
-  mark,
+  visual,
   title,
   description,
   meta,
   actions,
 }: {
-  mark: string;
+  visual: ReactNode;
   title: string;
   description: string;
   meta?: string;
@@ -114,8 +115,8 @@ function WorkspaceEmptyState({
   return (
     <div className="workspace-empty-state">
       <div className="workspace-empty-center">
-        <div className="workspace-empty-mark" aria-hidden>
-          {mark}
+        <div className="workspace-empty-visual" aria-hidden>
+          {visual}
         </div>
         <div className="workspace-empty-copy">
           <h2 className="workspace-empty-title">{title}</h2>
@@ -506,7 +507,7 @@ export function MainLayout() {
                     </div>
                     <div className="terminal-stage">
                       <WorkspaceEmptyState
-                        mark="{>_}"
+                        visual={<SquareTerminal className="workspace-empty-icon" />}
                         title="Workspace ready"
                         description="Open a terminal only when you need one. Keep the canvas clean until there is actual work to run."
                         meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
@@ -618,7 +619,7 @@ export function MainLayout() {
                     ) : (
                       <div className="editor-empty-shell">
                         <WorkspaceEmptyState
-                          mark="[/]"
+                          visual={<FolderOpen className="workspace-empty-icon" />}
                           title="Editor is empty"
                           description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
                           meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
