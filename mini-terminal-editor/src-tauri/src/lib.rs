@@ -598,7 +598,7 @@ pub fn run() {
                 {
                     use cocoa::{
                         appkit::{NSWindow, NSWindowTitleVisibility},
-                        base::{id, YES},
+                        base::{id, NO, YES},
                     };
 
                     if let Ok(ns_window) = win.ns_window() {
@@ -607,7 +607,8 @@ pub fn run() {
                             ns_window.setTitlebarAppearsTransparent_(YES);
                             ns_window
                                 .setTitleVisibility_(NSWindowTitleVisibility::NSWindowTitleHidden);
-                            ns_window.setMovableByWindowBackground_(YES);
+                            // Only our explicit drag regions should move the window.
+                            ns_window.setMovableByWindowBackground_(NO);
                         }
                     }
                 }

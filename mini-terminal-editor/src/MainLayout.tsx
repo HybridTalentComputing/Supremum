@@ -21,8 +21,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
-import { type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -175,6 +176,18 @@ export function MainLayout() {
 
     viewport.scrollLeft += event.deltaY;
     event.preventDefault();
+  }, []);
+
+  const handleTitlebarMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest('[data-tauri-drag-region="false"]')) return;
+
+    void getCurrentWindow().startDragging().catch((error) => {
+      console.error("Failed to start window dragging:", error);
+    });
   }, []);
 
   const handleOpenFile = useCallback((path: string, content: string) => {
@@ -358,7 +371,7 @@ export function MainLayout() {
 
   return (
     <div className="main-layout-shell">
-      <div className="app-titlebar" data-tauri-drag-region>
+      <div className="app-titlebar" onMouseDown={handleTitlebarMouseDown}>
         <div className="app-titlebar-controls">
           <Button
             type="button"

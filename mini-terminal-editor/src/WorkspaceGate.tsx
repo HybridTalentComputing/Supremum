@@ -3,11 +3,12 @@
  */
 import { open } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "./WorkspaceContext";
 import { MainLayout } from "./MainLayout";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FolderOpen, FolderPlus, History } from "lucide-react";
 
 const CREATE_PROJECT_LOCATION_STORAGE_KEY = "subset.create-project-location";
@@ -131,9 +132,22 @@ export function WorkspaceGate() {
       ? `${formatDisplayPath(createParentPath)}/${createProjectNameTrimmed}`
       : null;
 
+  const handleTitlebarMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest('[data-tauri-drag-region="false"]')) return;
+
+    void getCurrentWindow().startDragging().catch((error) => {
+      console.error("Failed to start window dragging:", error);
+    });
+  };
+
   if (!workspacePath) {
     return (
       <div className="workspace-gate">
+        <div className="workspace-gate-titlebar" onMouseDown={handleTitlebarMouseDown} />
         <div className="workspace-gate-content">
           <div className="workspace-gate-visual" aria-hidden>
             <img

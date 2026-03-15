@@ -126,19 +126,31 @@ body {
 /* Workspace gate: select project folder */
 .workspace-gate {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   min-height: 100vh;
   background: #02070c;
+}
+
+.workspace-gate-titlebar {
+  flex: none;
+  height: 30px;
+  min-height: 30px;
+  border-bottom: 1px solid rgba(201, 216, 230, 0.1);
+  background: #02070c;
+  user-select: none;
 }
 
 .workspace-gate-content {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   gap: 1.25rem;
   text-align: center;
-  padding: 2rem;
+  padding: 2.5rem 2rem 1.5rem;
   width: min(46rem, calc(100vw - 4rem));
 }
 
@@ -339,9 +351,12 @@ body {
   width: 100%;
   flex-direction: column;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
   gap: 0.65rem;
   margin-top: 0.35rem;
   text-align: left;
+  overflow: hidden;
 }
 
 .workspace-gate-recents-header {
@@ -359,6 +374,35 @@ body {
   width: 100%;
   flex-direction: column;
   gap: 0.25rem;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.25rem;
+  scrollbar-width: auto;
+  scrollbar-color: transparent transparent;
+}
+
+.workspace-gate-recent-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.workspace-gate-recent-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-gate-recent-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.workspace-gate-recents:hover .workspace-gate-recent-list,
+.workspace-gate-recents:focus-within .workspace-gate-recent-list {
+  scrollbar-color: rgba(120, 130, 142, 0.85) transparent;
+}
+
+.workspace-gate-recents:hover .workspace-gate-recent-list::-webkit-scrollbar-thumb,
+.workspace-gate-recents:focus-within .workspace-gate-recent-list::-webkit-scrollbar-thumb {
+  background: rgba(140, 151, 164, 0.72);
 }
 
 .workspace-gate-recent {
