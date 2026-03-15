@@ -340,6 +340,106 @@ body {
   display: flex;
 }
 
+.workspace-empty-state {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  background: #02070c;
+}
+
+.workspace-empty-center {
+  display: flex;
+  width: min(30rem, 100%);
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.workspace-empty-mark {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-size: clamp(2.4rem, 7vw, 3.3rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(223, 230, 236, 0.26);
+}
+
+.workspace-empty-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.workspace-empty-title {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: rgba(244, 251, 255, 0.9);
+}
+
+.workspace-empty-description {
+  max-width: 24rem;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: rgba(159, 174, 188, 0.76);
+}
+
+.workspace-empty-meta {
+  font-size: 0.76rem;
+  color: rgba(130, 145, 160, 0.72);
+}
+
+.workspace-empty-actions {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.workspace-empty-action {
+  display: flex;
+  width: 100%;
+  height: 2.6rem;
+  justify-content: space-between;
+  border-radius: 10px;
+  padding: 0 0.75rem;
+  color: rgba(201, 216, 230, 0.78);
+}
+
+.workspace-empty-action:hover,
+.workspace-empty-action:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(244, 251, 255, 0.94);
+}
+
+.workspace-empty-action-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.workspace-empty-action-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.35rem;
+  min-width: 3.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(159, 174, 188, 0.72);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .terminal-shell {
   display: flex;
   flex: 1;
@@ -358,6 +458,20 @@ body {
   overflow: hidden;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
   background: #02070c;
+}
+
+.terminal-tabs-bar-empty {
+  justify-content: space-between;
+}
+
+.terminal-tabs-empty-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.875rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(159, 174, 188, 0.74);
 }
 
 .terminal-tabs-scroll {
@@ -546,6 +660,13 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.editor-empty-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 .editor-header {

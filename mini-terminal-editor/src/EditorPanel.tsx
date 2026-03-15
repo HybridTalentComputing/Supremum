@@ -8,10 +8,24 @@ import { FileTree } from "./FileTree";
 type EditorPanelProps = {
   workspacePath: string;
   onOpenFile: (path: string, content: string) => void;
+  activeSidebarTab?: "changes" | "files";
+  onSidebarTabChange?: (tab: "changes" | "files") => void;
 };
 
-export function EditorPanel({ workspacePath, onOpenFile }: EditorPanelProps) {
-  const [activeTab, setActiveTab] = useState<"changes" | "files">("files");
+export function EditorPanel({
+  workspacePath,
+  onOpenFile,
+  activeSidebarTab,
+  onSidebarTabChange,
+}: EditorPanelProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState<"changes" | "files">("files");
+  const activeTab = activeSidebarTab ?? internalActiveTab;
+
+  const handleTabChange = (value: string) => {
+    const nextTab = value === "changes" ? "changes" : "files";
+    setInternalActiveTab(nextTab);
+    onSidebarTabChange?.(nextTab);
+  };
 
   const handleSelectFile = (path: string, content: string) => {
     onOpenFile(path, content);
@@ -20,9 +34,7 @@ export function EditorPanel({ workspacePath, onOpenFile }: EditorPanelProps) {
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(value) =>
-        setActiveTab(value === "changes" ? "changes" : "files")
-      }
+      onValueChange={handleTabChange}
       className="flex flex-col flex-1 min-h-0 w-full gap-0"
     >
       {/* Tabs 横跨整个右栏顶部，平分宽度，随窗口伸缩 */}

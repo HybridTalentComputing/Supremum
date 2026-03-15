@@ -1,0 +1,50 @@
+<svg width="256" height="256" viewBox="0 0 256 256"
+     xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: light rounded-rectangle app icon -->
+  <rect x="8" y="8" width="240" height="240" rx="48"
+        fill="#F5F5F7"/>
+
+  <!-- AI glow: very subtle cyan gradient behind brackets -->
+  <defs>
+    <radialGradient id="aiGlowLight" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#30CFFF" stop-opacity="0.18"/>
+      <stop offset="70%" stop-color="#1C88E5" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="128" cy="128" rx="80" ry="60"
+           fill="url(#aiGlowLight)"/>
+
+  <!-- Clean subset brackets: dark gray for good contrast on light bg -->
+  <!-- Left bracket -->
+  <path d="M112 92
+           H 104
+           C 92 92 84 98 84 108
+           V 148
+           C 84 158 92 164 104 164
+           H 112"
+        fill="none"
+        stroke="#2F3540"
+        stroke-width="12"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+  <!-- Right bracket -->
+  <path d="M144 92
+           H 152
+           C 164 92 172 98 172 108
+           V 148
+           C 172 158 164 164 152 164
+           H 144"
+        fill="none"
+        stroke="#2F3540"
+        stroke-width="12"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+  <!-- Outer intelligence ring: subtle line to echo dark-mode icon -->
+  <circle cx="128" cy="128" r="92" 
+          fill="none" stroke="#9CCFF5" 
+          stroke-width="2" opacity="0.35"/>
+
+</svg>

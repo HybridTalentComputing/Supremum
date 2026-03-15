@@ -21,7 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
-import { type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   Circle,
@@ -93,23 +93,72 @@ function ActivePathBar({ path }: { path: string }) {
   );
 }
 
+function WorkspaceEmptyState({
+  mark,
+  title,
+  description,
+  meta,
+  actions,
+}: {
+  mark: string;
+  title: string;
+  description: string;
+  meta?: string;
+  actions?: Array<{
+    icon: ReactNode;
+    label: string;
+    hint?: string;
+    onClick?: () => void;
+  }>;
+}) {
+  return (
+    <div className="workspace-empty-state">
+      <div className="workspace-empty-center">
+        <div className="workspace-empty-mark" aria-hidden>
+          {mark}
+        </div>
+        <div className="workspace-empty-copy">
+          <h2 className="workspace-empty-title">{title}</h2>
+          <p className="workspace-empty-description">{description}</p>
+          {meta ? <p className="workspace-empty-meta">{meta}</p> : null}
+        </div>
+        {actions?.length ? (
+          <div className="workspace-empty-actions">
+            {actions.map((action) => (
+              <Button
+                key={action.label}
+                type="button"
+                variant="ghost"
+                className="workspace-empty-action"
+                onClick={action.onClick}
+              >
+                <span className="workspace-empty-action-main">
+                  {action.icon}
+                  <span>{action.label}</span>
+                </span>
+                {action.hint ? (
+                  <span className="workspace-empty-action-hint">{action.hint}</span>
+                ) : null}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function MainLayout() {
   const { workspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const terminalCounterRef = useRef(1);
-  const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([
-    {
-      id: "term-1",
-      title: "Terminal 1",
-      defaultTitle: "Terminal 1",
-      cwd: workspacePath ?? undefined,
-    },
-  ]);
-  const [activeTerminalId, setActiveTerminalId] = useState("term-1");
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<"terminal" | "editor">("terminal");
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -124,7 +173,7 @@ export function MainLayout() {
     event.preventDefault();
   }, []);
 
-  const handleOpenFile = (path: string, content: string) => {
+  const handleOpenFile = useCallback((path: string, content: string) => {
     setOpenTabs((currentTabs) => {
       const existingTab = currentTabs.find((tab) => tab.path === path);
       if (existingTab) return currentTabs;
@@ -132,7 +181,7 @@ export function MainLayout() {
     });
     setActiveTabPath(path);
     setActiveWorkspace("editor");
-  };
+  }, []);
 
   const handleSave = async (path: string, content: string) => {
     await invoke("write_file", {
@@ -172,9 +221,6 @@ export function MainLayout() {
         if (nextTabs.length === 0) return null;
         return nextTabs[Math.max(0, tabIndex - 1)]?.path ?? nextTabs[0].path;
       });
-      if (nextTabs.length === 0) {
-        setActiveWorkspace("terminal");
-      }
       return nextTabs;
     });
   };
@@ -197,16 +243,13 @@ export function MainLayout() {
 
   const handleCloseTerminal = useCallback((terminalId: string) => {
     setTerminalTabs((currentTabs) => {
-      if (currentTabs.length <= 1) {
-        return currentTabs;
-      }
-
       const tabIndex = currentTabs.findIndex((tab) => tab.id === terminalId);
       if (tabIndex === -1) return currentTabs;
 
       const nextTabs = currentTabs.filter((tab) => tab.id !== terminalId);
       setActiveTerminalId((currentActiveId) => {
         if (currentActiveId !== terminalId) return currentActiveId;
+        if (nextTabs.length === 0) return null;
         return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
       });
       return nextTabs;
@@ -237,13 +280,18 @@ export function MainLayout() {
     setSidebarCollapsed(true);
   }, []);
 
+  const handleShowSidebar = useCallback(() => {
+    const panel = sidebarPanelRef.current;
+    setActiveSidebarTab("files");
+    if (!panel || !panel.isCollapsed()) return;
+    panel.expand();
+    setSidebarCollapsed(false);
+  }, []);
+
   useEffect(() => {
     if (openTabs.length === 0) {
       if (activeTabPath !== null) {
         setActiveTabPath(null);
-      }
-      if (activeWorkspace === "editor") {
-        setActiveWorkspace("terminal");
       }
       return;
     }
@@ -251,11 +299,22 @@ export function MainLayout() {
     if (!activeTabPath || !openTabs.some((tab) => tab.path === activeTabPath)) {
       setActiveTabPath(openTabs[0].path);
     }
-  }, [activeTabPath, activeWorkspace, openTabs]);
+  }, [activeTabPath, openTabs]);
 
-  const activeTerminal = terminalTabs.find((tab) => tab.id === activeTerminalId) ?? terminalTabs[0];
+  useEffect(() => {
+    if (terminalTabs.length === 0) {
+      if (activeTerminalId !== null) {
+        setActiveTerminalId(null);
+      }
+      return;
+    }
+
+    if (!activeTerminalId || !terminalTabs.some((tab) => tab.id === activeTerminalId)) {
+      setActiveTerminalId(terminalTabs[0].id);
+    }
+  }, [activeTerminalId, terminalTabs]);
+
   const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
-  const canShowEditor = openTabs.length > 0;
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
 
   return (
@@ -298,6 +357,8 @@ export function MainLayout() {
             <EditorPanel
               workspacePath={workspacePath!}
               onOpenFile={handleOpenFile}
+              activeSidebarTab={activeSidebarTab}
+              onSidebarTabChange={setActiveSidebarTab}
             />
           </div>
         </ResizablePanel>
@@ -326,11 +387,7 @@ export function MainLayout() {
                   size="sm"
                   className="workspace-manager-switch"
                   data-active={activeWorkspace === "editor" ? "true" : undefined}
-                  onClick={() => {
-                    if (!canShowEditor) return;
-                    setActiveWorkspace("editor");
-                  }}
-                  disabled={!canShowEditor}
+                  onClick={() => setActiveWorkspace("editor")}
                   aria-pressed={activeWorkspace === "editor"}
                 >
                   <FileText className="size-3.5" />
@@ -345,31 +402,31 @@ export function MainLayout() {
                 className="workspace-panel workspace-panel-terminal"
                 data-active={activeWorkspace === "terminal" ? "true" : undefined}
               >
-                <Tabs
-                  value={activeTerminalId}
-                  onValueChange={setActiveTerminalId}
-                  className="terminal-shell"
-                >
-                  <div className="terminal-tabs-bar">
-                    <ScrollArea
-                      className="terminal-tabs-scroll min-w-0 flex-1"
-                      onWheel={handleTabsWheel}
-                    >
-                      <TabsList
-                        variant="line"
-                        className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                {terminalTabs.length > 0 && activeTerminalId ? (
+                  <Tabs
+                    value={activeTerminalId}
+                    onValueChange={setActiveTerminalId}
+                    className="terminal-shell"
+                  >
+                    <div className="terminal-tabs-bar">
+                      <ScrollArea
+                        className="terminal-tabs-scroll min-w-0 flex-1"
+                        onWheel={handleTabsWheel}
                       >
-                        {terminalTabs.map((tab) => (
-                          <Tooltip key={tab.id}>
-                            <TooltipTrigger
-                              render={
-                                <TabsTrigger
-                                  value={tab.id}
-                                  className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                >
-                                  <SquareTerminal className="size-3.5" />
-                                  <span className="terminal-tab-label truncate">{tab.title}</span>
-                                  {terminalTabs.length > 1 && (
+                        <TabsList
+                          variant="line"
+                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                        >
+                          {terminalTabs.map((tab) => (
+                            <Tooltip key={tab.id}>
+                              <TooltipTrigger
+                                render={
+                                  <TabsTrigger
+                                    value={tab.id}
+                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                  >
+                                    <SquareTerminal className="size-3.5" />
+                                    <span className="terminal-tab-label truncate">{tab.title}</span>
                                     <span
                                       role="button"
                                       tabIndex={0}
@@ -389,57 +446,91 @@ export function MainLayout() {
                                     >
                                       <X className="size-3.5" />
                                     </span>
-                                  )}
-                                </TabsTrigger>
-                              }
-                            />
-                            <TooltipContent>{tab.title}</TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </TabsList>
-                      <ScrollBar orientation="horizontal" />
-                    </ScrollArea>
-                    <div className="terminal-tabs-actions">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="terminal-tab-create"
-                        onClick={handleCreateTerminal}
-                        aria-label="新建终端"
-                      >
-                        <Plus className="size-3.5" />
-                      </Button>
+                                  </TabsTrigger>
+                                }
+                              />
+                              <TooltipContent>{tab.title}</TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </TabsList>
+                        <ScrollBar orientation="horizontal" />
+                      </ScrollArea>
+                      <div className="terminal-tabs-actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="terminal-tab-create"
+                          onClick={handleCreateTerminal}
+                          aria-label="新建终端"
+                        >
+                          <Plus className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="terminal-stage">
+                      {terminalTabs.map((tab) => (
+                        <div
+                          key={tab.id}
+                          className="terminal-tab-panel"
+                          data-active={tab.id === activeTerminalId ? "true" : undefined}
+                        >
+                          <TerminalComponent
+                            terminalId={tab.id}
+                            cwd={tab.cwd}
+                            active={activeWorkspace === "terminal" && tab.id === activeTerminalId}
+                            defaultTitle={tab.defaultTitle}
+                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </Tabs>
+                ) : (
+                  <div className="terminal-shell terminal-shell-empty">
+                    <div className="terminal-tabs-bar terminal-tabs-bar-empty">
+                      <div className="terminal-tabs-empty-label">No terminal yet</div>
+                      <div className="terminal-tabs-actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="terminal-tab-create"
+                          onClick={handleCreateTerminal}
+                          aria-label="新建终端"
+                        >
+                          <Plus className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="terminal-stage">
+                      <WorkspaceEmptyState
+                        mark="{>_}"
+                        title="Workspace ready"
+                        description="Open a terminal only when you need one. Keep the canvas clean until there is actual work to run."
+                        meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                        actions={[
+                          {
+                            icon: <SquareTerminal className="size-4" />,
+                            label: "New Terminal",
+                            hint: "create",
+                            onClick: handleCreateTerminal,
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
-
-                  <div className="terminal-stage">
-                    {terminalTabs.map((tab) => (
-                      <div
-                        key={tab.id}
-                        className="terminal-tab-panel"
-                        data-active={tab.id === activeTerminalId ? "true" : undefined}
-                      >
-                        <TerminalComponent
-                          terminalId={tab.id}
-                          cwd={tab.cwd}
-                          active={activeWorkspace === "terminal" && tab.id === activeTerminalId}
-                          defaultTitle={tab.defaultTitle}
-                          onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </Tabs>
+                )}
               </div>
 
-              {canShowEditor && activeTab && (
-                <div
-                  className="workspace-panel workspace-panel-editor"
-                  data-active={activeWorkspace === "editor" ? "true" : undefined}
-                >
-                  <div className="editor-workspace">
-                    <div className="editor-workspace-inner">
+              <div
+                className="workspace-panel workspace-panel-editor"
+                data-active={activeWorkspace === "editor" ? "true" : undefined}
+              >
+                <div className="editor-workspace">
+                  <div className="editor-workspace-inner">
+                    {activeTab ? (
                       <Tabs
                         value={activeTab.path}
                         onValueChange={setActiveTabPath}
@@ -524,10 +615,19 @@ export function MainLayout() {
                           />
                         </div>
                       </Tabs>
-                    </div>
+                    ) : (
+                      <div className="editor-empty-shell">
+                        <WorkspaceEmptyState
+                          mark="[/]"
+                          title="Editor is empty"
+                          description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
+                          meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
             </TooltipProvider>
           </div>
