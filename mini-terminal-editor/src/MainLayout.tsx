@@ -178,7 +178,7 @@ function AgentPresetLauncher({
         <div className="agent-launcher-header">
           <h2 className="workspace-empty-title">Choose an AI agent</h2>
           <p className="workspace-empty-description">
-            Pick a preset to launch directly into the corresponding CLI workflow.
+            Pick a preset to launch directly into the corresponding CLI.
           </p>
         </div>
         <div className="agent-launcher-list">
