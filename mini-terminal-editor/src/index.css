@@ -1594,7 +1594,7 @@ body {
   min-height: 0;
   position: relative;
   overflow: hidden;
-  color: rgba(211, 220, 229, 0.82);
+  color: rgba(255, 255, 255, 0.78);
   font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .file-tree-toolbar {
@@ -1603,9 +1603,9 @@ body {
   justify-content: space-between;
   flex-shrink: 0;
   padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
-  color: rgba(204, 213, 221, 0.74);
+  color: rgba(255, 255, 255, 0.64);
 }
 .file-tree-actions {
   display: flex;
@@ -1625,7 +1625,7 @@ body {
   gap: 0.35rem;
   flex-shrink: 0;
   padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .file-tree-search-input {
   flex: 1;
@@ -1634,7 +1634,7 @@ body {
   border: none;
   font-size: 0.8125rem;
   font-family: inherit;
-  color: rgba(220, 228, 236, 0.84);
+  color: rgba(255, 255, 255, 0.82);
   outline: none;
 }
 .file-tree-search-clear {
@@ -1677,15 +1677,15 @@ body {
 }
 .file-tree-container:hover .file-tree,
 .file-tree-container:focus-within .file-tree {
-  scrollbar-color: rgba(120, 130, 142, 0.85) #1e1e1e;
+  scrollbar-color: rgba(142, 142, 142, 0.85) #161616;
 }
 .file-tree-container:hover .file-tree::-webkit-scrollbar-track,
 .file-tree-container:focus-within .file-tree::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: #161616;
 }
 .file-tree-container:hover .file-tree::-webkit-scrollbar-thumb,
 .file-tree-container:focus-within .file-tree::-webkit-scrollbar-thumb {
-  background: rgba(120, 130, 142, 0.85);
+  background: rgba(142, 142, 142, 0.85);
 }
 /* Row wrapper — react-arborist uses absolute positioning in react-window */
 .file-tree-row-wrapper {
@@ -1707,7 +1707,7 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
   background: transparent;
-  color: rgba(216, 224, 232, 0.82);
+  color: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   user-select: none;
   box-sizing: border-box;
@@ -1720,12 +1720,12 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .file-tree-row[data-focused="true"] {
-  outline: 1px solid rgba(130, 190, 255, 0.22);
+  outline: 1px solid rgba(255, 255, 255, 0.16);
   outline-offset: -1px;
 }
 .file-tree-row[data-drop-target="true"] {
-  background: rgba(31, 216, 255, 0.12);
-  outline: 1px dashed rgba(31, 216, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  outline: 1px dashed rgba(255, 255, 255, 0.22);
   outline-offset: -1px;
 }
 .file-tree-row[data-dragging="true"] {
@@ -1743,12 +1743,12 @@ body.file-tree-dragging * {
   transform: translateX(20px);
 }
 .file-tree-drag-preview-content {
-  background: rgba(31, 216, 255, 0.15);
-  border: 1px solid rgba(31, 216, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
   font-size: 0.8125rem;
-  color: #c9d8e6;
+  color: #efefef;
   white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
@@ -1772,7 +1772,7 @@ body.file-tree-dragging * {
   stroke-width: 1.6;
 }
 .file-tree-icon-chevron {
-  color: rgba(154, 166, 178, 0.72);
+  color: rgba(255, 255, 255, 0.42);
 }
 .file-tree-name {
   flex: 0 0 auto;
@@ -1780,12 +1780,12 @@ body.file-tree-dragging * {
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap;
-  color: rgba(226, 233, 239, 0.9);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
   letter-spacing: 0;
 }
 .file-tree-row[data-selected="true"] .file-tree-name {
-  color: rgba(245, 248, 251, 0.97);
+  color: rgba(255, 255, 255, 0.97);
 }
 .file-tree-rename-input {
   flex: 1;
@@ -1799,8 +1799,8 @@ body.file-tree-dragging * {
   outline: none;
 }
 .file-tree-rename-input:focus {
-  border-color: rgba(31, 216, 255, 0.5);
-  box-shadow: 0 0 0 2px rgba(31, 216, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 .file-tree-loading,
 .file-tree-error {
