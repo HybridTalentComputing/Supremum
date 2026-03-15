@@ -21,8 +21,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
+  ChevronDown,
   ChevronRight,
   Circle,
   FileText,
@@ -110,6 +112,7 @@ function WorkspaceEmptyState({
     label: string;
     hint?: string;
     onClick?: () => void;
+    emphasis?: boolean;
   }>;
 }) {
   return (
@@ -129,8 +132,8 @@ function WorkspaceEmptyState({
               <Button
                 key={action.label}
                 type="button"
-                variant="ghost"
-                className="workspace-empty-action"
+                variant={action.emphasis ? "outline" : "ghost"}
+                className={`workspace-empty-action${action.emphasis ? " workspace-empty-action-emphasis" : ""}`}
                 onClick={action.onClick}
               >
                 <span className="workspace-empty-action-main">
@@ -150,7 +153,7 @@ function WorkspaceEmptyState({
 }
 
 export function MainLayout() {
-  const { workspacePath } = useWorkspace();
+  const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const terminalCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
@@ -289,6 +292,56 @@ export function MainLayout() {
     setSidebarCollapsed(false);
   }, []);
 
+  const handleSwitchWorkspace = useCallback(async () => {
+    if (!workspacePath) return;
+
+    const hasDirtyTabs = openTabs.some((tab) => tab.content !== tab.savedContent);
+    const hasOpenContext = terminalTabs.length > 0 || openTabs.length > 0;
+
+    if (hasDirtyTabs) {
+      const shouldContinue = window.confirm(
+        "Switch project? Unsaved editor changes will be lost and open terminals will be closed."
+      );
+      if (!shouldContinue) return;
+    } else if (hasOpenContext) {
+      const shouldContinue = window.confirm(
+        "Switch project? Open terminals and editor tabs in the current project will be closed."
+      );
+      if (!shouldContinue) return;
+    }
+
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Switch Project",
+        defaultPath: workspacePath,
+      });
+
+      const nextPath =
+        typeof selected === "string" ? selected : Array.isArray(selected) ? selected[0] : null;
+      if (!nextPath || nextPath === workspacePath) return;
+
+      await Promise.all(
+        terminalTabs.map((tab) =>
+          invoke("close_terminal", { terminalId: tab.id }).catch((error) => {
+            console.error(`Failed to close terminal ${tab.id}:`, error);
+          })
+        )
+      );
+
+      setTerminalTabs([]);
+      setActiveTerminalId(null);
+      setOpenTabs([]);
+      setActiveTabPath(null);
+      setActiveWorkspace("terminal");
+      setActiveSidebarTab("files");
+      setWorkspacePath(nextPath);
+    } catch (error) {
+      console.error("Failed to switch workspace:", error);
+    }
+  }, [openTabs, setWorkspacePath, terminalTabs, workspacePath]);
+
   useEffect(() => {
     if (openTabs.length === 0) {
       if (activeTabPath !== null) {
@@ -333,10 +386,19 @@ export function MainLayout() {
           >
             <PanelLeft className="size-3.5" />
           </Button>
-          <div className="app-titlebar-path" title={workspacePath ?? undefined}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="app-titlebar-path-button"
+            onClick={() => void handleSwitchWorkspace()}
+            data-tauri-drag-region="false"
+            title={workspacePath ?? undefined}
+          >
             <FolderClosed className="size-3.5" />
             <span className="app-titlebar-path-text truncate">{workspaceDisplayPath}</span>
-          </div>
+            <ChevronDown className="size-3.5 app-titlebar-path-chevron" />
+          </Button>
         </div>
         <div className="app-titlebar-drag-region" />
       </div>
@@ -517,6 +579,7 @@ export function MainLayout() {
                             label: "New Terminal",
                             hint: "create",
                             onClick: handleCreateTerminal,
+                            emphasis: true,
                           },
                         ]}
                       />

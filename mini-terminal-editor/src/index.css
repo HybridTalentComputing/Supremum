@@ -466,7 +466,7 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.app-titlebar-path {
+.app-titlebar-path-button {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -476,15 +476,21 @@ body {
   border-radius: 8px;
   color: rgba(201, 216, 230, 0.82);
   font-size: 0.8rem;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
-.app-titlebar-path > * {
-  pointer-events: none;
+.app-titlebar-path-button:hover,
+.app-titlebar-path-button:focus-visible {
+  color: rgba(244, 251, 255, 0.96);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .app-titlebar-path-text {
   min-width: 0;
+}
+
+.app-titlebar-path-chevron {
+  color: rgba(159, 174, 188, 0.66);
 }
 
 .app-titlebar-drag-region {
@@ -684,6 +690,19 @@ body {
 .workspace-empty-action:focus-visible {
   background: rgba(255, 255, 255, 0.04);
   color: rgba(244, 251, 255, 0.94);
+}
+
+.workspace-empty-action-emphasis {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(236, 242, 247, 0.92);
+  box-shadow: none;
+}
+
+.workspace-empty-action-emphasis:hover,
+.workspace-empty-action-emphasis:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .workspace-empty-action-main {
