@@ -390,6 +390,15 @@ fn create_terminal(
     cmd.cwd(&cwd_path);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "Mini Terminal");
+    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+    cmd.env("CLICOLOR", "1");
+    cmd.env("CLICOLOR_FORCE", "1");
+    cmd.env("LSCOLORS", "ExFxCxDxBxegedabagacad");
+    cmd.env(
+        "LS_COLORS",
+        "di=1;36:ln=1;35:so=1;32:pi=33:ex=1;32:bd=1;33:cd=1;33:su=37;41:sg=30;43:tw=30;42:ow=34;42",
+    );
     cmd.arg("-i");
 
     let child = pair
