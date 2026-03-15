@@ -252,6 +252,13 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
     window.addEventListener("pointerup", handlePointerUp);
   }, [ctx, node]);
 
+  const handleRowClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    node.handleClick(e);
+    if (node.data.isDir) {
+      node.toggle();
+    }
+  }, [node]);
+
   return (
     <div
       ref={rowRef}
@@ -262,7 +269,7 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
       data-drop-target={isDropTarget ? "true" : undefined}
       data-focused={node.isFocused ? "true" : undefined}
       data-dragging={isBeingDragged ? "true" : undefined}
-      onClick={(e) => node.handleClick(e)}
+      onClick={handleRowClick}
       onPointerDown={handlePointerDown}
       onContextMenu={() => {
         ctx.setContextTarget(
