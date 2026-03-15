@@ -38,6 +38,8 @@ export function WorkspaceGate() {
   const [createPanelOpen, setCreatePanelOpen] = useState(false);
   const [createParentPath, setCreateParentPath] = useState<string | null>(null);
   const createInputRef = useRef<HTMLInputElement | null>(null);
+  const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const titlebarDraggingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,16 +140,54 @@ export function WorkspaceGate() {
     const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest('[data-tauri-drag-region="false"]')) return;
+    if (event.detail === 2) {
+      titlebarDragStartRef.current = null;
+      titlebarDraggingRef.current = false;
+      void invoke("toggle_window_zoom").catch((error) => {
+        console.error("Failed to toggle window zoom:", error);
+      });
+      return;
+    }
+    titlebarDragStartRef.current = { x: event.clientX, y: event.clientY };
+    titlebarDraggingRef.current = false;
+  };
 
+  const handleTitlebarMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    if ((event.buttons & 1) !== 1) return;
+    if (!titlebarDragStartRef.current || titlebarDraggingRef.current) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-tauri-drag-region="false"]')) {
+      titlebarDragStartRef.current = null;
+      return;
+    }
+
+    const deltaX = Math.abs(event.clientX - titlebarDragStartRef.current.x);
+    const deltaY = Math.abs(event.clientY - titlebarDragStartRef.current.y);
+    if (deltaX < 4 && deltaY < 4) return;
+
+    titlebarDraggingRef.current = true;
+    titlebarDragStartRef.current = null;
     void getCurrentWindow().startDragging().catch((error) => {
       console.error("Failed to start window dragging:", error);
     });
   };
 
+  const handleTitlebarMouseUp = () => {
+    titlebarDragStartRef.current = null;
+    titlebarDraggingRef.current = false;
+  };
+
   if (!workspacePath) {
     return (
       <div className="workspace-gate">
-        <div className="workspace-gate-titlebar" onMouseDown={handleTitlebarMouseDown} />
+        <div
+          className="workspace-gate-titlebar"
+          onMouseDown={handleTitlebarMouseDown}
+          onMouseMove={handleTitlebarMouseMove}
+          onMouseUp={handleTitlebarMouseUp}
+          onMouseLeave={handleTitlebarMouseUp}
+        />
         <div className="workspace-gate-content">
           <div className="workspace-gate-visual" aria-hidden>
             <img

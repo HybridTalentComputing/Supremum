@@ -220,6 +220,8 @@ export function MainLayout() {
   const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const agentPresetMenuRef = useRef<HTMLDivElement | null>(null);
+  const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const titlebarDraggingRef = useRef(false);
   const terminalCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
@@ -250,10 +252,42 @@ export function MainLayout() {
     const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest('[data-tauri-drag-region="false"]')) return;
+    if (event.detail === 2) {
+      titlebarDragStartRef.current = null;
+      titlebarDraggingRef.current = false;
+      void invoke("toggle_window_zoom").catch((error) => {
+        console.error("Failed to toggle window zoom:", error);
+      });
+      return;
+    }
+    titlebarDragStartRef.current = { x: event.clientX, y: event.clientY };
+    titlebarDraggingRef.current = false;
+  }, []);
 
+  const handleTitlebarMouseMove = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if ((event.buttons & 1) !== 1) return;
+    if (!titlebarDragStartRef.current || titlebarDraggingRef.current) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-tauri-drag-region="false"]')) {
+      titlebarDragStartRef.current = null;
+      return;
+    }
+
+    const deltaX = Math.abs(event.clientX - titlebarDragStartRef.current.x);
+    const deltaY = Math.abs(event.clientY - titlebarDragStartRef.current.y);
+    if (deltaX < 4 && deltaY < 4) return;
+
+    titlebarDraggingRef.current = true;
+    titlebarDragStartRef.current = null;
     void getCurrentWindow().startDragging().catch((error) => {
       console.error("Failed to start window dragging:", error);
     });
+  }, []);
+
+  const handleTitlebarMouseUp = useCallback(() => {
+    titlebarDragStartRef.current = null;
+    titlebarDraggingRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -556,7 +590,13 @@ export function MainLayout() {
 
   return (
     <div className="main-layout-shell">
-      <div className="app-titlebar" onMouseDown={handleTitlebarMouseDown}>
+      <div
+        className="app-titlebar"
+        onMouseDown={handleTitlebarMouseDown}
+        onMouseMove={handleTitlebarMouseMove}
+        onMouseUp={handleTitlebarMouseUp}
+        onMouseLeave={handleTitlebarMouseUp}
+      >
         <div className="app-titlebar-controls">
           <Button
             type="button"

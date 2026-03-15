@@ -346,6 +346,43 @@ fn reveal_in_file_manager(payload: RevealInFileManagerPayload) -> Result<(), Str
     Ok(())
 }
 
+#[tauri::command]
+fn toggle_window_zoom(window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::{
+            appkit::NSWindow,
+            base::{id, nil},
+        };
+
+        let ns_window = window
+            .ns_window()
+            .map_err(|e| format!("failed to access native window: {e}"))?;
+        let ns_window = ns_window as id;
+        unsafe {
+            ns_window.performZoom_(nil);
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let is_maximized = window
+            .is_maximized()
+            .map_err(|e| format!("failed to query window state: {e}"))?;
+        if is_maximized {
+            window
+                .unmaximize()
+                .map_err(|e| format!("failed to restore window: {e}"))?;
+        } else {
+            window
+                .maximize()
+                .map_err(|e| format!("failed to maximize window: {e}"))?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, serde::Serialize)]
 struct TerminalOutput {
     terminal_id: String,
@@ -585,7 +622,8 @@ pub fn run() {
             rename_entry,
             delete_entry,
             move_entry,
-            reveal_in_file_manager
+            reveal_in_file_manager,
+            toggle_window_zoom
         ])
         .setup(|app| {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)
