@@ -9,7 +9,7 @@ import {
 import { TerminalComponent } from "./Terminal";
 import { EditorPanel } from "./EditorPanel";
 import { useWorkspace } from "./WorkspaceContext";
-import { CodeEditor } from "./CodeEditor";
+import { CodeEditor, isPreviewablePath } from "./CodeEditor";
 import { AGENT_PRESETS, type AgentPreset, type AgentPresetId } from "./agentPresets";
 import { useFileIconUrl } from "./fileIcons";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Eye,
   FileText,
+  FileCode2,
   FolderOpen,
   FolderClosed,
   PanelLeft,
@@ -81,23 +83,61 @@ function EditorFileIcon({ path }: { path: string }) {
   return <img src={iconUrl} alt="" className="editor-tab-icon-img" draggable={false} />;
 }
 
-function ActivePathBar({ path }: { path: string }) {
+function ActivePathBar({
+  path,
+  previewable,
+  mode,
+  onModeChange,
+}: {
+  path: string;
+  previewable?: boolean;
+  mode?: "code" | "preview";
+  onModeChange?: (mode: "code" | "preview") => void;
+}) {
   const parts = getTabDir(path);
   const fileName = getTabName(path);
 
   return (
     <div className="editor-path-bar">
-      {parts.map((part, index) => (
-        <div key={`${part}-${index}`} className="editor-path-segment">
-          {index > 0 && <ChevronRight className="editor-path-separator" />}
-          <span className="editor-path-text">{part}</span>
+      <div className="editor-path-main">
+        {parts.map((part, index) => (
+          <div key={`${part}-${index}`} className="editor-path-segment">
+            {index > 0 && <ChevronRight className="editor-path-separator" />}
+            <span className="editor-path-text">{part}</span>
+          </div>
+        ))}
+        {parts.length > 0 && <ChevronRight className="editor-path-separator" />}
+        <div className="editor-path-file">
+          <EditorFileIcon path={path} />
+          <span className="editor-path-text editor-path-text-active">{fileName}</span>
         </div>
-      ))}
-      {parts.length > 0 && <ChevronRight className="editor-path-separator" />}
-      <div className="editor-path-file">
-        <EditorFileIcon path={path} />
-        <span className="editor-path-text editor-path-text-active">{fileName}</span>
       </div>
+      {previewable ? (
+        <div className="editor-view-switch" data-tauri-drag-region="false">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="editor-view-switch-button"
+            data-active={mode === "preview" ? "true" : undefined}
+            onClick={() => onModeChange?.("preview")}
+          >
+            <Eye className="size-3.5" />
+            <span>Preview</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="editor-view-switch-button"
+            data-active={mode === "code" ? "true" : undefined}
+            onClick={() => onModeChange?.("code")}
+          >
+            <FileCode2 className="size-3.5" />
+            <span>Code</span>
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -229,6 +269,7 @@ export function MainLayout() {
   const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor">("agent");
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
+  const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
@@ -320,6 +361,14 @@ export function MainLayout() {
       if (existingTab) return currentTabs;
       return [...currentTabs, { path, content, savedContent: content }];
     });
+    setEditorViewModes((currentModes) =>
+      currentModes[path]
+        ? currentModes
+        : {
+            ...currentModes,
+            [path]: isPreviewablePath(path) ? "preview" : "code",
+          }
+    );
     setActiveTabPath(path);
     setActiveWorkspace("editor");
   }, []);
@@ -361,6 +410,12 @@ export function MainLayout() {
         if (currentActivePath !== path) return currentActivePath;
         if (nextTabs.length === 0) return null;
         return nextTabs[Math.max(0, tabIndex - 1)]?.path ?? nextTabs[0].path;
+      });
+      setEditorViewModes((currentModes) => {
+        if (!(path in currentModes)) return currentModes;
+        const nextModes = { ...currentModes };
+        delete nextModes[path];
+        return nextModes;
       });
       if (nextTabs.length === 0) {
         setActiveWorkspace("agent");
@@ -502,6 +557,7 @@ export function MainLayout() {
       setActiveAgentTerminalId(null);
       setOpenTabs([]);
       setActiveTabPath(null);
+      setEditorViewModes({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
       setAgentPresetMenuOpen(false);
@@ -510,6 +566,13 @@ export function MainLayout() {
       console.error("Failed to switch workspace:", error);
     }
   }, [setWorkspacePath, terminalTabs, workspacePath]);
+
+  const handleSetEditorViewMode = useCallback((path: string, mode: "code" | "preview") => {
+    setEditorViewModes((currentModes) => ({
+      ...currentModes,
+      [path]: mode,
+    }));
+  }, []);
 
   useEffect(() => {
     if (openTabs.length === 0) {
@@ -559,6 +622,10 @@ export function MainLayout() {
   }, [activeAgentTerminalId, terminalTabs]);
 
   const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
+  const activeEditorMode =
+    activeTab && isPreviewablePath(activeTab.path)
+      ? (editorViewModes[activeTab.path] ?? "preview")
+      : "code";
   const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
@@ -1034,13 +1101,19 @@ export function MainLayout() {
                               </Button>
                             </div>
                           </div>
-                          <ActivePathBar path={activeTab.path} />
+                          <ActivePathBar
+                            path={activeTab.path}
+                            previewable={isPreviewablePath(activeTab.path)}
+                            mode={activeEditorMode}
+                            onModeChange={(mode) => handleSetEditorViewMode(activeTab.path, mode)}
+                          />
                         </div>
                         <div className="editor-content">
                           <CodeEditor
                             path={activeTab.path}
                             content={activeTab.content}
                             dirty={activeTab.content !== activeTab.savedContent}
+                            mode={activeEditorMode}
                             onChange={handleChange}
                             onSave={handleSave}
                           />

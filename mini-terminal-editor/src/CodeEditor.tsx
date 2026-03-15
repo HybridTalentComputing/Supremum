@@ -12,14 +12,24 @@ import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
 import { xml } from "@codemirror/lang-xml";
 import type { Extension } from "@codemirror/state";
+import MarkdownPreview from "@uiw/react-markdown-preview";
+import "@uiw/react-markdown-preview/markdown.css";
 
 type CodeEditorProps = {
   path: string;
   content: string;
   dirty?: boolean;
+  mode?: "code" | "preview";
   onChange: (path: string, content: string) => void;
   onSave: (path: string, content: string) => void | Promise<void>;
 };
+
+const PREVIEWABLE_EXTENSIONS = new Set(["md", "markdown", "mdown", "mkd", "mkdn"]);
+
+export function isPreviewablePath(path: string) {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return PREVIEWABLE_EXTENSIONS.has(ext);
+}
 
 function getLanguageExtension(path: string): Extension | null {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -45,6 +55,7 @@ export function CodeEditor({
   path,
   content,
   dirty = false,
+  mode = "code",
   onChange,
   onSave,
 }: CodeEditorProps) {
@@ -68,6 +79,21 @@ export function CodeEditor({
 
   const langExt = getLanguageExtension(path);
   const extensions = [oneDark, ...(langExt ? [langExt] : [])];
+  const shouldRenderPreview = mode === "preview" && isPreviewablePath(path);
+
+  if (shouldRenderPreview) {
+    return (
+      <div className="code-editor-shell">
+        <div className="markdown-preview-shell">
+          <MarkdownPreview
+            source={content}
+            className="markdown-preview"
+            wrapperElement={{ "data-color-mode": "dark" }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="code-editor-shell">
