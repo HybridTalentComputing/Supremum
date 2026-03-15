@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileTree } from "./FileTree";
+import { FileText, GitCompareArrows } from "lucide-react";
 
 type EditorPanelProps = {
   workspacePath: string;
@@ -39,19 +40,20 @@ export function EditorPanel({
     >
       {/* Tabs 横跨整个右栏顶部，平分宽度，随窗口伸缩 */}
       <TabsList
-        variant="line"
-        className="w-full flex shrink-0 rounded-none border-b border-border/50 bg-transparent px-0 h-9 min-w-0"
+        className="sidebar-workspace-tabs"
       >
         <TabsTrigger
           value="files"
-          className="flex-1 min-w-0 basis-0 rounded-none border-b-2 border-transparent data-active:border-primary px-3"
+          className="sidebar-workspace-tab"
         >
+          <FileText className="size-4" />
           Files
         </TabsTrigger>
         <TabsTrigger
           value="changes"
-          className="flex-1 min-w-0 basis-0 rounded-none border-b-2 border-transparent data-active:border-primary px-3"
+          className="sidebar-workspace-tab"
         >
+          <GitCompareArrows className="size-4" />
           Changes
         </TabsTrigger>
       </TabsList>
