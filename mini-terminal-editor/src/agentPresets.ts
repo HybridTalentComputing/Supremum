@@ -28,7 +28,7 @@ export const AGENT_PRESETS: AgentPreset[] = [
     description: "Danger mode: All permissions auto-approved",
     command:
       'codex -c model_reasoning_effort="high" --dangerously-bypass-approvals-and-sandbox -c model_reasoning_summary="detailed" -c model_supports_reasoning_summaries=true',
-    iconPath: "/agent-icons/codex.svg",
+    iconPath: "/agent-icons/codex-white.svg",
   },
   {
     id: "gemini",
@@ -49,7 +49,7 @@ export const AGENT_PRESETS: AgentPreset[] = [
     label: "Copilot",
     description: "Danger mode: All permissions auto-approved",
     command: "copilot --allow-all",
-    iconPath: "/agent-icons/copilot.svg",
+    iconPath: "/agent-icons/copilot-white.svg",
   },
   {
     id: "cursor-agent",

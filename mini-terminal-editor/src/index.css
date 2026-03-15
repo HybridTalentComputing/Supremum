@@ -983,9 +983,11 @@ body {
   flex: none;
   height: 32px;
   min-height: 32px;
-  overflow: hidden;
+  overflow: visible;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
   background: #02070c;
+  position: relative;
+  z-index: 5;
 }
 
 .terminal-tabs-bar-empty {
@@ -1111,7 +1113,7 @@ body {
   position: absolute;
   top: calc(100% + 0.35rem);
   right: 0;
-  z-index: 30;
+  z-index: 40;
   display: flex;
   width: min(18rem, calc(100vw - 2rem));
   flex-direction: column;
