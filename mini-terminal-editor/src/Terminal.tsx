@@ -8,46 +8,49 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 /* xterm.css 由 index.css 统一导入，确保覆盖样式生效 */
 
-const TERMINAL_ID = "term-1";
-
 type TerminalOutputPayload = { terminal_id: string; data: string };
 
-// Batched writes: coalesce Channel output per animation frame
-let writeBuffer: string[] = [];
-let writeRafId: number | null = null;
-
-function batchedWrite(data: string, getXterm: () => Terminal | null) {
-  writeBuffer.push(data);
-  if (writeRafId === null) {
-    writeRafId = requestAnimationFrame(() => {
-      writeRafId = null;
-      if (writeBuffer.length > 0) {
-        const xterm = getXterm();
-        if (xterm) xterm.write(writeBuffer.join(""));
-        writeBuffer = [];
-      }
-    });
-  }
-}
-
-function disposeWriteBatch() {
-  if (writeRafId !== null) {
-    cancelAnimationFrame(writeRafId);
-    writeRafId = null;
-  }
-  writeBuffer = [];
-}
-
 type TerminalComponentProps = {
+  terminalId: string;
   cwd?: string;
+  active?: boolean;
 };
 
-export function TerminalComponent({ cwd }: TerminalComponentProps) {
+export function TerminalComponent({
+  terminalId,
+  cwd,
+  active = true,
+}: TerminalComponentProps) {
   const terminalSurfaceRef = useRef<HTMLDivElement | null>(null);
   const terminalRootRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const statusRef = useRef<"connecting" | "connected" | "error">("connecting");
+  const writeBufferRef = useRef<string[]>([]);
+  const writeRafIdRef = useRef<number | null>(null);
+
+  const batchedWrite = useCallback((data: string) => {
+    writeBufferRef.current.push(data);
+    if (writeRafIdRef.current === null) {
+      writeRafIdRef.current = requestAnimationFrame(() => {
+        writeRafIdRef.current = null;
+        if (writeBufferRef.current.length === 0) return;
+        const xterm = xtermRef.current;
+        if (xterm) {
+          xterm.write(writeBufferRef.current.join(""));
+        }
+        writeBufferRef.current = [];
+      });
+    }
+  }, []);
+
+  const disposeWriteBatch = useCallback(() => {
+    if (writeRafIdRef.current !== null) {
+      cancelAnimationFrame(writeRafIdRef.current);
+      writeRafIdRef.current = null;
+    }
+    writeBufferRef.current = [];
+  }, []);
 
   const fit = useCallback(() => {
     const fitAddon = fitAddonRef.current;
@@ -63,14 +66,14 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
 
     if (statusRef.current === "connected") {
       invoke("resize_terminal", {
-        terminalId: TERMINAL_ID,
+        terminalId,
         cols,
         rows,
       }).catch(() => {
         statusRef.current = "error";
       });
     }
-  }, []);
+  }, [terminalId]);
 
   useEffect(() => {
     const mountPoint = terminalRootRef.current;
@@ -103,11 +106,11 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
 
       const channel = new Channel<TerminalOutputPayload>();
       channel.onmessage = (msg) => {
-        batchedWrite(msg.data, () => xtermRef.current);
+        batchedWrite(msg.data);
       };
 
       invoke("create_terminal", {
-        terminalId: TERMINAL_ID,
+        terminalId,
         cwd: cwd || null,
         cols: xterm.cols,
         rows: xterm.rows,
@@ -125,13 +128,13 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
 
     // Forward xterm input to PTY
     const dataDisposable = xterm.onData((data) => {
-      invoke("write_terminal", { terminalId: TERMINAL_ID, data }).catch(() => {
+      invoke("write_terminal", { terminalId, data }).catch(() => {
         statusRef.current = "error";
       });
     });
 
     const resizeDisposable = xterm.onResize(({ cols, rows }) => {
-      invoke("resize_terminal", { terminalId: TERMINAL_ID, cols, rows }).catch(() => {
+      invoke("resize_terminal", { terminalId, cols, rows }).catch(() => {
         statusRef.current = "error";
       });
     });
@@ -140,13 +143,13 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
       cancelAnimationFrame(rafId);
       dataDisposable.dispose();
       resizeDisposable.dispose();
-      invoke("close_terminal", { terminalId: TERMINAL_ID }).catch(() => {});
+      invoke("close_terminal", { terminalId }).catch(() => {});
       disposeWriteBatch();
       xterm.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, []);
+  }, [batchedWrite, cwd, disposeWriteBatch, fit, terminalId]);
 
   // Resize on container size change
   useEffect(() => {
@@ -169,6 +172,15 @@ export function TerminalComponent({ cwd }: TerminalComponentProps) {
       cancelled = true;
     };
   }, [fit]);
+
+  useEffect(() => {
+    if (!active) return;
+    const rafId = requestAnimationFrame(() => {
+      fit();
+      xtermRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [active, fit]);
 
   return (
     <div
