@@ -134,10 +134,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
   text-align: center;
   padding: 2rem;
-  max-width: 360px;
+  width: min(46rem, calc(100vw - 4rem));
 }
 
 .workspace-gate-visual {
@@ -154,7 +154,7 @@ body {
 }
 
 .workspace-gate-title {
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 600;
   margin: 0;
   color: #c9d8e6;
@@ -163,26 +163,269 @@ body {
 .workspace-gate-desc {
   font-size: 0.875rem;
   color: rgba(201, 216, 230, 0.7);
-  margin: 0 0 0.5rem;
+  margin: 0;
+  line-height: 1.65;
+  max-width: 30rem;
+}
+
+.workspace-gate-actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.workspace-gate-action {
+  display: flex;
+  min-height: 5rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.875rem;
+  padding: 1rem;
+  border-radius: 14px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.workspace-gate-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+  color: rgba(201, 216, 230, 0.84);
+}
+
+.workspace-gate-action-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.workspace-gate-action-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(236, 242, 247, 0.94);
+}
+
+.workspace-gate-action-desc {
+  font-size: 0.78rem;
   line-height: 1.5;
+  color: rgba(159, 174, 188, 0.72);
+  white-space: normal;
 }
 
-.workspace-gate-btn {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-family: inherit;
-  color: #02070c;
-  background: #f1f3f5;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  min-width: auto;
-  height: auto;
-  box-shadow: none;
+.workspace-gate-create-panel {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
 }
 
-.workspace-gate-btn:hover {
-  background: #ffffff;
+.workspace-gate-create-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 0.8rem;
+}
+
+.workspace-gate-create-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.workspace-gate-create-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(196, 202, 210, 0.74);
+}
+
+.workspace-gate-create-input {
+  width: 100%;
+  min-width: 0;
+  height: 2.5rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(5, 11, 16, 0.92);
+  color: rgba(236, 242, 247, 0.94);
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.workspace-gate-create-input:focus {
+  border-color: rgba(156, 220, 254, 0.42);
+}
+
+.workspace-gate-create-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 161, 161, 0.84);
+}
+
+.workspace-gate-create-location {
+  display: flex;
+  min-width: 0;
+}
+
+.workspace-gate-create-location-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  height: 2.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-gate-create-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workspace-gate-create-preview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.workspace-gate-create-preview-label {
+  font-size: 0.76rem;
+  color: rgba(159, 174, 188, 0.68);
+}
+
+.workspace-gate-create-preview-path {
+  min-width: 0;
+  font-size: 0.84rem;
+  color: rgba(225, 233, 240, 0.9);
+  word-break: break-all;
+}
+
+.workspace-gate-create-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.workspace-gate-create-cancel,
+.workspace-gate-create-submit {
+  height: 2.5rem;
+  padding-inline: 0.95rem;
+}
+
+.workspace-gate-create-submit {
+  background: rgba(156, 220, 254, 0.9);
+  color: #041018;
+}
+
+.workspace-gate-create-submit:hover {
+  background: rgba(180, 231, 255, 0.96);
+}
+
+.workspace-gate-recents {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+  text-align: left;
+}
+
+.workspace-gate-recents-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(196, 202, 210, 0.74);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.workspace-gate-recent-list {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.workspace-gate-recent {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  justify-content: flex-start;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  color: rgba(201, 216, 230, 0.78);
+}
+
+.workspace-gate-recent-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workspace-gate-recent-name {
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(236, 242, 247, 0.92);
+}
+
+.workspace-gate-recent-path {
+  min-width: 0;
+  font-size: 0.78rem;
+  color: rgba(159, 174, 188, 0.66);
+}
+
+.workspace-gate-recents-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: rgba(159, 174, 188, 0.66);
+}
+
+@media (max-width: 720px) {
+  .workspace-gate-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-gate-create-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-gate-create-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-gate-create-actions {
+    justify-content: flex-end;
+  }
+
+  .workspace-gate-create-actions > * {
+    flex: 1;
+  }
+
+  .workspace-gate-recent-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
 }
 
 .main-layout-shell {

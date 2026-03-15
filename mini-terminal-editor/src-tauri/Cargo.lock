@@ -1882,20 +1882,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "mini-terminal"
-version = "0.1.0"
-dependencies = [
- "cocoa",
- "objc",
- "portable-pty",
- "raw-window-handle",
- "serde",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3323,6 +3309,20 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "subset"
+version = "0.1.0"
+dependencies = [
+ "cocoa",
+ "objc",
+ "portable-pty",
+ "raw-window-handle",
+ "serde",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+]
 
 [[package]]
 name = "swift-rs"

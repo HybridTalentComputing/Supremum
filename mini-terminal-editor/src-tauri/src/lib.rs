@@ -55,6 +55,13 @@ struct CreateDirPayload {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CreateProjectRootPayload {
+    parent_path: String,
+    project_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RenameEntryPayload {
     workspace_path: String,
     old_path: String,
@@ -209,6 +216,33 @@ fn create_dir(payload: CreateDirPayload) -> Result<(), String> {
     let dir_path = safe_workspace_path_for_create(&workspace, &payload.path)?;
     fs::create_dir_all(&dir_path)
         .map_err(|e| format!("failed to create directory: {e}"))
+}
+
+#[tauri::command]
+fn create_project_root(payload: CreateProjectRootPayload) -> Result<String, String> {
+    if payload.project_name.trim().is_empty() {
+        return Err("project name cannot be empty".to_string());
+    }
+    if payload.project_name.contains('/') || payload.project_name.contains('\\') {
+        return Err("project name cannot contain slashes".to_string());
+    }
+
+    let parent_path = PathBuf::from(&payload.parent_path);
+    let canonical_parent = fs::canonicalize(&parent_path)
+        .map_err(|e| format!("invalid parent path: {e}"))?;
+    if !canonical_parent.is_dir() {
+        return Err("parent path is not a directory".to_string());
+    }
+
+    let project_path = canonical_parent.join(payload.project_name.trim());
+    if project_path.exists() {
+        return Err("project already exists".to_string());
+    }
+
+    fs::create_dir_all(&project_path)
+        .map_err(|e| format!("failed to create project directory: {e}"))?;
+
+    Ok(project_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -390,7 +424,7 @@ fn create_terminal(
     cmd.cwd(&cwd_path);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "Mini Terminal");
+    cmd.env("TERM_PROGRAM", "Subset");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     cmd.env("CLICOLOR", "1");
     cmd.env("CLICOLOR_FORCE", "1");
@@ -547,6 +581,7 @@ pub fn run() {
             list_dir,
             create_file,
             create_dir,
+            create_project_root,
             rename_entry,
             delete_entry,
             move_entry,

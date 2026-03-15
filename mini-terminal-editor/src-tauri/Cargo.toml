@@ -1,5 +1,5 @@
 [package]
-name = "mini-terminal"
+name = "subset"
 version = "0.1.0"
 description = "Minimal Tauri xterm terminal app"
 authors = ["htcmax"]
