@@ -24,8 +24,8 @@ body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #02070c;
-  color: #c9d8e6;
+  background: #090909;
+  color: #e6e6e6;
   font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -44,7 +44,7 @@ body {
   width: 100%;
   height: 100%;
   min-height: 100vh;
-  background: #02070c;
+  background: #090909;
 }
 
 .terminal-surface {
@@ -52,7 +52,7 @@ body {
   flex: 1;
   min-height: 0;
   height: 100%;
-  background: #02070c;
+  background: #090909;
 }
 
 .xterm-root {
@@ -62,18 +62,18 @@ body {
 
 .xterm-root .xterm {
   height: 100%;
-  background: #02070c;
+  background: #090909;
 }
 
 .xterm-root .xterm-screen,
 .xterm-root .xterm-helpers,
 .xterm-root .xterm-helper-textarea {
-  background: #02070c;
+  background: #090909;
 }
 
 /* 完全隐藏 xterm 滚动条，消除右侧白条（滚动仍可通过触控板/滚轮实现） */
 .xterm .xterm-viewport {
-  background-color: #02070c !important;
+  background-color: #090909 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   scrollbar-width: none;
@@ -90,7 +90,7 @@ body {
 
 .xterm .xterm-viewport::-webkit-scrollbar-track,
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #02070c !important;
+  background: #090909 !important;
 }
 
 /* 确保终端容器无溢出白边 */
@@ -128,15 +128,15 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: #02070c;
+  background: #090909;
 }
 
 .workspace-gate-titlebar {
   flex: none;
   height: 30px;
   min-height: 30px;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.1);
-  background: #02070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090909;
   user-select: none;
 }
 
@@ -174,12 +174,12 @@ body {
   font-size: 1.35rem;
   font-weight: 600;
   margin: 0;
-  color: #c9d8e6;
+  color: #ececec;
 }
 
 .workspace-gate-desc {
   font-size: 0.875rem;
-  color: rgba(201, 216, 230, 0.7);
+  color: rgba(255, 255, 255, 0.66);
   margin: 0;
   line-height: 1.65;
   max-width: 30rem;
@@ -209,7 +209,7 @@ body {
   align-items: center;
   justify-content: center;
   margin-top: 0.1rem;
-  color: rgba(201, 216, 230, 0.84);
+  color: rgba(255, 255, 255, 0.84);
 }
 
 .workspace-gate-action-copy {
@@ -224,13 +224,13 @@ body {
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.3;
-  color: rgba(236, 242, 247, 0.94);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .workspace-gate-action-desc {
   font-size: 0.78rem;
   line-height: 1.5;
-  color: rgba(159, 174, 188, 0.72);
+  color: rgba(255, 255, 255, 0.5);
   white-space: normal;
 }
 
@@ -262,7 +262,7 @@ body {
 .workspace-gate-create-label {
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(196, 202, 210, 0.74);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .workspace-gate-create-input {
@@ -272,14 +272,14 @@ body {
   padding: 0 0.8rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  background: rgba(5, 11, 16, 0.92);
-  color: rgba(236, 242, 247, 0.94);
+  background: rgba(15, 15, 15, 0.94);
+  color: rgba(255, 255, 255, 0.94);
   font-size: 0.88rem;
   outline: none;
 }
 
 .workspace-gate-create-input:focus {
-  border-color: rgba(156, 220, 254, 0.42);
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .workspace-gate-create-hint {
@@ -318,13 +318,13 @@ body {
 
 .workspace-gate-create-preview-label {
   font-size: 0.76rem;
-  color: rgba(159, 174, 188, 0.68);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .workspace-gate-create-preview-path {
   min-width: 0;
   font-size: 0.84rem;
-  color: rgba(225, 233, 240, 0.9);
+  color: rgba(255, 255, 255, 0.86);
   word-break: break-all;
 }
 
@@ -341,12 +341,12 @@ body {
 }
 
 .workspace-gate-create-submit {
-  background: rgba(156, 220, 254, 0.9);
-  color: #041018;
+  background: rgba(242, 242, 242, 0.92);
+  color: #0a0a0a;
 }
 
 .workspace-gate-create-submit:hover {
-  background: rgba(180, 231, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .workspace-gate-recents {
@@ -366,7 +366,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: rgba(196, 202, 210, 0.74);
+  color: rgba(255, 255, 255, 0.68);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -400,12 +400,12 @@ body {
 
 .workspace-gate-recents:hover .workspace-gate-recent-list,
 .workspace-gate-recents:focus-within .workspace-gate-recent-list {
-  scrollbar-color: rgba(120, 130, 142, 0.85) transparent;
+  scrollbar-color: rgba(142, 142, 142, 0.85) transparent;
 }
 
 .workspace-gate-recents:hover .workspace-gate-recent-list::-webkit-scrollbar-thumb,
 .workspace-gate-recents:focus-within .workspace-gate-recent-list::-webkit-scrollbar-thumb {
-  background: rgba(140, 151, 164, 0.72);
+  background: rgba(148, 148, 148, 0.72);
 }
 
 .workspace-gate-recent {
@@ -416,7 +416,7 @@ body {
   border-radius: 10px;
   padding: 0.55rem 0.75rem;
   text-align: left;
-  color: rgba(201, 216, 230, 0.78);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .workspace-gate-recent-main {
@@ -432,20 +432,20 @@ body {
   min-width: 0;
   font-size: 0.88rem;
   font-weight: 600;
-  color: rgba(236, 242, 247, 0.92);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .workspace-gate-recent-path {
   min-width: 0;
   font-size: 0.78rem;
-  color: rgba(159, 174, 188, 0.66);
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .workspace-gate-recents-empty {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: rgba(159, 174, 188, 0.66);
+  color: rgba(255, 255, 255, 0.42);
 }
 
 @media (max-width: 720px) {
@@ -490,8 +490,8 @@ body {
   flex: none;
   height: 30px;
   min-height: 30px;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.1);
-  background: #02070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090909;
   user-select: none;
 }
 
@@ -505,13 +505,13 @@ body {
 }
 
 .app-titlebar-toggle {
-  color: rgba(196, 202, 210, 0.72);
+  color: rgba(255, 255, 255, 0.66);
   pointer-events: auto;
 }
 
 .app-titlebar-toggle:hover,
 .app-titlebar-toggle:focus-visible {
-  color: rgba(244, 251, 255, 0.96);
+  color: rgba(255, 255, 255, 0.96);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -523,14 +523,14 @@ body {
   max-width: min(36rem, 56vw);
   padding: 0 0.5rem;
   border-radius: 8px;
-  color: rgba(201, 216, 230, 0.82);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 0.8rem;
   pointer-events: auto;
 }
 
 .app-titlebar-path-button:hover,
 .app-titlebar-path-button:focus-visible {
-  color: rgba(244, 251, 255, 0.96);
+  color: rgba(255, 255, 255, 0.96);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -539,7 +539,7 @@ body {
 }
 
 .app-titlebar-path-chevron {
-  color: rgba(159, 174, 188, 0.66);
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .app-titlebar-drag-region {
@@ -566,7 +566,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  background: #02070c;
+  background: #090909;
 }
 
 .workspace-manager-bar {
@@ -576,8 +576,8 @@ body {
   height: 32px;
   min-height: 32px;
   padding: 0 0.375rem;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
-  background: #02070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090909;
 }
 
 .workspace-manager-list {
@@ -596,17 +596,17 @@ body {
   padding: 0 0.625rem;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: rgba(159, 174, 188, 0.7);
+  color: rgba(255, 255, 255, 0.48);
   background: transparent;
 }
 
 .workspace-manager-switch:hover {
-  color: rgba(215, 224, 232, 0.9);
+  color: rgba(255, 255, 255, 0.84);
   background: transparent;
 }
 
 .workspace-manager-switch[data-active] {
-  color: rgba(242, 246, 250, 0.96);
+  color: rgba(255, 255, 255, 0.96);
   background: transparent;
   border-color: transparent;
 }
@@ -648,8 +648,8 @@ body {
   height: 32px;
   min-height: 32px;
   padding: 0 0.25rem;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
-  background: #02070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090909;
 }
 
 .sidebar-workspace-tab {
@@ -665,7 +665,7 @@ body {
   border-radius: 0;
   white-space: nowrap;
   font-size: 0.76rem;
-  color: rgba(159, 174, 188, 0.7);
+  color: rgba(255, 255, 255, 0.46);
   background: transparent;
   box-shadow: none;
 }
@@ -675,12 +675,12 @@ body {
 }
 
 .sidebar-workspace-tab:hover {
-  color: rgba(215, 224, 232, 0.9);
+  color: rgba(255, 255, 255, 0.82);
   background: transparent;
 }
 
 .sidebar-workspace-tab[data-active] {
-  color: rgba(242, 246, 250, 0.96);
+  color: rgba(255, 255, 255, 0.96);
   background: transparent;
   box-shadow: none;
 }
@@ -715,7 +715,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 3rem 2rem;
-  background: #02070c;
+  background: #090909;
 }
 
 .workspace-empty-center {
@@ -737,7 +737,7 @@ body {
 .workspace-empty-icon {
   width: 2.4rem;
   height: 2.4rem;
-  color: rgba(201, 216, 230, 0.38);
+  color: rgba(255, 255, 255, 0.28);
 }
 
 .workspace-empty-copy {
@@ -752,19 +752,19 @@ body {
 .workspace-empty-title {
   font-size: 0.98rem;
   font-weight: 600;
-  color: rgba(244, 251, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .workspace-empty-description {
   max-width: 24rem;
   font-size: 0.82rem;
   line-height: 1.7;
-  color: rgba(159, 174, 188, 0.76);
+  color: rgba(255, 255, 255, 0.52);
 }
 
 .workspace-empty-meta {
   font-size: 0.76rem;
-  color: rgba(130, 145, 160, 0.72);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .workspace-empty-actions {
@@ -782,19 +782,19 @@ body {
   justify-content: space-between;
   border-radius: 10px;
   padding: 0 0.75rem;
-  color: rgba(201, 216, 230, 0.78);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .workspace-empty-action:hover,
 .workspace-empty-action:focus-visible {
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(244, 251, 255, 0.94);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .workspace-empty-action-emphasis {
   border-color: rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(236, 242, 247, 0.92);
+  color: rgba(255, 255, 255, 0.92);
   box-shadow: none;
 }
 
@@ -820,7 +820,7 @@ body {
   padding: 0 0.45rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(159, 174, 188, 0.72);
+  color: rgba(255, 255, 255, 0.46);
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -834,7 +834,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding: 3rem 2rem 2rem;
-  background: #02070c;
+  background: #090909;
   overflow: auto;
 }
 
@@ -889,9 +889,10 @@ body {
   gap: 0.875rem;
   padding: 1rem;
   border-radius: 14px;
-  color: rgba(201, 216, 230, 0.82);
+  color: rgba(255, 255, 255, 0.82);
   text-align: left;
   background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   flex-shrink: 1;
   white-space: normal;
 }
@@ -899,7 +900,7 @@ body {
 .agent-preset-card:hover,
 .agent-preset-card:focus-visible {
   background: rgba(255, 255, 255, 0.03);
-  color: rgba(244, 251, 255, 0.95);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .agent-preset-main {
@@ -928,7 +929,7 @@ body {
 
 .agent-preset-description {
   font-size: 0.74rem;
-  color: rgba(145, 159, 173, 0.8);
+  color: rgba(255, 255, 255, 0.48);
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -987,8 +988,8 @@ body {
   height: 32px;
   min-height: 32px;
   overflow: visible;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
-  background: #02070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090909;
   position: relative;
   z-index: 5;
 }
@@ -1004,7 +1005,7 @@ body {
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: rgba(159, 174, 188, 0.74);
+  color: rgba(255, 255, 255, 0.46);
 }
 
 .terminal-tabs-scroll {
@@ -1035,7 +1036,7 @@ body {
   max-width: 15rem;
   height: 32px;
   font-size: 0.84rem;
-  color: rgba(155, 169, 182, 0.76);
+  color: rgba(255, 255, 255, 0.48);
   background: transparent;
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
@@ -1053,14 +1054,14 @@ body {
 
 .terminal-tab:hover {
   background: transparent;
-  color: rgba(213, 221, 228, 0.9);
+  color: rgba(255, 255, 255, 0.84);
 }
 
 .terminal-tab[data-active] {
   background: transparent;
-  color: rgba(243, 247, 250, 0.97);
+  color: rgba(255, 255, 255, 0.97);
   box-shadow:
-    inset 0 -1px 0 rgba(242, 246, 250, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
     inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -1072,7 +1073,7 @@ body {
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 999px;
-  color: rgba(196, 202, 210, 0.54);
+  color: rgba(255, 255, 255, 0.42);
   opacity: 0;
   transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
 }
@@ -1088,7 +1089,7 @@ body {
 .terminal-tab-create:hover,
 .terminal-tab-create:focus-visible {
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(244, 251, 255, 0.95);
+  color: rgba(255, 255, 255, 0.95);
   outline: none;
 }
 
@@ -1097,8 +1098,8 @@ body {
   align-items: center;
   flex-shrink: 0;
   padding: 0 0.25rem;
-  border-left: 1px solid rgba(201, 216, 230, 0.08);
-  background: #02070c;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: #090909;
 }
 
 .agent-preset-menu-anchor {
@@ -1107,7 +1108,7 @@ body {
 }
 
 .terminal-tab-create {
-  color: rgba(196, 202, 210, 0.66);
+  color: rgba(255, 255, 255, 0.48);
   width: 1.5rem;
   height: 1.5rem;
 }
@@ -1122,9 +1123,9 @@ body {
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.35rem;
-  border: 1px solid rgba(201, 216, 230, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: #061018;
+  background: #111111;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
 }
 
@@ -1136,14 +1137,14 @@ body {
   border-radius: 10px;
   padding: 0.55rem 0.65rem;
   background: transparent;
-  color: rgba(201, 216, 230, 0.82);
+  color: rgba(255, 255, 255, 0.82);
   text-align: left;
 }
 
 .agent-preset-menu-item:hover,
 .agent-preset-menu-item:focus-visible {
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(244, 251, 255, 0.96);
+  color: rgba(255, 255, 255, 0.96);
   outline: none;
 }
 
@@ -1176,7 +1177,7 @@ body {
 
 .agent-preset-menu-description {
   font-size: 0.69rem;
-  color: rgba(145, 159, 173, 0.78);
+  color: rgba(255, 255, 255, 0.46);
 }
 
 @media (max-width: 640px) {
@@ -1849,8 +1850,8 @@ body.file-tree-dragging * {
 
 /* 深色主题：对齐终端 #02070c */
 .dark {
-  --background: #02070c;
-  --foreground: #c9d8e6;
+  --background: #090909;
+  --foreground: #e6e6e6;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);

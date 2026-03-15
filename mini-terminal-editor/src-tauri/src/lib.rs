@@ -629,7 +629,7 @@ pub fn run() {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)
             if let Some(win) = app.get_webview_window("main") {
                 use tauri::window::Color;
-                let color = Color(2, 7, 12, 255);
+                let color = Color(9, 9, 9, 255);
                 let _ = win.set_background_color(Some(color));
 
                 #[cfg(target_os = "macos")]
