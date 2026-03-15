@@ -308,98 +308,98 @@ export function MainLayout() {
                     />
                   </div>
                 ))}
-
-                {editorVisible && activeTab && (
-                  <div className="terminal-editor-overlay">
-                    <div className="terminal-editor-overlay-inner">
-                      <Tabs
-                        value={activeTab.path}
-                        onValueChange={setActiveTabPath}
-                        className="flex h-full min-h-0 flex-col gap-0"
-                      >
-                        <div className="editor-header">
-                          <div className="editor-tabs-bar">
-                            <ScrollArea
-                              className="editor-tabs-scroll min-w-0 flex-1"
-                              onWheel={handleTabsWheel}
-                            >
-                              <TabsList
-                                variant="line"
-                                className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                              >
-                                {openTabs.map((tab) => {
-                                  const isDirty = tab.content !== tab.savedContent;
-                                  return (
-                                    <Tooltip key={tab.path}>
-                                      <TooltipTrigger
-                                        render={
-                                          <TabsTrigger
-                                            value={tab.path}
-                                            className="editor-tab group !flex-none justify-start gap-2 rounded-none border-0 px-3 py-2 after:hidden"
-                                          >
-                                            <EditorFileIcon path={tab.path} />
-                                            {isDirty && (
-                                              <Circle className="size-2 fill-current stroke-none text-cyan-300" />
-                                            )}
-                                            <span className="editor-tab-label truncate">{getTabName(tab.path)}</span>
-                                            <span
-                                              role="button"
-                                              tabIndex={0}
-                                              className="editor-tab-close"
-                                              onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                handleCloseTab(tab.path);
-                                              }}
-                                              onKeyDown={(event) => {
-                                                if (event.key !== "Enter" && event.key !== " ") return;
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                handleCloseTab(tab.path);
-                                              }}
-                                              aria-label={`关闭 ${getTabName(tab.path)}`}
-                                            >
-                                              <X className="size-3.5" />
-                                            </span>
-                                          </TabsTrigger>
-                                        }
-                                      />
-                                      <TooltipContent>{tab.path}</TooltipContent>
-                                    </Tooltip>
-                                  );
-                                })}
-                              </TabsList>
-                              <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
-                            <div className="editor-tabs-actions">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                className="editor-overlay-close"
-                                onClick={() => setEditorVisible(false)}
-                                aria-label="收起编辑器"
-                              >
-                                <X className="size-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          <ActivePathBar path={activeTab.path} />
-                        </div>
-                        <div className="editor-content">
-                          <CodeEditor
-                            path={activeTab.path}
-                            content={activeTab.content}
-                            dirty={activeTab.content !== activeTab.savedContent}
-                            onChange={handleChange}
-                            onSave={handleSave}
-                          />
-                        </div>
-                      </Tabs>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {editorVisible && activeTab && (
+                <div className="terminal-editor-overlay">
+                  <div className="terminal-editor-overlay-inner">
+                    <Tabs
+                      value={activeTab.path}
+                      onValueChange={setActiveTabPath}
+                      className="flex h-full min-h-0 flex-col gap-0"
+                    >
+                      <div className="editor-header">
+                        <div className="editor-tabs-bar">
+                          <ScrollArea
+                            className="editor-tabs-scroll min-w-0 flex-1"
+                            onWheel={handleTabsWheel}
+                          >
+                            <TabsList
+                              variant="line"
+                              className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                            >
+                              {openTabs.map((tab) => {
+                                const isDirty = tab.content !== tab.savedContent;
+                                return (
+                                  <Tooltip key={tab.path}>
+                                    <TooltipTrigger
+                                      render={
+                                        <TabsTrigger
+                                          value={tab.path}
+                                          className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                        >
+                                          <EditorFileIcon path={tab.path} />
+                                          {isDirty && (
+                                            <Circle className="size-2 fill-current stroke-none text-cyan-300" />
+                                          )}
+                                          <span className="editor-tab-label truncate">{getTabName(tab.path)}</span>
+                                          <span
+                                            role="button"
+                                            tabIndex={0}
+                                            className="editor-tab-close"
+                                            onClick={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              handleCloseTab(tab.path);
+                                            }}
+                                            onKeyDown={(event) => {
+                                              if (event.key !== "Enter" && event.key !== " ") return;
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              handleCloseTab(tab.path);
+                                            }}
+                                            aria-label={`关闭 ${getTabName(tab.path)}`}
+                                          >
+                                            <X className="size-3.5" />
+                                          </span>
+                                        </TabsTrigger>
+                                      }
+                                    />
+                                    <TooltipContent>{tab.path}</TooltipContent>
+                                  </Tooltip>
+                                );
+                              })}
+                            </TabsList>
+                            <ScrollBar orientation="horizontal" />
+                          </ScrollArea>
+                          <div className="editor-tabs-actions">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="editor-overlay-close"
+                              onClick={() => setEditorVisible(false)}
+                              aria-label="收起编辑器"
+                            >
+                              <X className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                        <ActivePathBar path={activeTab.path} />
+                      </div>
+                      <div className="editor-content">
+                        <CodeEditor
+                          path={activeTab.path}
+                          content={activeTab.content}
+                          dirty={activeTab.content !== activeTab.savedContent}
+                          onChange={handleChange}
+                          onSave={handleSave}
+                        />
+                      </div>
+                    </Tabs>
+                  </div>
+                </div>
+              )}
             </Tabs>
           </TooltipProvider>
         </div>
