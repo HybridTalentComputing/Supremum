@@ -26,7 +26,9 @@ body {
   height: 100%;
   background: #02070c;
   color: #c9d8e6;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   /* 让系统原生控件（如滚动条）使用深色主题 */
   color-scheme: dark;
 }
@@ -1199,6 +1201,7 @@ body {
   height: 100%;
   min-width: 0;
   min-height: 0;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
 }
 
 .editor-workspace .cm-theme,
@@ -1209,6 +1212,12 @@ body {
 .editor-workspace .cm-scroller,
 .editor-workspace .cm-content {
   min-height: 100%;
+}
+
+.editor-workspace .cm-content,
+.editor-workspace .cm-gutters,
+.editor-workspace .cm-line {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
 }
 
 .editor-workspace .cm-scroller {
@@ -1263,6 +1272,8 @@ body {
   min-height: 0;
   position: relative;
   overflow: hidden;
+  color: rgba(211, 220, 229, 0.82);
+  font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .file-tree-toolbar {
   display: flex;
@@ -1272,6 +1283,7 @@ body {
   padding: 0.25rem 0.5rem;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
   background: rgba(255, 255, 255, 0.02);
+  color: rgba(204, 213, 221, 0.74);
 }
 .file-tree-actions {
   display: flex;
@@ -1299,7 +1311,8 @@ body {
   background: transparent;
   border: none;
   font-size: 0.8125rem;
-  color: inherit;
+  font-family: inherit;
+  color: rgba(220, 228, 236, 0.84);
   outline: none;
 }
 .file-tree-search-clear {
@@ -1369,15 +1382,16 @@ body {
   min-width: 100%;
   height: 24px;
   padding: 0 0.5rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   background: transparent;
-  color: inherit;
+  color: rgba(216, 224, 232, 0.82);
   cursor: pointer;
   user-select: none;
   box-sizing: border-box;
 }
 .file-tree-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 .file-tree-row[data-selected="true"] {
   background: rgba(255, 255, 255, 0.08);
@@ -1436,7 +1450,7 @@ body.file-tree-dragging * {
   stroke-width: 1.6;
 }
 .file-tree-icon-chevron {
-  color: #9aa6b2;
+  color: rgba(154, 166, 178, 0.72);
 }
 .file-tree-name {
   flex: 0 0 auto;
@@ -1444,6 +1458,12 @@ body.file-tree-dragging * {
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap;
+  color: rgba(226, 233, 239, 0.9);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.file-tree-row[data-selected="true"] .file-tree-name {
+  color: rgba(245, 248, 251, 0.97);
 }
 .file-tree-rename-input {
   flex: 1;
@@ -1464,6 +1484,7 @@ body.file-tree-dragging * {
 .file-tree-error {
   padding: 1rem;
   font-size: 0.8125rem;
+  font-family: inherit;
   opacity: 0.7;
   min-width: 0;
   overflow-wrap: break-word;
