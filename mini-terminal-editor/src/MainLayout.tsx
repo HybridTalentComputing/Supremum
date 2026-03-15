@@ -33,6 +33,7 @@ type EditorTab = {
 type TerminalTab = {
   id: string;
   title: string;
+  defaultTitle: string;
   cwd?: string;
 };
 
@@ -84,6 +85,7 @@ export function MainLayout() {
     {
       id: "term-1",
       title: "Terminal 1",
+      defaultTitle: "Terminal 1",
       cwd: workspacePath ?? undefined,
     },
   ]);
@@ -163,9 +165,11 @@ export function MainLayout() {
   const handleCreateTerminal = useCallback(() => {
     terminalCounterRef.current += 1;
     const id = `term-${terminalCounterRef.current}`;
+    const defaultTitle = `Terminal ${terminalCounterRef.current}`;
     const nextTab: TerminalTab = {
       id,
-      title: `Terminal ${terminalCounterRef.current}`,
+      title: defaultTitle,
+      defaultTitle,
       cwd: workspacePath ?? undefined,
     };
 
@@ -189,6 +193,16 @@ export function MainLayout() {
       });
       return nextTabs;
     });
+  }, []);
+
+  const handleTerminalTitleChange = useCallback((terminalId: string, title: string) => {
+    setTerminalTabs((currentTabs) =>
+      currentTabs.map((tab) =>
+        tab.id === terminalId && tab.title !== title
+          ? { ...tab, title }
+          : tab
+      )
+    );
   }, []);
 
   const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
@@ -289,6 +303,8 @@ export function MainLayout() {
                       terminalId={tab.id}
                       cwd={tab.cwd}
                       active={tab.id === activeTerminalId}
+                      defaultTitle={tab.defaultTitle}
+                      onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
                     />
                   </div>
                 ))}
