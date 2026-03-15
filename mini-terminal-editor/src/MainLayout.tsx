@@ -10,6 +10,7 @@ import { TerminalComponent } from "./Terminal";
 import { EditorPanel } from "./EditorPanel";
 import { useWorkspace } from "./WorkspaceContext";
 import { CodeEditor } from "./CodeEditor";
+import { AGENT_PRESETS, type AgentPreset, type AgentPresetId } from "./agentPresets";
 import { useFileIconUrl } from "./fileIcons";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -33,6 +34,7 @@ import {
   FolderClosed,
   PanelLeft,
   Plus,
+  Sparkles,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -46,9 +48,12 @@ type EditorTab = {
 
 type TerminalTab = {
   id: string;
+  kind: "agent" | "native";
   title: string;
   defaultTitle: string;
   cwd?: string;
+  presetId?: AgentPresetId;
+  startupCommands?: string[];
 };
 
 function getTabName(path: string) {
@@ -153,17 +158,78 @@ function WorkspaceEmptyState({
   );
 }
 
+function AgentPresetLauncher({
+  onSelectPreset,
+}: {
+  onSelectPreset: (preset: AgentPreset) => void;
+}) {
+  const presetRows = AGENT_PRESETS.reduce<AgentPreset[][]>((rows, preset, index) => {
+    const rowIndex = Math.floor(index / 2);
+    if (!rows[rowIndex]) {
+      rows[rowIndex] = [];
+    }
+    rows[rowIndex].push(preset);
+    return rows;
+  }, []);
+
+  return (
+    <div className="agent-launcher-shell">
+      <div className="agent-launcher">
+        <div className="agent-launcher-header">
+          <h2 className="workspace-empty-title">Choose an AI agent</h2>
+          <p className="workspace-empty-description">
+            Pick a preset to launch directly into the corresponding CLI workflow.
+          </p>
+        </div>
+        <div className="agent-launcher-list">
+          {presetRows.map((row, rowIndex) => (
+            <div key={`row-${rowIndex}`} className="agent-launcher-row">
+              {row.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  variant="outline"
+                  className="agent-preset-card"
+                  onClick={() => onSelectPreset(preset)}
+                >
+                  <span className="agent-preset-main">
+                    <span className="agent-preset-icon-wrap">
+                      <img
+                        src={preset.iconPath}
+                        alt=""
+                        className="agent-preset-icon"
+                        draggable={false}
+                      />
+                    </span>
+                    <span className="agent-preset-copy">
+                      <span className="agent-preset-title">{preset.label}</span>
+                      <span className="agent-preset-description">{preset.description}</span>
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MainLayout() {
   const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const agentPresetMenuRef = useRef<HTMLDivElement | null>(null);
   const terminalCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
-  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
-  const [activeWorkspace, setActiveWorkspace] = useState<"terminal" | "editor">("terminal");
+  const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
+  const [activeAgentTerminalId, setActiveAgentTerminalId] = useState<string | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor">("agent");
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
+  const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -189,6 +255,30 @@ export function MainLayout() {
       console.error("Failed to start window dragging:", error);
     });
   }, []);
+
+  useEffect(() => {
+    if (!agentPresetMenuOpen) return;
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && agentPresetMenuRef.current?.contains(target)) return;
+      setAgentPresetMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAgentPresetMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [agentPresetMenuOpen]);
 
   const handleOpenFile = useCallback((path: string, content: string) => {
     setOpenTabs((currentTabs) => {
@@ -238,37 +328,82 @@ export function MainLayout() {
         if (nextTabs.length === 0) return null;
         return nextTabs[Math.max(0, tabIndex - 1)]?.path ?? nextTabs[0].path;
       });
+      if (nextTabs.length === 0) {
+        setActiveWorkspace("agent");
+      }
       return nextTabs;
     });
   };
 
   const handleCreateTerminal = useCallback(() => {
+    const nextIndex = terminalCounterRef.current;
     terminalCounterRef.current += 1;
-    const id = `term-${terminalCounterRef.current}`;
-    const defaultTitle = `Terminal ${terminalCounterRef.current}`;
+    const id = `term-${nextIndex}`;
+    const defaultTitle = `Terminal ${nextIndex}`;
     const nextTab: TerminalTab = {
       id,
+      kind: "native",
       title: defaultTitle,
       defaultTitle,
       cwd: workspacePath ?? undefined,
     };
 
     setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
-    setActiveTerminalId(id);
+    setActiveNativeTerminalId(id);
     setActiveWorkspace("terminal");
   }, [workspacePath]);
 
+  const handleCreateAgentTerminal = useCallback(
+    (preset: AgentPreset) => {
+      const nextIndex = terminalCounterRef.current;
+      terminalCounterRef.current += 1;
+      const id = `term-${nextIndex}`;
+      const nextTab: TerminalTab = {
+        id,
+        kind: "agent",
+        title: preset.label,
+        defaultTitle: preset.label,
+        cwd: workspacePath ?? undefined,
+        presetId: preset.id,
+        startupCommands: [preset.command],
+      };
+
+      setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
+      setActiveAgentTerminalId(id);
+      setActiveWorkspace("agent");
+      setAgentPresetMenuOpen(false);
+    },
+    [workspacePath]
+  );
+
   const handleCloseTerminal = useCallback((terminalId: string) => {
     setTerminalTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.id === terminalId);
-      if (tabIndex === -1) return currentTabs;
+      const targetTab = currentTabs.find((tab) => tab.id === terminalId);
+      if (!targetTab) return currentTabs;
 
       const nextTabs = currentTabs.filter((tab) => tab.id !== terminalId);
-      setActiveTerminalId((currentActiveId) => {
-        if (currentActiveId !== terminalId) return currentActiveId;
-        if (nextTabs.length === 0) return null;
-        return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
-      });
+      const sameKindTabs = currentTabs.filter((tab) => tab.kind === targetTab.kind);
+      const sameKindIndex = sameKindTabs.findIndex((tab) => tab.id === terminalId);
+      const nextSameKindTabs = nextTabs.filter((tab) => tab.kind === targetTab.kind);
+
+      if (targetTab.kind === "native") {
+        setActiveNativeTerminalId((currentActiveId) => {
+          if (currentActiveId !== terminalId) return currentActiveId;
+          if (nextSameKindTabs.length === 0) return null;
+          return (
+            nextSameKindTabs[Math.max(0, sameKindIndex - 1)]?.id ?? nextSameKindTabs[0].id
+          );
+        });
+      } else {
+        setActiveAgentTerminalId((currentActiveId) => {
+          if (currentActiveId !== terminalId) return currentActiveId;
+          if (nextSameKindTabs.length === 0) return null;
+          return (
+            nextSameKindTabs[Math.max(0, sameKindIndex - 1)]?.id ?? nextSameKindTabs[0].id
+          );
+        });
+      }
+
       return nextTabs;
     });
   }, []);
@@ -329,11 +464,13 @@ export function MainLayout() {
       );
 
       setTerminalTabs([]);
-      setActiveTerminalId(null);
+      setActiveNativeTerminalId(null);
+      setActiveAgentTerminalId(null);
       setOpenTabs([]);
       setActiveTabPath(null);
-      setActiveWorkspace("terminal");
+      setActiveWorkspace("agent");
       setActiveSidebarTab("files");
+      setAgentPresetMenuOpen(false);
       setWorkspacePath(nextPath);
     } catch (error) {
       console.error("Failed to switch workspace:", error);
@@ -354,20 +491,68 @@ export function MainLayout() {
   }, [activeTabPath, openTabs]);
 
   useEffect(() => {
-    if (terminalTabs.length === 0) {
-      if (activeTerminalId !== null) {
-        setActiveTerminalId(null);
+    const nativeTabs = terminalTabs.filter((tab) => tab.kind === "native");
+    if (nativeTabs.length === 0) {
+      if (activeNativeTerminalId !== null) {
+        setActiveNativeTerminalId(null);
       }
       return;
     }
 
-    if (!activeTerminalId || !terminalTabs.some((tab) => tab.id === activeTerminalId)) {
-      setActiveTerminalId(terminalTabs[0].id);
+    if (
+      !activeNativeTerminalId ||
+      !nativeTabs.some((tab) => tab.id === activeNativeTerminalId)
+    ) {
+      setActiveNativeTerminalId(nativeTabs[0].id);
     }
-  }, [activeTerminalId, terminalTabs]);
+  }, [activeNativeTerminalId, terminalTabs]);
+
+  useEffect(() => {
+    const agentTabs = terminalTabs.filter((tab) => tab.kind === "agent");
+    if (agentTabs.length === 0) {
+      if (activeAgentTerminalId !== null) {
+        setActiveAgentTerminalId(null);
+      }
+      return;
+    }
+
+    if (
+      !activeAgentTerminalId ||
+      !agentTabs.some((tab) => tab.id === activeAgentTerminalId)
+    ) {
+      setActiveAgentTerminalId(agentTabs[0].id);
+    }
+  }, [activeAgentTerminalId, terminalTabs]);
 
   const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
+  const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
+  const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
+  const agentPresetMenu = agentPresetMenuOpen ? (
+    <div className="agent-preset-menu" role="menu" aria-label="AI Agent presets">
+      {AGENT_PRESETS.map((preset) => (
+        <button
+          key={preset.id}
+          type="button"
+          className="agent-preset-menu-item"
+          onClick={() => handleCreateAgentTerminal(preset)}
+        >
+          <span className="agent-preset-menu-main">
+            <img
+              src={preset.iconPath}
+              alt=""
+              className="agent-preset-menu-icon"
+              draggable={false}
+            />
+            <span className="agent-preset-menu-copy">
+              <span className="agent-preset-menu-title">{preset.label}</span>
+              <span className="agent-preset-menu-description">{preset.description}</span>
+            </span>
+          </span>
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   return (
     <div className="main-layout-shell">
@@ -406,7 +591,7 @@ export function MainLayout() {
         className="main-layout"
       >
         <ResizablePanel
-          defaultSize={30}
+          defaultSize={20}
           minSize={20}
           collapsible
           collapsedSize={0}
@@ -424,172 +609,316 @@ export function MainLayout() {
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70} minSize={30} className="flex min-h-0 flex-col">
+        <ResizablePanel defaultSize={80} minSize={30} className="flex min-h-0 flex-col">
           <div className="main-layout-terminal">
             <TooltipProvider delay={250}>
-            <div className="workspace-manager-bar">
-              <div className="workspace-manager-list" role="tablist" aria-label="工作区切换">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="workspace-manager-switch"
-                  data-active={activeWorkspace === "terminal" ? "true" : undefined}
-                  onClick={() => setActiveWorkspace("terminal")}
-                  aria-pressed={activeWorkspace === "terminal"}
-                >
-                  <SquareTerminal className="size-3.5" />
-                  <span className="workspace-manager-title">Terminal</span>
-                  <span className="workspace-manager-count">{terminalTabs.length}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="workspace-manager-switch"
-                  data-active={activeWorkspace === "editor" ? "true" : undefined}
-                  onClick={() => setActiveWorkspace("editor")}
-                  aria-pressed={activeWorkspace === "editor"}
-                >
-                  <FileText className="size-3.5" />
-                  <span className="workspace-manager-title">Editor</span>
-                  <span className="workspace-manager-count">{openTabs.length}</span>
-                </Button>
-              </div>
-            </div>
-
-            <div className="workspace-content-stack">
-              <div
-                className="workspace-panel workspace-panel-terminal"
-                data-active={activeWorkspace === "terminal" ? "true" : undefined}
-              >
-                {terminalTabs.length > 0 && activeTerminalId ? (
-                  <Tabs
-                    value={activeTerminalId}
-                    onValueChange={setActiveTerminalId}
-                    className="terminal-shell"
+              <div className="workspace-manager-bar">
+                <div className="workspace-manager-list" role="tablist" aria-label="工作区切换">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="workspace-manager-switch"
+                    data-active={activeWorkspace === "agent" ? "true" : undefined}
+                    onClick={() => setActiveWorkspace("agent")}
+                    aria-pressed={activeWorkspace === "agent"}
                   >
-                    <div className="terminal-tabs-bar">
-                      <ScrollArea
-                        className="terminal-tabs-scroll min-w-0 flex-1"
-                        onWheel={handleTabsWheel}
-                      >
-                        <TabsList
-                          variant="line"
-                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                        >
-                          {terminalTabs.map((tab) => (
-                            <Tooltip key={tab.id}>
-                              <TooltipTrigger
-                                render={
-                                  <TabsTrigger
-                                    value={tab.id}
-                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                  >
-                                    <SquareTerminal className="size-3.5" />
-                                    <span className="terminal-tab-label truncate">{tab.title}</span>
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      className="terminal-tab-close"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleCloseTerminal(tab.id);
-                                      }}
-                                      onKeyDown={(event) => {
-                                        if (event.key !== "Enter" && event.key !== " ") return;
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleCloseTerminal(tab.id);
-                                      }}
-                                      aria-label={`关闭 ${tab.title}`}
-                                    >
-                                      <X className="size-3.5" />
-                                    </span>
-                                  </TabsTrigger>
-                                }
-                              />
-                              <TooltipContent>{tab.title}</TooltipContent>
-                            </Tooltip>
-                          ))}
-                        </TabsList>
-                        <ScrollBar orientation="horizontal" />
-                      </ScrollArea>
-                      <div className="terminal-tabs-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="terminal-tab-create"
-                          onClick={handleCreateTerminal}
-                          aria-label="新建终端"
-                        >
-                          <Plus className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="terminal-stage">
-                      {terminalTabs.map((tab) => (
-                        <div
-                          key={tab.id}
-                          className="terminal-tab-panel"
-                          data-active={tab.id === activeTerminalId ? "true" : undefined}
-                        >
-                          <TerminalComponent
-                            terminalId={tab.id}
-                            cwd={tab.cwd}
-                            active={activeWorkspace === "terminal" && tab.id === activeTerminalId}
-                            defaultTitle={tab.defaultTitle}
-                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </Tabs>
-                ) : (
-                  <div className="terminal-shell terminal-shell-empty">
-                    <div className="terminal-tabs-bar terminal-tabs-bar-empty">
-                      <div className="terminal-tabs-empty-label">No terminal yet</div>
-                      <div className="terminal-tabs-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="terminal-tab-create"
-                          onClick={handleCreateTerminal}
-                          aria-label="新建终端"
-                        >
-                          <Plus className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="terminal-stage">
-                      <WorkspaceEmptyState
-                        visual={<SquareTerminal className="workspace-empty-icon" />}
-                        title="Workspace ready"
-                        description="Open a terminal only when you need one. Keep the canvas clean until there is actual work to run."
-                        meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
-                        actions={[
-                          {
-                            icon: <SquareTerminal className="size-4" />,
-                            label: "New Terminal",
-                            hint: "create",
-                            onClick: handleCreateTerminal,
-                            emphasis: true,
-                          },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                )}
+                    <Sparkles className="size-3.5" />
+                    <span className="workspace-manager-title">AI Agent</span>
+                    <span className="workspace-manager-count">{agentTerminalTabs.length}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="workspace-manager-switch"
+                    data-active={activeWorkspace === "terminal" ? "true" : undefined}
+                    onClick={() => {
+                      setAgentPresetMenuOpen(false);
+                      setActiveWorkspace("terminal");
+                    }}
+                    aria-pressed={activeWorkspace === "terminal"}
+                  >
+                    <SquareTerminal className="size-3.5" />
+                    <span className="workspace-manager-title">Terminal</span>
+                    <span className="workspace-manager-count">{nativeTerminalTabs.length}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="workspace-manager-switch"
+                    data-active={activeWorkspace === "editor" ? "true" : undefined}
+                    onClick={() => {
+                      setAgentPresetMenuOpen(false);
+                      setActiveWorkspace("editor");
+                    }}
+                    aria-pressed={activeWorkspace === "editor"}
+                  >
+                    <FileText className="size-3.5" />
+                    <span className="workspace-manager-title">Editor</span>
+                    <span className="workspace-manager-count">{openTabs.length}</span>
+                  </Button>
+                </div>
               </div>
 
-              <div
-                className="workspace-panel workspace-panel-editor"
-                data-active={activeWorkspace === "editor" ? "true" : undefined}
-              >
+              <div className="workspace-content-stack">
+                <div
+                  className="workspace-panel workspace-panel-agent"
+                  data-active={activeWorkspace === "agent" ? "true" : undefined}
+                >
+                  {agentTerminalTabs.length > 0 && activeAgentTerminalId ? (
+                    <Tabs
+                      value={activeAgentTerminalId}
+                      onValueChange={setActiveAgentTerminalId}
+                      className="terminal-shell"
+                    >
+                      <div className="terminal-tabs-bar">
+                        <ScrollArea
+                          className="terminal-tabs-scroll min-w-0 flex-1"
+                          onWheel={handleTabsWheel}
+                        >
+                          <TabsList
+                            variant="line"
+                            className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                          >
+                            {agentTerminalTabs.map((tab) => (
+                              <Tooltip key={tab.id}>
+                                <TooltipTrigger
+                                  render={
+                                    <TabsTrigger
+                                      value={tab.id}
+                                      className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                    >
+                                      <span className="terminal-tab-label truncate">{tab.title}</span>
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        className="terminal-tab-close"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleCloseTerminal(tab.id);
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key !== "Enter" && event.key !== " ") return;
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleCloseTerminal(tab.id);
+                                        }}
+                                        aria-label={`关闭 ${tab.title}`}
+                                      >
+                                        <X className="size-3.5" />
+                                      </span>
+                                    </TabsTrigger>
+                                  }
+                                />
+                                <TooltipContent>{tab.title}</TooltipContent>
+                              </Tooltip>
+                            ))}
+                          </TabsList>
+                          <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                        <div
+                          className="terminal-tabs-actions agent-preset-menu-anchor"
+                          ref={agentPresetMenuRef}
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="terminal-tab-create"
+                            onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
+                            aria-label="启动 AI Agent"
+                            aria-expanded={agentPresetMenuOpen}
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                          {agentPresetMenu}
+                        </div>
+                      </div>
+
+                      <div className="terminal-stage">
+                        {agentTerminalTabs.map((tab) => (
+                          <div
+                            key={tab.id}
+                            className="terminal-tab-panel"
+                            data-active={tab.id === activeAgentTerminalId ? "true" : undefined}
+                          >
+                            <TerminalComponent
+                              terminalId={tab.id}
+                              cwd={tab.cwd}
+                              active={activeWorkspace === "agent" && tab.id === activeAgentTerminalId}
+                              defaultTitle={tab.defaultTitle}
+                              startupCommands={tab.startupCommands}
+                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </Tabs>
+                  ) : (
+                    <div className="terminal-shell terminal-shell-empty">
+                      <div className="terminal-tabs-bar terminal-tabs-bar-empty">
+                        <div className="terminal-tabs-empty-label">Choose an AI agent</div>
+                        <div
+                          className="terminal-tabs-actions agent-preset-menu-anchor"
+                          ref={agentPresetMenuRef}
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="terminal-tab-create"
+                            onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
+                            aria-label="启动 AI Agent"
+                            aria-expanded={agentPresetMenuOpen}
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                          {agentPresetMenu}
+                        </div>
+                      </div>
+                      <div className="terminal-stage">
+                        <AgentPresetLauncher onSelectPreset={handleCreateAgentTerminal} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="workspace-panel workspace-panel-terminal"
+                  data-active={activeWorkspace === "terminal" ? "true" : undefined}
+                >
+                  {nativeTerminalTabs.length > 0 && activeNativeTerminalId ? (
+                    <Tabs
+                      value={activeNativeTerminalId}
+                      onValueChange={setActiveNativeTerminalId}
+                      className="terminal-shell"
+                    >
+                      <div className="terminal-tabs-bar">
+                        <ScrollArea
+                          className="terminal-tabs-scroll min-w-0 flex-1"
+                          onWheel={handleTabsWheel}
+                        >
+                          <TabsList
+                            variant="line"
+                            className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                          >
+                            {nativeTerminalTabs.map((tab) => (
+                              <Tooltip key={tab.id}>
+                                <TooltipTrigger
+                                  render={
+                                    <TabsTrigger
+                                      value={tab.id}
+                                      className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                    >
+                                      <SquareTerminal className="size-3.5" />
+                                      <span className="terminal-tab-label truncate">{tab.title}</span>
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        className="terminal-tab-close"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleCloseTerminal(tab.id);
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key !== "Enter" && event.key !== " ") return;
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleCloseTerminal(tab.id);
+                                        }}
+                                        aria-label={`关闭 ${tab.title}`}
+                                      >
+                                        <X className="size-3.5" />
+                                      </span>
+                                    </TabsTrigger>
+                                  }
+                                />
+                                <TooltipContent>{tab.title}</TooltipContent>
+                              </Tooltip>
+                            ))}
+                          </TabsList>
+                          <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                        <div className="terminal-tabs-actions">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="terminal-tab-create"
+                            onClick={handleCreateTerminal}
+                            aria-label="新建终端"
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="terminal-stage">
+                        {nativeTerminalTabs.map((tab) => (
+                          <div
+                            key={tab.id}
+                            className="terminal-tab-panel"
+                            data-active={tab.id === activeNativeTerminalId ? "true" : undefined}
+                          >
+                            <TerminalComponent
+                              terminalId={tab.id}
+                              cwd={tab.cwd}
+                              active={
+                                activeWorkspace === "terminal" && tab.id === activeNativeTerminalId
+                              }
+                              defaultTitle={tab.defaultTitle}
+                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </Tabs>
+                  ) : (
+                    <div className="terminal-shell terminal-shell-empty">
+                      <div className="terminal-tabs-bar terminal-tabs-bar-empty">
+                        <div className="terminal-tabs-empty-label">No terminal yet</div>
+                        <div className="terminal-tabs-actions">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="terminal-tab-create"
+                            onClick={handleCreateTerminal}
+                            aria-label="新建终端"
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="terminal-stage">
+                        <WorkspaceEmptyState
+                          visual={<SquareTerminal className="workspace-empty-icon" />}
+                          title="Workspace ready"
+                          description="Open a terminal only when you need one. Keep the canvas clean until there is actual work to run."
+                          meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                          actions={[
+                            {
+                              icon: <SquareTerminal className="size-4" />,
+                              label: "New Terminal",
+                              hint: "create",
+                              onClick: handleCreateTerminal,
+                              emphasis: true,
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="workspace-panel workspace-panel-editor"
+                  data-active={activeWorkspace === "editor" ? "true" : undefined}
+                >
                 <div className="editor-workspace">
                   <div className="editor-workspace-inner">
                     {activeTab ? (

@@ -644,7 +644,7 @@ body {
   min-width: 0;
   height: 32px;
   min-height: 32px;
-  padding: 0 0.5rem;
+  padding: 0 0.25rem;
   border-bottom: 1px solid rgba(201, 216, 230, 0.12);
   background: #02070c;
 }
@@ -655,11 +655,13 @@ body {
   min-width: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   height: 100%;
-  padding: 0 0.75rem;
+  padding: 0 0.5rem;
   border: 0;
   border-radius: 0;
+  white-space: nowrap;
+  font-size: 0.76rem;
   color: rgba(159, 174, 188, 0.7);
   background: transparent;
   box-shadow: none;
@@ -822,6 +824,150 @@ body {
   text-transform: uppercase;
 }
 
+.agent-launcher-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 2rem 2rem;
+  background: #02070c;
+  overflow: auto;
+}
+
+.agent-launcher {
+  display: flex;
+  width: min(56rem, 100%);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1.1rem;
+  text-align: center;
+}
+
+.agent-launcher-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.agent-launcher-copy {
+  display: flex;
+  max-width: 28rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.agent-launcher-list {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.agent-launcher-row {
+  display: flex;
+  width: 100%;
+  gap: 0.75rem;
+}
+
+.agent-preset-card {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+  min-height: 5rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.875rem;
+  padding: 1rem;
+  border-radius: 14px;
+  color: rgba(201, 216, 230, 0.82);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 1;
+  white-space: normal;
+}
+
+.agent-preset-card:hover,
+.agent-preset-card:focus-visible {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(244, 251, 255, 0.95);
+}
+
+.agent-preset-main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: flex-start;
+}
+
+.agent-preset-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  white-space: normal;
+}
+
+.agent-preset-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.agent-preset-description {
+  font-size: 0.74rem;
+  color: rgba(145, 159, 173, 0.8);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.agent-preset-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.agent-preset-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  object-fit: contain;
+}
+
+.agent-launcher-shell::-webkit-scrollbar {
+  width: 10px;
+}
+
+.agent-launcher-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-launcher-shell::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.agent-launcher-shell:hover::-webkit-scrollbar-thumb,
+.agent-launcher-shell:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(120, 130, 142, 0.7);
+}
+
+.agent-launcher-shell:hover::-webkit-scrollbar-thumb:hover,
+.agent-launcher-shell:focus-within::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 164, 177, 0.88);
+}
+
 .terminal-shell {
   display: flex;
   flex: 1;
@@ -950,10 +1096,88 @@ body {
   background: #02070c;
 }
 
+.agent-preset-menu-anchor {
+  position: relative;
+  overflow: visible;
+}
+
 .terminal-tab-create {
   color: rgba(196, 202, 210, 0.66);
   width: 1.5rem;
   height: 1.5rem;
+}
+
+.agent-preset-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  width: min(18rem, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(201, 216, 230, 0.12);
+  border-radius: 12px;
+  background: #061018;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+.agent-preset-menu-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: transparent;
+  color: rgba(201, 216, 230, 0.82);
+  text-align: left;
+}
+
+.agent-preset-menu-item:hover,
+.agent-preset-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(244, 251, 255, 0.96);
+  outline: none;
+}
+
+.agent-preset-menu-main {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.agent-preset-menu-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.agent-preset-menu-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.agent-preset-menu-title {
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.agent-preset-menu-description {
+  font-size: 0.69rem;
+  color: rgba(145, 159, 173, 0.78);
+}
+
+@media (max-width: 640px) {
+  .agent-launcher-row {
+    flex-direction: column;
+  }
 }
 
 .terminal-stage {

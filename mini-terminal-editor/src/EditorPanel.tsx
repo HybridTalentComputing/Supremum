@@ -46,14 +46,14 @@ export function EditorPanel({
           value="files"
           className="sidebar-workspace-tab"
         >
-          <FileText className="size-4" />
+          <FileText className="size-3.5" />
           Files
         </TabsTrigger>
         <TabsTrigger
           value="changes"
           className="sidebar-workspace-tab"
         >
-          <GitCompareArrows className="size-4" />
+          <GitCompareArrows className="size-3.5" />
           Changes
         </TabsTrigger>
       </TabsList>

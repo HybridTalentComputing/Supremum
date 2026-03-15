@@ -16,6 +16,11 @@ const PROMPT_ONLY_PATTERN = /[#$%>]\s*$/;
 const TITLE_ALIASES: Record<string, string> = {
   claude: "Claude Code",
   "claude-code": "Claude Code",
+  codex: "Codex",
+  gemini: "Gemini",
+  opencode: "OpenCode",
+  copilot: "Copilot",
+  "cursor-agent": "Cursor Agent",
 };
 
 function getExecutableLabel(command: string) {
@@ -77,6 +82,7 @@ type TerminalComponentProps = {
   active?: boolean;
   defaultTitle?: string;
   onTitleChange?: (title: string) => void;
+  startupCommands?: string[];
 };
 
 export function TerminalComponent({
@@ -85,6 +91,7 @@ export function TerminalComponent({
   active = true,
   defaultTitle = "Terminal",
   onTitleChange,
+  startupCommands,
 }: TerminalComponentProps) {
   const terminalSurfaceRef = useRef<HTMLDivElement | null>(null);
   const terminalRootRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +105,9 @@ export function TerminalComponent({
   const onTitleChangeRef = useRef(onTitleChange);
   const inputBufferRef = useRef("");
   const runningCommandTitleRef = useRef<string | null>(null);
+  const startupCommandsRef = useRef(startupCommands);
+  const startupCommandsExecutedRef = useRef(false);
+  const startupTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     defaultTitleRef.current = defaultTitle;
@@ -109,6 +119,10 @@ export function TerminalComponent({
   useEffect(() => {
     onTitleChangeRef.current = onTitleChange;
   }, [onTitleChange]);
+
+  useEffect(() => {
+    startupCommandsRef.current = startupCommands;
+  }, [startupCommands]);
 
   const emitTitle = useCallback(
     (nextTitle: string) => {
@@ -208,6 +222,7 @@ export function TerminalComponent({
     titleRef.current = defaultTitleRef.current;
     inputBufferRef.current = "";
     runningCommandTitleRef.current = null;
+    startupCommandsExecutedRef.current = false;
     onTitleChangeRef.current?.(defaultTitleRef.current);
 
     // Defer fit + PTY creation to next frame so container has layout
@@ -229,6 +244,21 @@ export function TerminalComponent({
         .then(() => {
           statusRef.current = "connected";
           fit();
+          if (
+            startupCommandsRef.current?.length &&
+            !startupCommandsExecutedRef.current
+          ) {
+            startupCommandsExecutedRef.current = true;
+            startupTimeoutRef.current = window.setTimeout(() => {
+              const data = startupCommandsRef.current
+                ?.map((command) => `${command}\r`)
+                .join("");
+              if (!data) return;
+              invoke("write_terminal", { terminalId, data }).catch(() => {
+                statusRef.current = "error";
+              });
+            }, 80);
+          }
         })
         .catch((err) => {
           xterm.writeln(`\r\nError: ${err}\r\n`);
@@ -276,6 +306,10 @@ export function TerminalComponent({
 
     return () => {
       cancelAnimationFrame(rafId);
+      if (startupTimeoutRef.current !== null) {
+        window.clearTimeout(startupTimeoutRef.current);
+        startupTimeoutRef.current = null;
+      }
       dataDisposable.dispose();
       titleDisposable.dispose();
       resizeDisposable.dispose();
