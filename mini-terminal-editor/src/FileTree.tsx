@@ -673,7 +673,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     [],
   );
 
-  const treeKey = `${treeVersion}:${containerSize.width}x${containerSize.height}`;
+  const treeKey = `${treeVersion}:${containerSize.height}`;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -681,7 +681,14 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   if (error)   return <div className="file-tree-error"><span>{error}</span></div>;
 
   return (
-    <FileTreeContext.Provider value={{ setContextTarget, dragState, isDragging, startDrag }}>
+    <FileTreeContext.Provider
+      value={{
+        setContextTarget,
+        dragState,
+        isDragging,
+        startDrag,
+      }}
+    >
       <div className="file-tree-panel">
 
         {/* Toolbar */}
@@ -768,7 +775,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
                 initialOpenState={openStateSnapshot}
                 rowHeight={24}
                 indent={0}
-                width={Math.max(containerSize.width, 1)}
+                width="100%"
                 height={Math.max(containerSize.height, 1)}
                 className="file-tree"
                 rowClassName="file-tree-row-wrapper"
