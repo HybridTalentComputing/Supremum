@@ -186,6 +186,95 @@ body {
   background: #02070c;
 }
 
+.workspace-manager-bar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 0.375rem;
+  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  background: #02070c;
+}
+
+.workspace-manager-list {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.workspace-manager-switch {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(26rem, 42vw);
+  height: 26px;
+  padding: 0 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(196, 202, 210, 0.7);
+  background: transparent;
+}
+
+.workspace-manager-switch:hover {
+  color: rgba(223, 230, 236, 0.94);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.workspace-manager-switch[data-active] {
+  color: #9cdcfe;
+  background: #0a1118;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.workspace-manager-switch:disabled {
+  opacity: 1;
+  color: rgba(196, 202, 210, 0.42);
+  background: transparent;
+}
+
+.workspace-manager-title {
+  margin-left: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.workspace-manager-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.68rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.workspace-content-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-panel {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  display: none;
+}
+
+.workspace-panel[data-active] {
+  display: flex;
+}
+
 .terminal-shell {
   display: flex;
   flex: 1;
@@ -375,18 +464,20 @@ body {
   background: #02070c;
 }
 
-.terminal-editor-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
+.editor-workspace {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   background: #1e1e1e;
   display: flex;
   flex-direction: column;
 }
 
-.terminal-editor-overlay-inner {
+.editor-workspace-inner {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -547,7 +638,7 @@ body {
   white-space: nowrap;
 }
 
-.terminal-editor-overlay-inner > [data-slot="tabs"] {
+.editor-workspace-inner > [data-slot="tabs"] {
   background: #252526;
 }
 
@@ -616,56 +707,56 @@ body {
   height: 100%;
 }
 
-.terminal-editor-overlay .cm-editor,
-.terminal-editor-overlay .cm-scroller,
-.terminal-editor-overlay .cm-gutters,
-.terminal-editor-overlay .cm-activeLine,
-.terminal-editor-overlay .cm-activeLineGutter {
+.editor-workspace .cm-editor,
+.editor-workspace .cm-scroller,
+.editor-workspace .cm-gutters,
+.editor-workspace .cm-activeLine,
+.editor-workspace .cm-activeLineGutter {
   background-color: #252526 !important;
 }
 
-.terminal-editor-overlay .code-editor-instance .cm-editor {
+.editor-workspace .code-editor-instance .cm-editor {
   display: flex;
   flex: 1;
   width: 100%;
 }
 
-.terminal-editor-overlay .cm-editor {
+.editor-workspace .cm-editor {
   height: 100%;
   min-width: 0;
   min-height: 0;
 }
 
-.terminal-editor-overlay .cm-theme,
-.terminal-editor-overlay .cm-focused {
+.editor-workspace .cm-theme,
+.editor-workspace .cm-focused {
   height: 100%;
 }
 
-.terminal-editor-overlay .cm-scroller,
-.terminal-editor-overlay .cm-content {
+.editor-workspace .cm-scroller,
+.editor-workspace .cm-content {
   min-height: 100%;
 }
 
-.terminal-editor-overlay .cm-scroller {
+.editor-workspace .cm-scroller {
   overflow: auto !important;
   width: 100%;
 }
 
-.terminal-editor-overlay .cm-scroller::-webkit-scrollbar {
+.editor-workspace .cm-scroller::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-.terminal-editor-overlay .cm-scroller::-webkit-scrollbar-track {
+.editor-workspace .cm-scroller::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.terminal-editor-overlay .cm-scroller::-webkit-scrollbar-thumb {
+.editor-workspace .cm-scroller::-webkit-scrollbar-thumb {
   background: transparent;
   border-radius: 999px;
 }
 
-.terminal-editor-overlay .cm-scroller {
+.editor-workspace .cm-scroller {
   scrollbar-width: auto;
   scrollbar-color: transparent transparent;
 }
@@ -685,8 +776,8 @@ body {
   scrollbar-color: rgba(120, 130, 142, 0.85) #1e1e1e;
 }
 
-.terminal-editor-overlay .cm-content,
-.terminal-editor-overlay .cm-line {
+.editor-workspace .cm-content,
+.editor-workspace .cm-line {
   background-color: transparent !important;
 }
 
