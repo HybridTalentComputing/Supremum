@@ -22,7 +22,17 @@ import {
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
 import { type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, Circle, FileText, Plus, SquareTerminal, X } from "lucide-react";
+import {
+  ChevronRight,
+  Circle,
+  FileText,
+  FolderClosed,
+  PanelLeft,
+  Plus,
+  SquareTerminal,
+  X,
+} from "lucide-react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 
 type EditorTab = {
   path: string;
@@ -45,6 +55,11 @@ function getTabName(path: string) {
 function getTabDir(path: string) {
   const parts = path.split("/");
   return parts.slice(0, -1);
+}
+
+function formatWorkspacePath(path: string | null) {
+  if (!path) return "";
+  return path.replace(/^\/Users\/[^/]+/, "~");
 }
 
 function EditorFileIcon({ path }: { path: string }) {
@@ -80,6 +95,7 @@ function ActivePathBar({ path }: { path: string }) {
 
 export function MainLayout() {
   const { workspacePath } = useWorkspace();
+  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const terminalCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([
     {
@@ -93,6 +109,7 @@ export function MainLayout() {
   const [activeWorkspace, setActiveWorkspace] = useState<"terminal" | "editor">("terminal");
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -206,6 +223,20 @@ export function MainLayout() {
     );
   }, []);
 
+  const handleToggleSidebar = useCallback(() => {
+    const panel = sidebarPanelRef.current;
+    if (!panel) return;
+
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setSidebarCollapsed(false);
+      return;
+    }
+
+    panel.collapse();
+    setSidebarCollapsed(true);
+  }, []);
+
   useEffect(() => {
     if (openTabs.length === 0) {
       if (activeTabPath !== null) {
@@ -223,28 +254,57 @@ export function MainLayout() {
   }, [activeTabPath, activeWorkspace, openTabs]);
 
   const activeTerminal = terminalTabs.find((tab) => tab.id === activeTerminalId) ?? terminalTabs[0];
-  const activeTerminalLabel = activeTerminal?.title ?? "Terminal";
   const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
-  const activeEditorLabel = activeTab ? getTabName(activeTab.path) : "No file";
   const canShowEditor = openTabs.length > 0;
+  const workspaceDisplayPath = formatWorkspacePath(workspacePath);
 
   return (
-    <ResizablePanelGroup
-      orientation="horizontal"
-      className="main-layout"
-    >
-      <ResizablePanel defaultSize={30} minSize={20} className="flex min-h-0 flex-col">
-        <div className="main-layout-editor">
-          <EditorPanel
-            workspacePath={workspacePath!}
-            onOpenFile={handleOpenFile}
-          />
+    <div className="main-layout-shell">
+      <div className="app-titlebar" data-tauri-drag-region>
+        <div className="app-titlebar-controls">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="app-titlebar-toggle"
+            onClick={handleToggleSidebar}
+            data-tauri-drag-region="false"
+            aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}
+          >
+            <PanelLeft className="size-3.5" />
+          </Button>
+          <div className="app-titlebar-path" title={workspacePath ?? undefined}>
+            <FolderClosed className="size-3.5" />
+            <span className="app-titlebar-path-text truncate">{workspaceDisplayPath}</span>
+          </div>
         </div>
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={70} minSize={30} className="flex min-h-0 flex-col">
-        <div className="main-layout-terminal">
-          <TooltipProvider delay={250}>
+        <div className="app-titlebar-drag-region" />
+      </div>
+
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="main-layout"
+      >
+        <ResizablePanel
+          defaultSize={30}
+          minSize={20}
+          collapsible
+          collapsedSize={0}
+          panelRef={sidebarPanelRef}
+          onResize={() => setSidebarCollapsed(sidebarPanelRef.current?.isCollapsed() ?? false)}
+          className="flex min-h-0 flex-col"
+        >
+          <div className="main-layout-editor">
+            <EditorPanel
+              workspacePath={workspacePath!}
+              onOpenFile={handleOpenFile}
+            />
+          </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={70} minSize={30} className="flex min-h-0 flex-col">
+          <div className="main-layout-terminal">
+            <TooltipProvider delay={250}>
             <div className="workspace-manager-bar">
               <div className="workspace-manager-list" role="tablist" aria-label="工作区切换">
                 <Button
@@ -469,9 +529,10 @@ export function MainLayout() {
                 </div>
               )}
             </div>
-          </TooltipProvider>
-        </div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+            </TooltipProvider>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }

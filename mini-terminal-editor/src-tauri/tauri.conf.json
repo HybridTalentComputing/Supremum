@@ -19,7 +19,9 @@
         "height": 600,
         "resizable": true,
         "backgroundColor": "#02070c",
-        "titleBarStyle": "Transparent"
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

@@ -558,6 +558,24 @@ pub fn run() {
                 use tauri::window::Color;
                 let color = Color(2, 7, 12, 255);
                 let _ = win.set_background_color(Some(color));
+
+                #[cfg(target_os = "macos")]
+                {
+                    use cocoa::{
+                        appkit::{NSWindow, NSWindowTitleVisibility},
+                        base::{id, YES},
+                    };
+
+                    if let Ok(ns_window) = win.ns_window() {
+                        let ns_window = ns_window as id;
+                        unsafe {
+                            ns_window.setTitlebarAppearsTransparent_(YES);
+                            ns_window
+                                .setTitleVisibility_(NSWindowTitleVisibility::NSWindowTitleHidden);
+                            ns_window.setMovableByWindowBackground_(YES);
+                        }
+                    }
+                }
             }
             Ok(())
         })
