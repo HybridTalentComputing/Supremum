@@ -295,21 +295,6 @@ export function MainLayout() {
   const handleSwitchWorkspace = useCallback(async () => {
     if (!workspacePath) return;
 
-    const hasDirtyTabs = openTabs.some((tab) => tab.content !== tab.savedContent);
-    const hasOpenContext = terminalTabs.length > 0 || openTabs.length > 0;
-
-    if (hasDirtyTabs) {
-      const shouldContinue = window.confirm(
-        "Switch project? Unsaved editor changes will be lost and open terminals will be closed."
-      );
-      if (!shouldContinue) return;
-    } else if (hasOpenContext) {
-      const shouldContinue = window.confirm(
-        "Switch project? Open terminals and editor tabs in the current project will be closed."
-      );
-      if (!shouldContinue) return;
-    }
-
     try {
       const selected = await open({
         directory: true,
@@ -340,7 +325,7 @@ export function MainLayout() {
     } catch (error) {
       console.error("Failed to switch workspace:", error);
     }
-  }, [openTabs, setWorkspacePath, terminalTabs, workspacePath]);
+  }, [setWorkspacePath, terminalTabs, workspacePath]);
 
   useEffect(() => {
     if (openTabs.length === 0) {
