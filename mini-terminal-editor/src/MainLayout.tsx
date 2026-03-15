@@ -244,7 +244,7 @@ export function MainLayout() {
                           render={
                             <TabsTrigger
                               value={tab.id}
-                              className="terminal-tab group !flex-none justify-start gap-2 rounded-none border-0 px-3 py-2 after:hidden"
+                              className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
                             >
                               <SquareTerminal className="size-3.5" />
                               <span className="terminal-tab-label truncate">{tab.title}</span>
