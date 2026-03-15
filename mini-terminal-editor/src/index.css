@@ -1537,6 +1537,45 @@ body {
   min-height: 0;
   overflow: auto;
   background: #252526;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.markdown-preview-shell::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.markdown-preview-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.markdown-preview-shell::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.markdown-preview-shell:hover::-webkit-scrollbar-track,
+.markdown-preview-shell:focus-within::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.markdown-preview-shell:hover::-webkit-scrollbar-thumb,
+.markdown-preview-shell:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.72);
+  border-color: rgba(0, 0, 0, 0);
+}
+
+.markdown-preview-shell:hover::-webkit-scrollbar-thumb:hover,
+.markdown-preview-shell:focus-within::-webkit-scrollbar-thumb:hover {
+  background: rgba(158, 158, 158, 0.82);
+}
+
+.markdown-preview-shell:hover,
+.markdown-preview-shell:focus-within {
+  scrollbar-color: rgba(120, 120, 120, 0.72) rgba(255, 255, 255, 0.03);
 }
 
 .markdown-preview {
