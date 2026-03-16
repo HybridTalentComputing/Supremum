@@ -2,6 +2,13 @@
 // Based on dispatcher pattern: Channel instead of emit, UTF-8 safety.
 // File operations: read_file, write_file, list_dir, path-constrained to workspace.
 
+mod git_backend;
+
+use git_backend::{
+    git_commit, git_discard_all, git_discard_file, git_get_capability, git_get_diff_contents,
+    git_get_status, git_init_repository, git_stage_all, git_stage_file, git_unstage_all,
+    git_unstage_file,
+};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Deserialize;
 use std::{
@@ -347,6 +354,48 @@ fn reveal_in_file_manager(payload: RevealInFileManagerPayload) -> Result<(), Str
 }
 
 #[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("unsupported URL scheme".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(&url)
+            .status()
+            .map_err(|e| format!("failed to open URL: {e}"))?;
+        if !status.success() {
+            return Err("failed to open URL".to_string());
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .status()
+            .map_err(|e| format!("failed to open URL: {e}"))?;
+        if !status.success() {
+            return Err("failed to open URL".to_string());
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let status = Command::new("xdg-open")
+            .arg(&url)
+            .status()
+            .map_err(|e| format!("failed to open URL: {e}"))?;
+        if !status.success() {
+            return Err("failed to open URL".to_string());
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn toggle_window_zoom(window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -623,7 +672,19 @@ pub fn run() {
             delete_entry,
             move_entry,
             reveal_in_file_manager,
-            toggle_window_zoom
+            toggle_window_zoom,
+            open_external_url,
+            git_get_capability,
+            git_init_repository,
+            git_get_status,
+            git_get_diff_contents,
+            git_stage_file,
+            git_unstage_file,
+            git_stage_all,
+            git_unstage_all,
+            git_discard_file,
+            git_discard_all,
+            git_commit
         ])
         .setup(|app| {
             // Set window background to dark so title bar matches terminal theme (macOS transparent titlebar)

@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Circle,
   Eye,
+  GitCompareArrows,
   FileText,
   FileCode2,
   FolderOpen,
@@ -41,12 +42,31 @@ import {
   X,
 } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useGitChanges } from "./useGitChanges";
+import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
+import { DiffEditor } from "./DiffEditor";
+import { AllDiffsView } from "./AllDiffsView";
 
-type EditorTab = {
+type FileEditorTab = {
+  id: string;
   path: string;
   content: string;
   savedContent: string;
 };
+
+type DiffFileTab = {
+  id: string;
+  kind: "file";
+  file: GitChangedFile;
+  category: GitDiffCategory;
+};
+
+type DiffAllTab = {
+  id: string;
+  kind: "all";
+};
+
+type DiffTab = DiffFileTab | DiffAllTab;
 
 type TerminalTab = {
   id: string;
@@ -61,6 +81,18 @@ type TerminalTab = {
 function getTabName(path: string) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
+}
+
+function getFileTabId(path: string) {
+  return `file:${path}`;
+}
+
+function getDiffTabId(path: string) {
+  return `diff:${path}`;
+}
+
+function getAllDiffTabId() {
+  return "diff:all";
 }
 
 function getTabDir(path: string) {
@@ -266,13 +298,19 @@ export function MainLayout() {
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
   const [activeAgentTerminalId, setActiveAgentTerminalId] = useState<string | null>(null);
-  const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor">("agent");
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
-  const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor" | "diff">("agent");
+  const [openTabs, setOpenTabs] = useState<FileEditorTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
+  const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
+  const git = useGitChanges({
+    workspacePath,
+    active: Boolean(workspacePath) && activeSidebarTab === "changes",
+  });
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -356,21 +394,50 @@ export function MainLayout() {
   }, [agentPresetMenuOpen]);
 
   const handleOpenFile = useCallback((path: string, content: string) => {
+    const tabId = getFileTabId(path);
     setOpenTabs((currentTabs) => {
-      const existingTab = currentTabs.find((tab) => tab.path === path);
+      const existingTab = currentTabs.find((tab) => tab.id === tabId);
       if (existingTab) return currentTabs;
-      return [...currentTabs, { path, content, savedContent: content }];
+      return [...currentTabs, { id: tabId, path, content, savedContent: content }];
     });
     setEditorViewModes((currentModes) =>
-      currentModes[path]
+      currentModes[tabId]
         ? currentModes
         : {
             ...currentModes,
-            [path]: isPreviewablePath(path) ? "preview" : "code",
+            [tabId]: isPreviewablePath(path) ? "preview" : "code",
           }
     );
-    setActiveTabPath(path);
+    setActiveTabId(tabId);
     setActiveWorkspace("editor");
+  }, []);
+
+  const handleOpenDiff = useCallback((file: GitChangedFile, category: GitDiffCategory) => {
+    const tabId = getDiffTabId(file.path);
+    setDiffTabs((currentTabs) => {
+      const existingTab = currentTabs.find((tab) => tab.id === tabId);
+      if (existingTab?.kind === "file") {
+        return currentTabs.map((tab) =>
+          tab.id === tabId && tab.kind === "file"
+            ? { ...tab, file, category }
+            : tab
+        );
+      }
+      return [...currentTabs, { id: tabId, kind: "file", file, category }];
+    });
+    setActiveDiffTabId(tabId);
+    setActiveWorkspace("diff");
+  }, []);
+
+  const handleOpenAllDiffs = useCallback(() => {
+    const allDiffTabId = getAllDiffTabId();
+    setDiffTabs((currentTabs) =>
+      currentTabs.some((tab) => tab.id === allDiffTabId)
+        ? currentTabs
+        : [{ id: allDiffTabId, kind: "all" }, ...currentTabs]
+    );
+    setActiveDiffTabId(allDiffTabId);
+    setActiveWorkspace("diff");
   }, []);
 
   const handleSave = async (path: string, content: string) => {
@@ -379,50 +446,67 @@ export function MainLayout() {
     });
     setOpenTabs((currentTabs) =>
       currentTabs.map((tab) =>
-        tab.path === path
-          ? { ...tab, content, savedContent: content }
-          : tab
+        tab.path === path ? { ...tab, content, savedContent: content } : tab
       )
     );
   };
 
   const handleChange = (path: string, content: string) => {
     setOpenTabs((currentTabs) =>
-      currentTabs.map((tab) =>
-        tab.path === path ? { ...tab, content } : tab
-      )
+      currentTabs.map((tab) => (tab.path === path ? { ...tab, content } : tab))
     );
   };
 
-  const handleCloseTab = (path: string) => {
+  const handleCloseTab = (tabId: string) => {
     setOpenTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.path === path);
+      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
       if (tabIndex === -1) return currentTabs;
 
       const targetTab = currentTabs[tabIndex];
       const isDirty = targetTab.content !== targetTab.savedContent;
-      if (isDirty && !window.confirm(`"${getTabName(path)}" 尚未保存，确认关闭？`)) {
+      const targetPath = targetTab.path;
+      if (isDirty && !window.confirm(`"${getTabName(targetPath)}" 尚未保存，确认关闭？`)) {
         return currentTabs;
       }
 
-      const nextTabs = currentTabs.filter((tab) => tab.path !== path);
-      setActiveTabPath((currentActivePath) => {
-        if (currentActivePath !== path) return currentActivePath;
+      const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+      setActiveTabId((currentActiveId) => {
+        if (currentActiveId !== tabId) return currentActiveId;
         if (nextTabs.length === 0) return null;
-        return nextTabs[Math.max(0, tabIndex - 1)]?.path ?? nextTabs[0].path;
+        return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
       });
       setEditorViewModes((currentModes) => {
-        if (!(path in currentModes)) return currentModes;
+        if (!(tabId in currentModes)) return currentModes;
         const nextModes = { ...currentModes };
-        delete nextModes[path];
+        delete nextModes[tabId];
         return nextModes;
       });
       if (nextTabs.length === 0) {
-        setActiveWorkspace("agent");
+        setActiveWorkspace(diffTabs.length > 0 ? "diff" : "agent");
       }
       return nextTabs;
     });
   };
+
+  const handleCloseDiffTab = useCallback((tabId: string) => {
+    setDiffTabs((currentTabs) => {
+      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+      if (tabIndex === -1) return currentTabs;
+
+      const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+      setActiveDiffTabId((currentActiveId) => {
+        if (currentActiveId !== tabId) return currentActiveId;
+        if (nextTabs.length === 0) return null;
+        return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
+      });
+
+      if (nextTabs.length === 0) {
+        setActiveWorkspace(openTabs.length > 0 ? "editor" : "agent");
+      }
+
+      return nextTabs;
+    });
+  }, [openTabs.length]);
 
   const handleCreateTerminal = useCallback(() => {
     const nextIndex = terminalCounterRef.current;
@@ -556,7 +640,9 @@ export function MainLayout() {
       setActiveNativeTerminalId(null);
       setActiveAgentTerminalId(null);
       setOpenTabs([]);
-      setActiveTabPath(null);
+      setActiveTabId(null);
+      setDiffTabs([]);
+      setActiveDiffTabId(null);
       setEditorViewModes({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
@@ -567,25 +653,99 @@ export function MainLayout() {
     }
   }, [setWorkspacePath, terminalTabs, workspacePath]);
 
-  const handleSetEditorViewMode = useCallback((path: string, mode: "code" | "preview") => {
+  const handleSetEditorViewMode = useCallback((tabId: string, mode: "code" | "preview") => {
     setEditorViewModes((currentModes) => ({
       ...currentModes,
-      [path]: mode,
+      [tabId]: mode,
     }));
   }, []);
 
   useEffect(() => {
     if (openTabs.length === 0) {
-      if (activeTabPath !== null) {
-        setActiveTabPath(null);
+      if (activeTabId !== null) {
+        setActiveTabId(null);
       }
       return;
     }
 
-    if (!activeTabPath || !openTabs.some((tab) => tab.path === activeTabPath)) {
-      setActiveTabPath(openTabs[0].path);
+    if (!activeTabId || !openTabs.some((tab) => tab.id === activeTabId)) {
+      setActiveTabId(openTabs[0].id);
     }
-  }, [activeTabPath, openTabs]);
+  }, [activeTabId, openTabs]);
+
+  useEffect(() => {
+    if (!workspacePath) return;
+
+    if (git.capability?.status && git.capability.status !== "available") {
+      setDiffTabs([]);
+      setActiveDiffTabId(null);
+      return;
+    }
+
+    const stagedByPath = new Map((git.status?.staged ?? []).map((file) => [file.path, file]));
+    const unstagedByPath = new Map(git.combinedChanges.map((file) => [file.path, file]));
+
+    setDiffTabs((currentTabs) => {
+      let changed = false;
+      const nextTabs: DiffTab[] = [];
+
+      for (const tab of currentTabs) {
+        if (tab.kind === "all") {
+          nextTabs.push(tab);
+          continue;
+        }
+
+        const nextStaged = stagedByPath.get(tab.file.path);
+        if (nextStaged) {
+          if (tab.category !== "staged" || tab.file !== nextStaged) {
+            changed = true;
+            nextTabs.push({ ...tab, file: nextStaged, category: "staged" });
+          } else {
+            nextTabs.push(tab);
+          }
+          continue;
+        }
+
+        const nextUnstaged = unstagedByPath.get(tab.file.path);
+        if (nextUnstaged) {
+          if (tab.category !== "unstaged" || tab.file !== nextUnstaged) {
+            changed = true;
+            nextTabs.push({ ...tab, file: nextUnstaged, category: "unstaged" });
+          } else {
+            nextTabs.push(tab);
+          }
+          continue;
+        }
+
+        changed = true;
+      }
+
+      if (!changed) {
+        return currentTabs;
+      }
+
+      if (nextTabs.length === 0) {
+        setActiveDiffTabId(null);
+      } else if (activeDiffTabId && !nextTabs.some((tab) => tab.id === activeDiffTabId)) {
+        setActiveDiffTabId(nextTabs[nextTabs.length - 1]?.id ?? null);
+      }
+
+      return nextTabs;
+    });
+  }, [activeDiffTabId, git.capability?.status, git.combinedChanges, git.status?.staged, workspacePath]);
+
+  useEffect(() => {
+    if (diffTabs.length === 0) {
+      if (activeDiffTabId !== null) {
+        setActiveDiffTabId(null);
+      }
+      return;
+    }
+
+    if (!activeDiffTabId || !diffTabs.some((tab) => tab.id === activeDiffTabId)) {
+      setActiveDiffTabId(diffTabs[0].id);
+    }
+  }, [activeDiffTabId, diffTabs]);
 
   useEffect(() => {
     const nativeTabs = terminalTabs.filter((tab) => tab.kind === "native");
@@ -621,13 +781,15 @@ export function MainLayout() {
     }
   }, [activeAgentTerminalId, terminalTabs]);
 
-  const activeTab = openTabs.find((tab) => tab.path === activeTabPath) ?? null;
+  const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? null;
+  const activeDiffTab = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
-      ? (editorViewModes[activeTab.path] ?? "preview")
+      ? (editorViewModes[activeTab.id] ?? "preview")
       : "code";
   const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
+  const totalChangedFiles = (git.status?.staged.length ?? 0) + git.combinedChanges.length;
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
   const agentPresetMenu = agentPresetMenuOpen ? (
     <div className="agent-preset-menu" role="menu" aria-label="AI Agent presets">
@@ -710,6 +872,9 @@ export function MainLayout() {
             <EditorPanel
               workspacePath={workspacePath!}
               onOpenFile={handleOpenFile}
+              onOpenDiff={handleOpenDiff}
+              onOpenAllDiffs={handleOpenAllDiffs}
+              git={git}
               activeSidebarTab={activeSidebarTab}
               onSidebarTabChange={setActiveSidebarTab}
             />
@@ -765,6 +930,22 @@ export function MainLayout() {
                     <FileText className="size-3.5" />
                     <span className="workspace-manager-title">Editor</span>
                     <span className="workspace-manager-count">{openTabs.length}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="workspace-manager-switch"
+                    data-active={activeWorkspace === "diff" ? "true" : undefined}
+                    onClick={() => {
+                      setAgentPresetMenuOpen(false);
+                      setActiveWorkspace("diff");
+                    }}
+                    aria-pressed={activeWorkspace === "diff"}
+                  >
+                    <GitCompareArrows className="size-3.5" />
+                    <span className="workspace-manager-title">Diff</span>
+                    <span className="workspace-manager-count">{diffTabs.length}</span>
                   </Button>
                 </div>
               </div>
@@ -1026,113 +1207,258 @@ export function MainLayout() {
                   className="workspace-panel workspace-panel-editor"
                   data-active={activeWorkspace === "editor" ? "true" : undefined}
                 >
-                <div className="editor-workspace">
-                  <div className="editor-workspace-inner">
-                    {activeTab ? (
-                      <Tabs
-                        value={activeTab.path}
-                        onValueChange={setActiveTabPath}
-                        className="flex h-full min-h-0 flex-col gap-0"
-                      >
-                        <div className="editor-header">
-                          <div className="editor-tabs-bar">
-                            <ScrollArea
-                              className="editor-tabs-scroll min-w-0 flex-1"
-                              onWheel={handleTabsWheel}
-                            >
-                              <TabsList
-                                variant="line"
-                                className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                  <div className="editor-workspace">
+                    <div className="editor-workspace-inner">
+                      {activeTab ? (
+                        <Tabs
+                          value={activeTab.id}
+                          onValueChange={setActiveTabId}
+                          className="flex h-full min-h-0 flex-col gap-0"
+                        >
+                          <div className="editor-header">
+                            <div className="editor-tabs-bar">
+                              <ScrollArea
+                                className="editor-tabs-scroll min-w-0 flex-1"
+                                onWheel={handleTabsWheel}
                               >
-                                {openTabs.map((tab) => {
-                                  const isDirty = tab.content !== tab.savedContent;
-                                  return (
-                                    <Tooltip key={tab.path}>
-                                      <TooltipTrigger
-                                        render={
-                                          <TabsTrigger
-                                            value={tab.path}
-                                            className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                          >
-                                            <EditorFileIcon path={tab.path} />
-                                            {isDirty && (
-                                              <Circle className="size-2 fill-current stroke-none text-cyan-300" />
-                                            )}
-                                            <span className="editor-tab-label truncate">{getTabName(tab.path)}</span>
-                                            <span
-                                              role="button"
-                                              tabIndex={0}
-                                              className="editor-tab-close"
-                                              onClick={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                handleCloseTab(tab.path);
-                                              }}
-                                              onKeyDown={(event) => {
-                                                if (event.key !== "Enter" && event.key !== " ") return;
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                handleCloseTab(tab.path);
-                                              }}
-                                              aria-label={`关闭 ${getTabName(tab.path)}`}
+                                <TabsList
+                                  variant="line"
+                                  className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                >
+                                  {openTabs.map((tab) => {
+                                    const isDirty = tab.content !== tab.savedContent;
+                                    const tabLabel = getTabName(tab.path);
+                                    return (
+                                      <Tooltip key={tab.id}>
+                                        <TooltipTrigger
+                                          render={
+                                            <TabsTrigger
+                                              value={tab.id}
+                                              className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
                                             >
-                                              <X className="size-3.5" />
-                                            </span>
-                                          </TabsTrigger>
-                                        }
-                                      />
-                                      <TooltipContent>{tab.path}</TooltipContent>
-                                    </Tooltip>
-                                  );
-                                })}
-                              </TabsList>
-                              <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
-                            <div className="editor-tabs-actions">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                className="editor-overlay-close"
-                                onClick={() => setActiveWorkspace("terminal")}
-                                aria-label="切换到终端"
+                                              <EditorFileIcon path={tab.path} />
+                                              {isDirty && (
+                                                <Circle className="size-2 fill-current stroke-none text-cyan-300" />
+                                              )}
+                                              <span className="editor-tab-label truncate">{tabLabel}</span>
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                className="editor-tab-close"
+                                                onClick={(event) => {
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  handleCloseTab(tab.id);
+                                                }}
+                                                onKeyDown={(event) => {
+                                                  if (event.key !== "Enter" && event.key !== " ") return;
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  handleCloseTab(tab.id);
+                                                }}
+                                                aria-label={`关闭 ${tabLabel}`}
+                                              >
+                                                <X className="size-3.5" />
+                                              </span>
+                                            </TabsTrigger>
+                                          }
+                                        />
+                                        <TooltipContent>{tab.path}</TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })}
+                                </TabsList>
+                                <ScrollBar orientation="horizontal" />
+                              </ScrollArea>
+                              <div className="editor-tabs-actions">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="editor-overlay-close"
+                                  onClick={() => setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal")}
+                                  aria-label="关闭编辑区"
+                                >
+                                  <X className="size-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <ActivePathBar
+                              path={activeTab.path}
+                              previewable={isPreviewablePath(activeTab.path)}
+                              mode={activeEditorMode}
+                              onModeChange={(mode) => {
+                                handleSetEditorViewMode(activeTab.id, mode);
+                              }}
+                            />
+                          </div>
+                          <div className="editor-content">
+                            <CodeEditor
+                              path={activeTab.path}
+                              content={activeTab.content}
+                              dirty={activeTab.content !== activeTab.savedContent}
+                              mode={activeEditorMode}
+                              onChange={handleChange}
+                              onSave={handleSave}
+                            />
+                          </div>
+                        </Tabs>
+                      ) : (
+                        <div className="editor-empty-shell">
+                          <WorkspaceEmptyState
+                            visual={<FolderOpen className="workspace-empty-icon" />}
+                            title="Editor is empty"
+                            description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
+                            meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="workspace-panel workspace-panel-diff"
+                  data-active={activeWorkspace === "diff" ? "true" : undefined}
+                >
+                  <div className="editor-workspace diff-workspace">
+                    <div className="editor-workspace-inner">
+                      {activeDiffTab ? (
+                        <Tabs
+                          value={activeDiffTab.id}
+                          onValueChange={setActiveDiffTabId}
+                          className="flex h-full min-h-0 flex-col gap-0"
+                        >
+                          <div className="editor-header">
+                            <div className="editor-tabs-bar">
+                              <ScrollArea
+                                className="editor-tabs-scroll min-w-0 flex-1"
+                                onWheel={handleTabsWheel}
                               >
-                                <X className="size-3.5" />
-                              </Button>
+                                <TabsList
+                                  variant="line"
+                                  className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                >
+                                  {diffTabs.map((tab) => {
+                                    const tabLabel =
+                                      tab.kind === "all"
+                                        ? `Git: Changes (${totalChangedFiles} files)`
+                                        : `${getTabName(tab.file.path)} (Diff)`;
+                                    const tooltipLabel =
+                                      tab.kind === "all"
+                                        ? "Open all changes"
+                                        : `${tab.file.path} • ${tab.category}`;
+                                    return (
+                                      <Tooltip key={tab.id}>
+                                        <TooltipTrigger
+                                          render={
+                                            <TabsTrigger
+                                              value={tab.id}
+                                              className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                            >
+                                              {tab.kind === "all" ? (
+                                                <GitCompareArrows className="editor-tab-icon-svg" />
+                                              ) : (
+                                                <EditorFileIcon path={tab.file.path} />
+                                              )}
+                                              <span className="editor-tab-label truncate">{tabLabel}</span>
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                className="editor-tab-close"
+                                                onClick={(event) => {
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  handleCloseDiffTab(tab.id);
+                                                }}
+                                                onKeyDown={(event) => {
+                                                  if (event.key !== "Enter" && event.key !== " ") return;
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  handleCloseDiffTab(tab.id);
+                                                }}
+                                                aria-label={`关闭 ${tabLabel}`}
+                                              >
+                                                <X className="size-3.5" />
+                                              </span>
+                                            </TabsTrigger>
+                                          }
+                                        />
+                                        <TooltipContent>{tooltipLabel}</TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })}
+                                </TabsList>
+                                <ScrollBar orientation="horizontal" />
+                              </ScrollArea>
+                              <div className="editor-tabs-actions">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="editor-overlay-close"
+                                  onClick={() => setActiveWorkspace(openTabs.length > 0 ? "editor" : "terminal")}
+                                  aria-label="关闭 Diff 工作区"
+                                >
+                                  <X className="size-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="diff-workspace-pathbar">
+                              {activeDiffTab.kind === "all" ? (
+                                <>
+                                  <GitCompareArrows className="size-3.5" />
+                                  <span>All repository changes</span>
+                                </>
+                              ) : (
+                                <>
+                                  <EditorFileIcon path={activeDiffTab.file.path} />
+                                  <span>{activeDiffTab.file.oldPath ? `${activeDiffTab.file.oldPath} → ` : ""}{activeDiffTab.file.path}</span>
+                                </>
+                              )}
                             </div>
                           </div>
-                          <ActivePathBar
-                            path={activeTab.path}
-                            previewable={isPreviewablePath(activeTab.path)}
-                            mode={activeEditorMode}
-                            onModeChange={(mode) => handleSetEditorViewMode(activeTab.path, mode)}
+                          <div className="editor-content">
+                            {activeDiffTab.kind === "all" ? (
+                              <AllDiffsView
+                                workspacePath={workspacePath!}
+                                stagedFiles={git.status?.staged ?? []}
+                                unstagedFiles={git.combinedChanges}
+                                refreshToken={git.refreshToken}
+                              />
+                            ) : (
+                              <DiffEditor
+                                workspacePath={workspacePath!}
+                                file={activeDiffTab.file}
+                                category={activeDiffTab.category}
+                                refreshToken={git.refreshToken}
+                              />
+                            )}
+                          </div>
+                        </Tabs>
+                      ) : (
+                        <div className="editor-empty-shell">
+                          <WorkspaceEmptyState
+                            visual={<GitCompareArrows className="workspace-empty-icon" />}
+                            title="Diff workspace is empty"
+                            description="Open a changed file or use Open Changes from Source Control when you want a repository-level diff view."
+                            meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                            actions={[
+                              {
+                                icon: <GitCompareArrows className="size-4" />,
+                                label: "Open Changes",
+                                hint: "review",
+                                onClick: handleOpenAllDiffs,
+                                emphasis: true,
+                              },
+                            ]}
                           />
                         </div>
-                        <div className="editor-content">
-                          <CodeEditor
-                            path={activeTab.path}
-                            content={activeTab.content}
-                            dirty={activeTab.content !== activeTab.savedContent}
-                            mode={activeEditorMode}
-                            onChange={handleChange}
-                            onSave={handleSave}
-                          />
-                        </div>
-                      </Tabs>
-                    ) : (
-                      <div className="editor-empty-shell">
-                        <WorkspaceEmptyState
-                          visual={<FolderOpen className="workspace-empty-icon" />}
-                          title="Editor is empty"
-                          description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
-                          meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
-                        />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             </TooltipProvider>
           </div>
         </ResizablePanel>

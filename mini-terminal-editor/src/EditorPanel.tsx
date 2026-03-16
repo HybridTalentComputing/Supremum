@@ -5,10 +5,16 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileTree } from "./FileTree";
 import { FileText, GitCompareArrows } from "lucide-react";
+import { ChangesPanel } from "./ChangesPanel";
+import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
+import type { UseGitChangesResult } from "./useGitChanges";
 
 type EditorPanelProps = {
   workspacePath: string;
   onOpenFile: (path: string, content: string) => void;
+  onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
+  onOpenAllDiffs: () => void;
+  git: UseGitChangesResult;
   activeSidebarTab?: "changes" | "files";
   onSidebarTabChange?: (tab: "changes" | "files") => void;
 };
@@ -16,6 +22,9 @@ type EditorPanelProps = {
 export function EditorPanel({
   workspacePath,
   onOpenFile,
+  onOpenDiff,
+  onOpenAllDiffs,
+  git,
   activeSidebarTab,
   onSidebarTabChange,
 }: EditorPanelProps) {
@@ -72,11 +81,14 @@ export function EditorPanel({
         </TabsContent>
         <TabsContent
           value="changes"
-          className="flex-1 min-h-0 mt-0 p-2 overflow-auto data-[selected=false]:hidden"
+          className="flex-1 min-h-0 mt-0 overflow-hidden data-[selected=false]:hidden"
         >
-          <div className="text-muted-foreground text-sm">
-            Changes 面板待实现
-          </div>
+          <ChangesPanel
+            workspacePath={workspacePath}
+            git={git}
+            onOpenDiff={onOpenDiff}
+            onOpenAllDiffs={onOpenAllDiffs}
+          />
         </TabsContent>
       </div>
     </Tabs>

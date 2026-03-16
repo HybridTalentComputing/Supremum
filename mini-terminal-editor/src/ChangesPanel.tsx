@@ -1,0 +1,618 @@
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { openExternalUrl } from "./gitApi";
+import { useFileIconUrl } from "./fileIcons";
+import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
+import type { UseGitChangesResult } from "./useGitChanges";
+import {
+  AlertCircle,
+  Check,
+  Ellipsis,
+  FilePlus2,
+  Files,
+  FolderGit2,
+  GitBranch,
+  Minus,
+  RefreshCw,
+  RotateCcw,
+  TriangleAlert,
+  Undo2,
+} from "lucide-react";
+
+type ChangesPanelProps = {
+  workspacePath: string;
+  git: UseGitChangesResult;
+  onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
+  onOpenAllDiffs: () => void;
+};
+
+function ChangeFileIcon({ path }: { path: string }) {
+  const iconUrl = useFileIconUrl(path.split("/").pop() || path, false, false);
+
+  if (!iconUrl) {
+    return <FilePlus2 className="changes-file-icon-svg" />;
+  }
+
+  return <img src={iconUrl} alt="" className="changes-file-icon-img" draggable={false} />;
+}
+
+function getWorkspaceName(workspacePath: string) {
+  const parts = workspacePath.split(/[\\/]/);
+  return parts[parts.length - 1] || workspacePath;
+}
+
+function getStatusLabel(file: GitChangedFile, category: GitDiffCategory) {
+  if (category === "staged") {
+    switch (file.status) {
+      case "added":
+      case "untracked":
+        return "A";
+      case "deleted":
+        return "D";
+      case "renamed":
+        return "R";
+      case "copied":
+        return "C";
+      default:
+        return "M";
+    }
+  }
+
+  switch (file.status) {
+    case "untracked":
+    case "added":
+      return "U";
+    case "deleted":
+      return "D";
+    case "renamed":
+      return "R";
+    case "copied":
+      return "C";
+    default:
+      return "M";
+  }
+}
+
+function FileActions({
+  category,
+  file,
+  disabled,
+  onOpenDiff,
+  onStage,
+  onUnstage,
+  onDiscard,
+}: {
+  category: GitDiffCategory;
+  file: GitChangedFile;
+  disabled: boolean;
+  onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
+  onStage: (path: string) => void;
+  onUnstage: (path: string) => void;
+  onDiscard: (path: string) => void;
+}) {
+  const stageAction =
+    category === "staged"
+      ? {
+          label: "Unstage Changes",
+          onClick: () => onUnstage(file.path),
+          icon: <Minus className="size-3.5" />,
+        }
+      : {
+          label: "Stage Changes",
+          onClick: () => onStage(file.path),
+          icon: <FilePlus2 className="size-3.5" />,
+        };
+
+  return (
+    <div className="changes-file-actions">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="changes-file-action"
+        disabled={disabled}
+        aria-label={stageAction.label}
+        onClick={(event) => {
+          event.stopPropagation();
+          stageAction.onClick();
+        }}
+      >
+        {stageAction.icon}
+      </Button>
+      {category === "unstaged" ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="changes-file-action"
+          disabled={disabled}
+          aria-label="Discard Changes"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDiscard(file.path);
+          }}
+        >
+          <RotateCcw className="size-3.5" />
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="changes-file-action"
+        disabled={disabled}
+        aria-label="Open Diff"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenDiff(file, category);
+        }}
+      >
+        <GitBranch className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function FileRow({
+  file,
+  category,
+  disabled,
+  onOpenDiff,
+  onStage,
+  onUnstage,
+  onDiscard,
+}: {
+  file: GitChangedFile;
+  category: GitDiffCategory;
+  disabled: boolean;
+  onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
+  onStage: (path: string) => void;
+  onUnstage: (path: string) => void;
+  onDiscard: (path: string) => void;
+}) {
+  const pathParts = file.path.split("/");
+  const name = pathParts[pathParts.length - 1] || file.path;
+  const parent = pathParts.slice(0, -1).join("/");
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          className="changes-file-row"
+          onClick={() => onOpenDiff(file, category)}
+        >
+          <span className={cn("changes-file-status", `is-${file.status}`)} />
+          <span className="changes-file-icon">
+            <ChangeFileIcon path={file.path} />
+          </span>
+          <span className="changes-file-copy">
+            <span className="changes-file-name">{name}</span>
+            <span className="changes-file-parent">
+              {parent || "."}
+              {file.oldPath ? ` • ${file.oldPath}` : ""}
+            </span>
+          </span>
+          <span className="changes-file-stats">
+            {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
+            {file.deletions > 0 ? <span className="is-del">-{file.deletions}</span> : null}
+          </span>
+          <span className={cn("changes-file-code", `is-${file.status}`)}>
+            {getStatusLabel(file, category)}
+          </span>
+          <FileActions
+            category={category}
+            file={file}
+            disabled={disabled}
+            onOpenDiff={onOpenDiff}
+            onStage={onStage}
+            onUnstage={onUnstage}
+            onDiscard={onDiscard}
+          />
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {category === "staged" ? (
+          <ContextMenuItem disabled={disabled} onClick={() => onUnstage(file.path)}>
+            Unstage Changes
+          </ContextMenuItem>
+        ) : (
+          <ContextMenuItem disabled={disabled} onClick={() => onStage(file.path)}>
+            Stage Changes
+          </ContextMenuItem>
+        )}
+        {category === "unstaged" ? (
+          <ContextMenuItem disabled={disabled} onClick={() => onDiscard(file.path)}>
+            Discard Changes
+          </ContextMenuItem>
+        ) : null}
+        <ContextMenuItem disabled={disabled} onClick={() => onOpenDiff(file, category)}>
+          Open Diff
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+function CapabilityState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+  secondaryLabel,
+  onSecondaryAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+  secondaryLabel?: string;
+  onSecondaryAction?: () => void;
+}) {
+  return (
+    <div className="changes-state-shell">
+      <div className="changes-state-icon">
+        <FolderGit2 className="size-6" />
+      </div>
+      <div className="changes-state-copy">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <div className="changes-state-actions">
+        <Button type="button" size="sm" variant="outline" onClick={onAction}>
+          {actionLabel}
+        </Button>
+        {secondaryLabel && onSecondaryAction ? (
+          <Button type="button" size="sm" variant="ghost" onClick={onSecondaryAction}>
+            {secondaryLabel}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function ChangesPanel({
+  workspacePath,
+  git,
+  onOpenDiff,
+  onOpenAllDiffs,
+}: ChangesPanelProps) {
+  const [commitMessage, setCommitMessage] = useState("");
+  const combinedChanges = useMemo(() => git.combinedChanges, [git.combinedChanges]);
+  const isBusy = git.pendingAction !== null;
+  const canCommit = Boolean(commitMessage.trim()) && (git.status?.staged.length ?? 0) > 0 && !isBusy;
+  const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
+
+  const handleDiscardFile = async (path: string) => {
+    const confirmed = window.confirm(`Discard changes for "${path}"?`);
+    if (!confirmed) return;
+    await git.discardFile(path);
+  };
+
+  const handleDiscardAll = async () => {
+    const confirmed = window.confirm("Discard all unstaged changes and remove untracked files?");
+    if (!confirmed) return;
+    await git.discardAll();
+  };
+
+  const handleCommit = async () => {
+    if (!canCommit) return;
+    const result = await git.commit(commitMessage.trim());
+    if (result.ok) {
+      setCommitMessage("");
+    }
+  };
+
+  if (git.isLoading && !git.capability) {
+    return (
+      <div className="changes-loading">
+        <RefreshCw className="size-4 animate-spin" />
+        <span>Loading Source Control...</span>
+      </div>
+    );
+  }
+
+  if (git.capability?.status === "missing_git") {
+    return (
+      <CapabilityState
+        title="Git is not installed"
+        description="Source Control needs a system Git installation before this workspace can show changes."
+        actionLabel="Install Git"
+        onAction={() => {
+          void openExternalUrl("https://git-scm.com");
+        }}
+        secondaryLabel="Refresh"
+        onSecondaryAction={() => {
+          void git.refresh();
+        }}
+      />
+    );
+  }
+
+  if (git.capability?.status === "not_repository") {
+    return (
+      <CapabilityState
+        title="Initialize Repository"
+        description="This folder is not a Git repository yet. Initialize it to start using Source Control."
+        actionLabel="Initialize Repository"
+        onAction={() => {
+          void git.initRepository();
+        }}
+        secondaryLabel="Refresh"
+        onSecondaryAction={() => {
+          void git.refresh();
+        }}
+      />
+    );
+  }
+
+  if (git.capability?.status === "unsafe_repository") {
+    return (
+      <CapabilityState
+        title="Git blocked this repository"
+        description="Git marked this workspace as unsafe. Add it to safe.directory in your Git config to enable Source Control."
+        actionLabel="Open Help"
+        onAction={() => {
+          void openExternalUrl(
+            "https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory",
+          );
+        }}
+        secondaryLabel="Refresh"
+        onSecondaryAction={() => {
+          void git.refresh();
+        }}
+      />
+    );
+  }
+
+  if (git.capability?.status === "git_error") {
+    return (
+      <CapabilityState
+        title="Git is unavailable"
+        description={git.capability.message ?? "Git returned an unexpected error for this workspace."}
+        actionLabel="Refresh"
+        onAction={() => {
+          void git.refresh();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="changes-panel">
+      <div className="changes-header">
+        <div className="changes-header-title">
+          <span>Source Control</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="changes-refresh-button"
+            aria-label="Refresh Source Control"
+            onClick={() => {
+              void git.refresh();
+            }}
+          >
+            <RefreshCw className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")} />
+          </Button>
+        </div>
+        <Button type="button" variant="ghost" size="icon-xs" className="changes-more-button">
+          <Ellipsis className="size-3.5" />
+        </Button>
+      </div>
+
+      <div className="changes-repository-row">
+        <div className="changes-repository-main">
+          <FolderGit2 className="size-4" />
+          <span className="changes-repository-name">{workspaceName}</span>
+        </div>
+        <div className="changes-repository-meta">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="changes-repository-action"
+                  aria-label="Open Changes"
+                  disabled={isBusy || !git.status?.hasChanges}
+                  onClick={onOpenAllDiffs}
+                >
+                  <Files className="size-3.5" />
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">Open Changes</TooltipContent>
+          </Tooltip>
+          <span className="changes-branch-badge">
+            <GitBranch className="size-3.5" />
+            {git.status?.branch ?? "HEAD"}
+          </span>
+        </div>
+      </div>
+
+      <div className="changes-commit-box">
+        <textarea
+          value={commitMessage}
+          onChange={(event) => setCommitMessage(event.target.value)}
+          className="changes-commit-input"
+          placeholder={`Message (${navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl"}+Enter to commit on "${git.status?.branch ?? "HEAD"}")`}
+          rows={2}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              void handleCommit();
+            }
+          }}
+        />
+        <div className="changes-commit-actions">
+          <Button
+            type="button"
+            size="sm"
+            variant="default"
+            className="changes-commit-button"
+            disabled={!canCommit}
+            onClick={handleCommit}
+          >
+            <Check className="size-3.5" />
+            Commit
+          </Button>
+        </div>
+      </div>
+
+      {git.error ? (
+        <div className="changes-banner is-error">
+          <AlertCircle className="size-4" />
+          <span>{git.error}</span>
+        </div>
+      ) : null}
+
+      {!git.status?.hasChanges ? (
+        <div className="changes-empty">
+          <FolderGit2 className="size-6" />
+          <p>No changes detected</p>
+        </div>
+      ) : (
+        <ScrollArea className="changes-sections">
+          {(git.status?.staged.length ?? 0) > 0 ? (
+            <section className="changes-section">
+              <div className="changes-section-header">
+                <div className="changes-section-title">
+                  <span>Staged Changes</span>
+                  <span>{git.status?.staged.length ?? 0}</span>
+                </div>
+                <div className="changes-section-actions">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="changes-section-action"
+                          disabled={isBusy}
+                          aria-label="Unstage All Changes"
+                          onClick={() => {
+                            void git.unstageAll();
+                          }}
+                        >
+                          <Undo2 className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="bottom">Unstage All Changes</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+              <div className="changes-file-list">
+                {(git.status?.staged ?? []).map((file) => (
+                  <FileRow
+                    key={`staged:${file.path}`}
+                    file={file}
+                    category="staged"
+                    disabled={isBusy}
+                    onOpenDiff={onOpenDiff}
+                    onStage={(path) => {
+                      void git.stageFile(path);
+                    }}
+                    onUnstage={(path) => {
+                      void git.unstageFile(path);
+                    }}
+                    onDiscard={handleDiscardFile}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {(combinedChanges.length ?? 0) > 0 ? (
+            <section className="changes-section">
+              <div className="changes-section-header">
+                <div className="changes-section-title">
+                  <span>Changes</span>
+                  <span>{combinedChanges.length}</span>
+                </div>
+                <div className="changes-section-actions">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="changes-section-action"
+                          disabled={isBusy}
+                          aria-label="Discard All Changes"
+                          onClick={handleDiscardAll}
+                        >
+                          <RotateCcw className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="bottom">Discard All Changes</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="changes-section-action"
+                          disabled={isBusy}
+                          aria-label="Stage All Changes"
+                          onClick={() => {
+                            void git.stageAll();
+                          }}
+                        >
+                          <FilePlus2 className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="bottom">Stage All Changes</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+              <div className="changes-file-list">
+                {combinedChanges.map((file) => (
+                  <FileRow
+                    key={`unstaged:${file.path}`}
+                    file={file}
+                    category="unstaged"
+                    disabled={isBusy}
+                    onOpenDiff={onOpenDiff}
+                    onStage={(path) => {
+                      void git.stageFile(path);
+                    }}
+                    onUnstage={(path) => {
+                      void git.unstageFile(path);
+                    }}
+                    onDiscard={handleDiscardFile}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </ScrollArea>
+      )}
+
+      {git.capability?.message && git.capability.status !== "available" ? (
+        <div className="changes-banner is-muted">
+          <TriangleAlert className="size-4" />
+          <span>{git.capability.message}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
