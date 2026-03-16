@@ -1917,19 +1917,29 @@ body {
 
 .diff-editor-overview {
   position: relative;
-  width: 0.75rem;
+  width: 0.9rem;
   flex: none;
   border-left: 1px solid rgba(255, 255, 255, 0.04);
-  background: #191919;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+}
+
+.diff-editor-overview-viewport {
+  position: absolute;
+  left: 0.12rem;
+  right: 0.12rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
 }
 
 .diff-editor-overview-marker {
   position: absolute;
-  left: 0.12rem;
-  right: 0.12rem;
+  left: 0.22rem;
+  right: 0.22rem;
   border: 0;
   border-radius: 999px;
-  opacity: 0.8;
+  opacity: 0.92;
   cursor: pointer;
 }
 

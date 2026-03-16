@@ -60,6 +60,12 @@ type MergeSurfaceState = {
   docLength: number;
 };
 
+type ScrollPreviewState = {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+};
+
 function ToolbarTooltip({
   label,
   children,
@@ -318,6 +324,11 @@ export function DiffEditor({
   const [dirty, setDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mergeState, setMergeState] = useState<MergeSurfaceState>(readMergeSurfaceState(null));
+  const [scrollPreview, setScrollPreview] = useState<ScrollPreviewState>({
+    scrollTop: 0,
+    scrollHeight: 1,
+    clientHeight: 1,
+  });
   const activeDiffTargetRef = useRef("");
   const contentsRef = useRef<GitDiffContents | null>(null);
   const dirtyRef = useRef(false);
@@ -347,6 +358,36 @@ export function DiffEditor({
       onDirtyChange?.(false);
     };
   }, [onDirtyChange]);
+
+  useEffect(() => {
+    const scrollDOM = mergeState.view?.scrollDOM;
+    if (!scrollDOM) {
+      setScrollPreview({
+        scrollTop: 0,
+        scrollHeight: 1,
+        clientHeight: 1,
+      });
+      return;
+    }
+
+    const sync = () => {
+      setScrollPreview({
+        scrollTop: scrollDOM.scrollTop,
+        scrollHeight: Math.max(scrollDOM.scrollHeight, 1),
+        clientHeight: Math.max(scrollDOM.clientHeight, 1),
+      });
+    };
+
+    sync();
+    scrollDOM.addEventListener("scroll", sync);
+    const resizeObserver = new ResizeObserver(sync);
+    resizeObserver.observe(scrollDOM);
+
+    return () => {
+      scrollDOM.removeEventListener("scroll", sync);
+      resizeObserver.disconnect();
+    };
+  }, [mergeState.view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -469,6 +510,17 @@ export function DiffEditor({
       }),
     [mergeState.activeChunkIndex, mergeState.chunks, mergeState.docLength],
   );
+  const viewportTop = useMemo(() => {
+    const maxScrollable = Math.max(scrollPreview.scrollHeight - scrollPreview.clientHeight, 1);
+    return `${(scrollPreview.scrollTop / maxScrollable) * Math.max(0, 100 - (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100)}%`;
+  }, [scrollPreview.clientHeight, scrollPreview.scrollHeight, scrollPreview.scrollTop]);
+  const viewportHeight = useMemo(
+    () => `${Math.max(8, (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100)}%`,
+    [scrollPreview.clientHeight, scrollPreview.scrollHeight],
+  );
+  const toggleModeLabel =
+    preferredMode === "side-by-side" ? "Switch to inline diff" : "Switch to side by side diff";
+  const ToggleModeIcon = preferredMode === "side-by-side" ? Columns2 : List;
 
   return (
     <div className={cn("diff-editor-shell", embedded && "diff-editor-shell-embedded")}>
@@ -520,30 +572,21 @@ export function DiffEditor({
               <ChevronDown className="size-3.5" />
             </Button>
           </ToolbarTooltip>
-          <ToolbarTooltip label="Switch to side by side diff">
+          <ToolbarTooltip label={toggleModeLabel}>
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
               className="diff-editor-action"
-              aria-label="Side by side diff"
-              data-active={preferredMode === "side-by-side" ? "true" : undefined}
-              onClick={() => setPreferredMode("side-by-side")}
+              aria-label={toggleModeLabel}
+              data-active="true"
+              onClick={() =>
+                setPreferredMode((currentMode) =>
+                  currentMode === "side-by-side" ? "inline" : "side-by-side",
+                )
+              }
             >
-              <Columns2 className="size-3.5" />
-            </Button>
-          </ToolbarTooltip>
-          <ToolbarTooltip label="Switch to inline diff">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="diff-editor-action"
-              aria-label="Inline diff"
-              data-active={preferredMode === "inline" ? "true" : undefined}
-              onClick={() => setPreferredMode("inline")}
-            >
-              <List className="size-3.5" />
+              <ToggleModeIcon className="size-3.5" />
             </Button>
           </ToolbarTooltip>
           <ToolbarTooltip label={hideUnchanged ? "Show unchanged lines" : "Hide unchanged lines"}>
@@ -608,6 +651,11 @@ export function DiffEditor({
         </div>
         {!isLoading && !error && chunkCount > 0 ? (
           <div className="diff-editor-overview" aria-label="Change overview">
+            <div
+              className="diff-editor-overview-viewport"
+              style={{ top: viewportTop, height: viewportHeight }}
+              aria-hidden
+            />
             {overviewItems.map((item) => (
               <button
                 key={item.id}
