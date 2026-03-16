@@ -2315,23 +2315,33 @@ body {
   font-size: 0.72rem;
 }
 
+.diff-editor-surface .cm-line {
+  position: relative;
+}
+
 .diff-editor-surface .cm-merge-a .cm-changedLine,
 .diff-editor-surface .cm-deletedChunk {
-  background: rgba(98, 45, 45, 0.28) !important;
+  background: rgba(78, 23, 23, 0.72) !important;
+  box-shadow: inset 3px 0 0 rgba(255, 74, 74, 0.95);
 }
 
 .diff-editor-surface .cm-merge-b .cm-changedLine,
 .diff-editor-surface .cm-inlineChangedLine {
-  background: rgba(44, 87, 56, 0.28) !important;
+  background: rgba(19, 68, 52, 0.78) !important;
+  box-shadow: inset 3px 0 0 rgba(0, 212, 170, 0.92);
 }
 
 .diff-editor-surface .cm-merge-a .cm-changedText,
 .diff-editor-surface .cm-deletedChunk .cm-deletedText {
-  background: rgba(168, 66, 66, 0.36) !important;
+  background: rgba(171, 50, 50, 0.38) !important;
+  border-radius: 2px;
+  color: rgba(255, 214, 214, 0.98) !important;
 }
 
 .diff-editor-surface .cm-merge-b .cm-changedText {
-  background: rgba(69, 142, 89, 0.34) !important;
+  background: rgba(10, 152, 116, 0.32) !important;
+  border-radius: 2px;
+  color: rgba(203, 255, 239, 0.98) !important;
 }
 
 .diff-editor-surface .cm-merge-b .cm-deletedText {
@@ -2340,13 +2350,26 @@ body {
 
 .diff-editor-surface .cm-merge-a .cm-changedLineGutter,
 .diff-editor-surface .cm-deletedLineGutter {
-  background: rgba(214, 92, 92, 0.72) !important;
-  color: #151515 !important;
+  background: rgba(108, 28, 28, 0.92) !important;
+  color: rgba(255, 92, 92, 0.98) !important;
 }
 
 .diff-editor-surface .cm-merge-b .cm-changedLineGutter {
-  background: rgba(112, 210, 126, 0.78) !important;
-  color: #151515 !important;
+  background: rgba(17, 84, 65, 0.94) !important;
+  color: rgba(34, 233, 188, 0.98) !important;
+}
+
+.diff-editor-surface .cm-merge-a .cm-gutterElement,
+.diff-editor-surface .cm-merge-b .cm-gutterElement {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.diff-editor-surface .cm-mergeView .cm-scroller {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.015),
+    rgba(255, 255, 255, 0)
+  );
 }
 
 .editor-panel-placeholder {
