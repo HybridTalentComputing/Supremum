@@ -1466,7 +1466,6 @@ body {
 .changes-section-title {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1474,10 +1473,26 @@ body {
   color: rgba(174, 183, 191, 0.9);
 }
 
+.changes-section-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
 .changes-section-actions {
   display: flex;
   align-items: center;
   gap: 0.12rem;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(0.2rem);
+  transition:
+    max-width 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
 .changes-section-action {
@@ -1486,6 +1501,29 @@ body {
 
 .changes-section-action:hover {
   color: rgba(246, 248, 250, 0.96);
+}
+
+.changes-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(118, 126, 134, 0.24);
+  color: rgba(232, 236, 240, 0.94);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.changes-section:hover .changes-section-actions,
+.changes-section:focus-within .changes-section-actions {
+  max-width: 5rem;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .changes-file-list {
@@ -1646,6 +1684,7 @@ body {
 }
 
 .changes-file-row:hover .changes-file-actions,
+.changes-file-row:focus-within .changes-file-actions,
 .changes-file-row:focus-visible .changes-file-actions {
   max-width: 4.5rem;
   opacity: 1;

@@ -543,19 +543,21 @@ export function ChangesPanel({
               <div className="changes-section-header">
                 <div className="changes-section-title">
                   <span>Staged Changes</span>
-                  <span>{git.status?.staged.length ?? 0}</span>
                 </div>
-                <div className="changes-section-actions">
-                  {stagedSectionActions.map((action) => (
-                    <IconActionButton
-                      key={action.label}
-                      label={action.label}
-                      icon={action.icon}
-                      className="changes-section-action"
-                      disabled={isBusy}
-                      onClick={action.onClick}
-                    />
-                  ))}
+                <div className="changes-section-meta">
+                  <div className="changes-section-actions">
+                    {stagedSectionActions.map((action) => (
+                      <IconActionButton
+                        key={action.label}
+                        label={action.label}
+                        icon={action.icon}
+                        className="changes-section-action"
+                        disabled={isBusy}
+                        onClick={action.onClick}
+                      />
+                    ))}
+                  </div>
+                  <span className="changes-section-count">{git.status?.staged.length ?? 0}</span>
                 </div>
               </div>
               <div className="changes-file-list">
@@ -585,19 +587,21 @@ export function ChangesPanel({
               <div className="changes-section-header">
                 <div className="changes-section-title">
                   <span>Changes</span>
-                  <span>{combinedChanges.length}</span>
                 </div>
-                <div className="changes-section-actions">
-                  {unstagedSectionActions.map((action) => (
-                    <IconActionButton
-                      key={action.label}
-                      label={action.label}
-                      icon={action.icon}
-                      className="changes-section-action"
-                      disabled={isBusy}
-                      onClick={action.onClick}
-                    />
-                  ))}
+                <div className="changes-section-meta">
+                  <div className="changes-section-actions">
+                    {unstagedSectionActions.map((action) => (
+                      <IconActionButton
+                        key={action.label}
+                        label={action.label}
+                        icon={action.icon}
+                        className="changes-section-action"
+                        disabled={isBusy}
+                        onClick={action.onClick}
+                      />
+                    ))}
+                  </div>
+                  <span className="changes-section-count">{combinedChanges.length}</span>
                 </div>
               </div>
               <div className="changes-file-list">
