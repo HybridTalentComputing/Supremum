@@ -230,21 +230,23 @@ function FileRow({
             <span className="changes-file-name">{name}</span>
             {parentLabel ? <span className="changes-file-parent">{parentLabel}</span> : null}
           </span>
-          <FileActions
-            category={category}
-            file={file}
-            disabled={disabled}
-            onOpenDiff={onOpenDiff}
-            onStage={onStage}
-            onUnstage={onUnstage}
-            onDiscard={onDiscard}
-          />
-          <span className="changes-file-stats">
-            {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
-            {file.deletions > 0 ? <span className="is-del">-{file.deletions}</span> : null}
-          </span>
-          <span className={cn("changes-file-code", `is-${file.status}`)}>
-            {getStatusLabel(file, category)}
+          <span className="changes-file-tail">
+            <FileActions
+              category={category}
+              file={file}
+              disabled={disabled}
+              onOpenDiff={onOpenDiff}
+              onStage={onStage}
+              onUnstage={onUnstage}
+              onDiscard={onDiscard}
+            />
+            <span className="changes-file-stats">
+              {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
+              {file.deletions > 0 ? <span className="is-del">-{file.deletions}</span> : null}
+            </span>
+            <span className={cn("changes-file-code", `is-${file.status}`)}>
+              {getStatusLabel(file, category)}
+            </span>
           </span>
         </div>
       </ContextMenuTrigger>

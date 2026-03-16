@@ -1474,6 +1474,7 @@ body {
 }
 
 .changes-section-meta {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1482,17 +1483,16 @@ body {
 }
 
 .changes-section-actions {
-  display: flex;
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 0.35rem);
+  display: inline-flex;
   align-items: center;
   gap: 0.12rem;
-  max-width: 0;
-  overflow: hidden;
   opacity: 0;
-  transform: translateX(0.2rem);
-  transition:
-    max-width 120ms ease,
-    opacity 120ms ease,
-    transform 120ms ease;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
 }
 
 .changes-section-action {
@@ -1519,11 +1519,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.changes-section:hover .changes-section-actions,
-.changes-section:focus-within .changes-section-actions {
-  max-width: 5rem;
+.changes-section-header:hover .changes-section-actions,
+.changes-section-header:focus-within .changes-section-actions {
   opacity: 1;
-  transform: translateX(0);
+  pointer-events: auto;
 }
 
 .changes-file-list {
@@ -1597,9 +1596,9 @@ body {
 }
 
 .changes-file-name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: none;
+  max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1609,14 +1608,22 @@ body {
 }
 
 .changes-file-parent {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 45%;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.74rem;
   color: rgba(150, 159, 168, 0.86);
+}
+
+.changes-file-tail {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .changes-file-stats {
@@ -1642,18 +1649,16 @@ body {
 }
 
 .changes-file-actions {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 0.35rem);
   display: inline-flex;
   align-items: center;
   gap: 0.08rem;
-  flex-shrink: 0;
-  max-width: 0;
-  overflow: hidden;
   opacity: 0;
-  transform: translateX(0.2rem);
-  transition:
-    max-width 120ms ease,
-    opacity 120ms ease,
-    transform 120ms ease;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
 }
 
 .changes-file-code {
@@ -1686,9 +1691,8 @@ body {
 .changes-file-row:hover .changes-file-actions,
 .changes-file-row:focus-within .changes-file-actions,
 .changes-file-row:focus-visible .changes-file-actions {
-  max-width: 4.5rem;
   opacity: 1;
-  transform: translateX(0);
+  pointer-events: auto;
 }
 
 .changes-file-action {
