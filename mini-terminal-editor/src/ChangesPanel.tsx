@@ -16,7 +16,6 @@ import type { UseGitChangesResult } from "./useGitChanges";
 import {
   AlertCircle,
   Check,
-  Ellipsis,
   FilePlus2,
   FolderGit2,
   GitBranch,
@@ -462,15 +461,6 @@ export function ChangesPanel({
 
   return (
     <div className="changes-panel">
-      <div className="changes-header">
-        <div className="changes-header-title">
-          <span>Source Control</span>
-        </div>
-        <Button type="button" variant="ghost" size="icon-xs" className="changes-more-button">
-          <Ellipsis className="size-3.5" />
-        </Button>
-      </div>
-
       <div className="changes-repository-row">
         <div className="changes-repository-main">
           <FolderGit2 className="size-4" />
