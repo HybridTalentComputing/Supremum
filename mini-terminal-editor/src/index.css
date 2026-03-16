@@ -1582,11 +1582,14 @@ body {
 .changes-file-stats {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
   flex-shrink: 0;
   font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
-  font-size: 0.69rem;
-  min-width: 2.1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
   justify-content: flex-end;
 }
 
@@ -1608,11 +1611,12 @@ body {
 }
 
 .changes-file-code {
-  width: 2.4rem;
+  min-width: 1.1rem;
   flex-shrink: 0;
-  text-align: right;
+  text-align: left;
   font-size: 0.78rem;
   font-weight: 700;
+  line-height: 1;
   font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
   font-variant-numeric: tabular-nums;
   color: rgba(170, 178, 186, 0.85);

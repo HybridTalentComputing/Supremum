@@ -183,6 +183,7 @@ function FileRow({
   file,
   category,
   disabled,
+  workspaceName,
   onOpenDiff,
   onStage,
   onUnstage,
@@ -191,6 +192,7 @@ function FileRow({
   file: GitChangedFile;
   category: GitDiffCategory;
   disabled: boolean;
+  workspaceName: string;
   onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
   onStage: (path: string) => void;
   onUnstage: (path: string) => void;
@@ -199,7 +201,8 @@ function FileRow({
   const pathParts = file.path.split("/");
   const name = pathParts[pathParts.length - 1] || file.path;
   const parent = pathParts.slice(0, -1).join("/");
-  const parentLabel = [parent || "", file.oldPath ? file.oldPath : ""].filter(Boolean).join(" • ");
+  const locationLabel = [workspaceName, parent].filter(Boolean).join("/");
+  const parentLabel = [locationLabel, file.oldPath ? file.oldPath : ""].filter(Boolean).join(" • ");
 
   return (
     <ContextMenu>
@@ -228,13 +231,6 @@ function FileRow({
             <span className="changes-file-name">{name}</span>
             {parentLabel ? <span className="changes-file-parent">{parentLabel}</span> : null}
           </span>
-          <span className="changes-file-stats">
-            {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
-            {file.deletions > 0 ? <span className="is-del">-{file.deletions}</span> : null}
-          </span>
-          <span className={cn("changes-file-code", `is-${file.status}`)}>
-            {getStatusLabel(file, category)}
-          </span>
           <FileActions
             category={category}
             file={file}
@@ -244,6 +240,13 @@ function FileRow({
             onUnstage={onUnstage}
             onDiscard={onDiscard}
           />
+          <span className="changes-file-stats">
+            {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
+            {file.deletions > 0 ? <span className="is-del">-{file.deletions}</span> : null}
+          </span>
+          <span className={cn("changes-file-code", `is-${file.status}`)}>
+            {getStatusLabel(file, category)}
+          </span>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -566,6 +569,7 @@ export function ChangesPanel({
                     file={file}
                     category="staged"
                     disabled={isBusy}
+                    workspaceName={workspaceName}
                     onOpenDiff={onOpenDiff}
                     onStage={(path) => {
                       void git.stageFile(path);
@@ -607,6 +611,7 @@ export function ChangesPanel({
                     file={file}
                     category="unstaged"
                     disabled={isBusy}
+                    workspaceName={workspaceName}
                     onOpenDiff={onOpenDiff}
                     onStage={(path) => {
                       void git.stageFile(path);
