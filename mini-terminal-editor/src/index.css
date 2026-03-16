@@ -1921,7 +1921,6 @@ body {
   flex: none;
   border-left: 1px solid rgba(255, 255, 255, 0.04);
   background: #1e1e1e;
-  cursor: ns-resize;
   user-select: none;
   touch-action: none;
 }
@@ -1980,7 +1979,6 @@ body {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.14),
     0 0 0 1px rgba(0, 0, 0, 0.08);
-  cursor: ns-resize;
   z-index: 2;
 }
 
