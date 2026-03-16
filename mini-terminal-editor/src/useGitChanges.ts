@@ -36,6 +36,10 @@ type GitMutationResult<T = void> = {
   error?: string;
 };
 
+type RefreshOptions = {
+  silent?: boolean;
+};
+
 export function useGitChanges({ workspacePath, active = false }: UseGitChangesOptions) {
   const [capability, setCapability] = useState<GitCapabilityResponse | null>(null);
   const [status, setStatus] = useState<GitChangesStatus | null>(null);
@@ -45,7 +49,7 @@ export function useGitChanges({ workspacePath, active = false }: UseGitChangesOp
   const [refreshToken, setRefreshToken] = useState(0);
   const refreshIdRef = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ silent = false }: RefreshOptions = {}) => {
     if (!workspacePath) {
       setCapability(null);
       setStatus(null);
@@ -55,8 +59,10 @@ export function useGitChanges({ workspacePath, active = false }: UseGitChangesOp
 
     const refreshId = refreshIdRef.current + 1;
     refreshIdRef.current = refreshId;
-    setIsLoading(true);
-    setPendingAction("refresh");
+    if (!silent) {
+      setIsLoading(true);
+      setPendingAction("refresh");
+    }
 
     try {
       const nextCapability = await gitGetCapability(workspacePath);
@@ -80,8 +86,10 @@ export function useGitChanges({ workspacePath, active = false }: UseGitChangesOp
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       if (refreshId === refreshIdRef.current) {
-        setIsLoading(false);
-        setPendingAction(null);
+        if (!silent) {
+          setIsLoading(false);
+          setPendingAction(null);
+        }
       }
     }
   }, [workspacePath]);
@@ -94,7 +102,7 @@ export function useGitChanges({ workspacePath, active = false }: UseGitChangesOp
     if (!workspacePath || !active || capability?.status !== "available") return;
 
     const timer = window.setInterval(() => {
-      void refresh();
+      void refresh({ silent: true });
     }, 2500);
 
     return () => {
@@ -116,13 +124,14 @@ export function useGitChanges({ workspacePath, active = false }: UseGitChangesOp
 
       try {
         const data = await operation();
-        await refresh();
+        await refresh({ silent: true });
         return { ok: true, data };
       } catch (nextError) {
         const message = nextError instanceof Error ? nextError.message : String(nextError);
         setError(message);
-        setPendingAction(null);
         return { ok: false, error: message };
+      } finally {
+        setPendingAction(null);
       }
     },
     [refresh, workspacePath],
