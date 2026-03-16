@@ -15,8 +15,8 @@
       {
         "label": "main",
         "title": "Subset",
-        "width": 800,
-        "height": 600,
+        "width": 1200,
+        "height": 900,
         "resizable": true,
         "backgroundColor": "#02070c",
         "titleBarStyle": "Overlay",
