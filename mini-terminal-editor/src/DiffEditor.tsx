@@ -155,25 +155,41 @@ export function DiffEditor({
   const [preferredMode, setPreferredMode] = useState<DiffViewMode>("side-by-side");
   const [hideUnchanged, setHideUnchanged] = useState(true);
   const { ref: containerRef, width } = useContainerWidth();
+  const activeDiffTargetRef = useRef<string>("");
+  const contentsRef = useRef<GitDiffContents | null>(null);
 
   const effectiveMode = width > 0 && width < 980 ? "inline" : preferredMode;
 
   useEffect(() => {
+    contentsRef.current = contents;
+  }, [contents]);
+
+  useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
+    const diffTarget = `${workspacePath}:${category}:${file.oldPath ?? ""}:${file.path}`;
+    const isTargetSwitch = activeDiffTargetRef.current !== diffTarget;
+    activeDiffTargetRef.current = diffTarget;
+    const shouldShowLoading = isTargetSwitch || contentsRef.current === null;
+
+    if (shouldShowLoading) {
+      setIsLoading(true);
+      setError(null);
+    }
 
     gitGetDiffContents(workspacePath, file.path, category, file.oldPath)
       .then((nextContents) => {
         if (cancelled) return;
         setContents(nextContents);
+        setError(null);
       })
       .catch((nextError) => {
         if (cancelled) return;
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
+        if (shouldShowLoading || contentsRef.current === null) {
+          setError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!cancelled && shouldShowLoading) {
           setIsLoading(false);
         }
       });
