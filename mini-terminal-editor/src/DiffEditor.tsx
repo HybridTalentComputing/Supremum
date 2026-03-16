@@ -1,4 +1,13 @@
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type WheelEvent as ReactWheelEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { gitGetDiffContents } from "./gitApi";
 import type { GitChangedFile, GitDiffCategory, GitDiffContents } from "./gitTypes";
 import {
@@ -55,6 +64,8 @@ type DiffEditorProps = {
 
 type MergeSurfaceState = {
   view: EditorView | null;
+  leftView: EditorView | null;
+  rightView: EditorView | null;
   chunks: readonly Chunk[];
   activeChunkIndex: number;
   docLength: number;
@@ -65,6 +76,34 @@ type ScrollPreviewState = {
   scrollHeight: number;
   clientHeight: number;
 };
+
+type OverviewSegment = {
+  id: string;
+  top: string;
+  height: string;
+  lane: "left" | "right";
+  kind: "addition" | "deletion";
+  active: boolean;
+};
+
+function getOverviewSegmentGeometry(
+  view: EditorView,
+  from: number,
+  to: number,
+  totalHeight: number,
+) {
+  const safeFrom = Math.max(0, Math.min(from, view.state.doc.length));
+  const safeTo = Math.max(safeFrom, Math.min(Math.max(to - 1, safeFrom), view.state.doc.length));
+  const startBlock = view.lineBlockAt(safeFrom);
+  const endBlock = view.lineBlockAt(safeTo);
+  const top = (startBlock.top / Math.max(totalHeight, 1)) * 100;
+  const height = Math.max(0.14, ((endBlock.bottom - startBlock.top) / Math.max(totalHeight, 1)) * 100);
+
+  return {
+    top: `${top}%`,
+    height: `${height}%`,
+  };
+}
 
 function ToolbarTooltip({
   label,
@@ -125,6 +164,8 @@ function readMergeSurfaceState(view: EditorView | null): MergeSurfaceState {
   if (!view) {
     return {
       view: null,
+      leftView: null,
+      rightView: null,
       chunks: [],
       activeChunkIndex: -1,
       docLength: 1,
@@ -136,6 +177,8 @@ function readMergeSurfaceState(view: EditorView | null): MergeSurfaceState {
 
   return {
     view,
+    leftView: view,
+    rightView: view,
     chunks,
     activeChunkIndex: resolveActiveChunkIndex(view.state.selection.main.head, chunks),
     docLength: Math.max(1, view.state.doc.length),
@@ -195,8 +238,13 @@ function MergeSurface({
     parent.innerHTML = "";
 
     if (viewMode === "side-by-side") {
-      const emitViewState = (view: EditorView) => {
-        onViewStateChangeRef.current(readMergeSurfaceState(view));
+      const emitViewState = (activeView: EditorView, leftView: EditorView, rightView: EditorView) => {
+        const base = readMergeSurfaceState(activeView);
+        onViewStateChangeRef.current({
+          ...base,
+          leftView,
+          rightView,
+        });
       };
 
       const mergeView = new MergeView({
@@ -206,6 +254,11 @@ function MergeSurface({
             ...extensions,
             EditorView.editable.of(false),
             EditorState.readOnly.of(true),
+            EditorView.updateListener.of((update) => {
+              if (update.docChanged || update.selectionSet || update.focusChanged) {
+                emitViewState(update.view, update.view, mergeView.b);
+              }
+            }),
           ],
         },
         b: {
@@ -220,7 +273,7 @@ function MergeSurface({
                 onEditRef.current(update.state.doc.toString());
               }
               if (update.docChanged || update.selectionSet || update.focusChanged) {
-                emitViewState(update.view);
+                emitViewState(update.view, mergeView.a, update.view);
               }
             }),
             keymap.of([
@@ -245,7 +298,7 @@ function MergeSurface({
         collapseUnchanged: hideUnchanged ? { margin: 3, minSize: 4 } : undefined,
       });
 
-      emitViewState(mergeView.b);
+      emitViewState(mergeView.b, mergeView.a, mergeView.b);
 
       return () => {
         onViewStateChangeRef.current(readMergeSurfaceState(null));
@@ -333,6 +386,10 @@ export function DiffEditor({
   const contentsRef = useRef<GitDiffContents | null>(null);
   const dirtyRef = useRef(false);
   const editableModifiedRef = useRef("");
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const overviewRef = useRef<HTMLDivElement | null>(null);
+  const dragOffsetRatioRef = useRef(0);
+  const isDraggingOverviewRef = useRef(false);
   const effectiveMode = preferredMode;
 
   const sideLabels = useMemo(() => getDiffSideLabels(file, category), [category, file]);
@@ -360,8 +417,8 @@ export function DiffEditor({
   }, [onDirtyChange]);
 
   useEffect(() => {
-    const scrollDOM = mergeState.view?.scrollDOM;
-    if (!scrollDOM) {
+    const scrollContainer = mainScrollRef.current;
+    if (!scrollContainer) {
       setScrollPreview({
         scrollTop: 0,
         scrollHeight: 1,
@@ -372,22 +429,22 @@ export function DiffEditor({
 
     const sync = () => {
       setScrollPreview({
-        scrollTop: scrollDOM.scrollTop,
-        scrollHeight: Math.max(scrollDOM.scrollHeight, 1),
-        clientHeight: Math.max(scrollDOM.clientHeight, 1),
+        scrollTop: scrollContainer.scrollTop,
+        scrollHeight: Math.max(scrollContainer.scrollHeight, 1),
+        clientHeight: Math.max(scrollContainer.clientHeight, 1),
       });
     };
 
     sync();
-    scrollDOM.addEventListener("scroll", sync);
+    scrollContainer.addEventListener("scroll", sync);
     const resizeObserver = new ResizeObserver(sync);
-    resizeObserver.observe(scrollDOM);
+    resizeObserver.observe(scrollContainer);
 
     return () => {
-      scrollDOM.removeEventListener("scroll", sync);
+      scrollContainer.removeEventListener("scroll", sync);
       resizeObserver.disconnect();
     };
-  }, [mergeState.view]);
+  }, [contents, hideUnchanged, mergeState.view, preferredMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -491,36 +548,158 @@ export function DiffEditor({
     mergeState.view.focus();
   }, [mergeState.chunks, mergeState.view]);
 
-  const overviewItems = useMemo(
-    () =>
-      mergeState.chunks.map((chunk, index) => {
-        const top = `${(chunk.fromB / mergeState.docLength) * 100}%`;
-        const height = `${Math.max(0.8, ((Math.max(chunk.toB, chunk.fromB + 1) - chunk.fromB) / mergeState.docLength) * 100)}%`;
-        const kind =
-          chunk.fromB === chunk.toB ? "deletion" : chunk.fromA === chunk.toA ? "addition" : "modification";
+  const overviewSegments = useMemo<OverviewSegment[]>(() => {
+    if (!contents || !mergeState.leftView || !mergeState.rightView) return [];
 
-        return {
-          id: `${chunk.fromA}:${chunk.toA}:${chunk.fromB}:${chunk.toB}`,
-          top,
-          height,
-          kind,
-          index,
-          active: index === mergeState.activeChunkIndex,
-        };
-      }),
-    [mergeState.activeChunkIndex, mergeState.chunks, mergeState.docLength],
-  );
-  const viewportTop = useMemo(() => {
+    const totalHeight = Math.max(scrollPreview.scrollHeight, scrollPreview.clientHeight, 1);
+    const segments: OverviewSegment[] = [];
+
+    for (let index = 0; index < mergeState.chunks.length; index += 1) {
+      const chunk = mergeState.chunks[index];
+      const baseId = `${chunk.fromA}:${chunk.toA}:${chunk.fromB}:${chunk.toB}`;
+      const kind =
+        chunk.fromB === chunk.toB ? "deletion" : chunk.fromA === chunk.toA ? "addition" : "modification";
+      const active = index === mergeState.activeChunkIndex;
+
+      if (chunk.fromA !== chunk.toA || kind === "modification") {
+        const geometry = getOverviewSegmentGeometry(
+          mergeState.leftView,
+          chunk.fromA,
+          Math.max(chunk.toA, chunk.fromA + 1),
+          totalHeight,
+        );
+        segments.push({
+          id: `${baseId}:left`,
+          top: geometry.top,
+          height: geometry.height,
+          lane: "left",
+          kind: "deletion",
+          active,
+        });
+      }
+
+      if (chunk.fromB !== chunk.toB || kind === "modification") {
+        const geometry = getOverviewSegmentGeometry(
+          mergeState.rightView,
+          chunk.fromB,
+          Math.max(chunk.toB, chunk.fromB + 1),
+          totalHeight,
+        );
+        segments.push({
+          id: `${baseId}:right`,
+          top: geometry.top,
+          height: geometry.height,
+          lane: "right",
+          kind: "addition",
+          active,
+        });
+      }
+    }
+
+    return segments;
+  }, [
+    contents,
+    mergeState.activeChunkIndex,
+    mergeState.chunks,
+    mergeState.leftView,
+    mergeState.rightView,
+    scrollPreview.clientHeight,
+    scrollPreview.scrollHeight,
+  ]);
+  const viewportTopRatio = useMemo(() => {
     const maxScrollable = Math.max(scrollPreview.scrollHeight - scrollPreview.clientHeight, 1);
-    return `${(scrollPreview.scrollTop / maxScrollable) * Math.max(0, 100 - (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100)}%`;
+    return (scrollPreview.scrollTop / maxScrollable) * Math.max(0, 1 - scrollPreview.clientHeight / scrollPreview.scrollHeight);
   }, [scrollPreview.clientHeight, scrollPreview.scrollHeight, scrollPreview.scrollTop]);
+  const viewportTop = useMemo(() => `${viewportTopRatio * 100}%`, [viewportTopRatio]);
   const viewportHeight = useMemo(
-    () => `${Math.max(8, (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100)}%`,
+    () => `${Math.max(4.5, (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100 * 0.72)}%`,
     [scrollPreview.clientHeight, scrollPreview.scrollHeight],
   );
   const toggleModeLabel =
     preferredMode === "side-by-side" ? "Switch to inline diff" : "Switch to side by side diff";
   const ToggleModeIcon = preferredMode === "side-by-side" ? Columns2 : List;
+  const viewportHeightRatio = Math.min(1, scrollPreview.clientHeight / scrollPreview.scrollHeight);
+
+  const setOverviewScrollPosition = useCallback(
+    (ratio: number) => {
+      const scrollContainer = mainScrollRef.current;
+      if (!scrollContainer) return;
+
+      const maxScrollable = Math.max(scrollContainer.scrollHeight - scrollContainer.clientHeight, 0);
+      scrollContainer.scrollTop = Math.max(0, Math.min(maxScrollable, ratio * maxScrollable));
+    },
+    [],
+  );
+
+  const handleOverviewPointerPosition = useCallback(
+    (clientY: number, preserveDragOffset: boolean) => {
+      const overview = overviewRef.current;
+      if (!overview) return;
+
+      const rect = overview.getBoundingClientRect();
+      if (rect.height <= 0) return;
+
+      const pointerRatio = (clientY - rect.top) / rect.height;
+      const nextRatio = preserveDragOffset
+        ? pointerRatio - dragOffsetRatioRef.current
+        : pointerRatio - viewportHeightRatio / 2;
+
+      setOverviewScrollPosition(Math.max(0, Math.min(1, nextRatio / Math.max(1 - viewportHeightRatio, 0.0001))));
+    },
+    [setOverviewScrollPosition, viewportHeightRatio],
+  );
+
+  const handleOverviewPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const overview = overviewRef.current;
+      if (!overview) return;
+
+      const target = event.target as HTMLElement | null;
+      const rect = overview.getBoundingClientRect();
+      const offsetY = event.clientY - rect.top;
+      const viewportPxHeight = rect.height * viewportHeightRatio;
+
+      if (target?.dataset.overviewViewport === "true") {
+        dragOffsetRatioRef.current = offsetY / rect.height - viewportTopRatio;
+      } else {
+        dragOffsetRatioRef.current = viewportPxHeight / 2 / rect.height;
+      }
+
+      isDraggingOverviewRef.current = true;
+      overview.setPointerCapture(event.pointerId);
+      handleOverviewPointerPosition(event.clientY, true);
+      event.preventDefault();
+    },
+    [handleOverviewPointerPosition, viewportHeightRatio, viewportTopRatio],
+  );
+
+  const handleOverviewPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isDraggingOverviewRef.current) return;
+      handleOverviewPointerPosition(event.clientY, true);
+      event.preventDefault();
+    },
+    [handleOverviewPointerPosition],
+  );
+
+  const handleOverviewPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isDraggingOverviewRef.current) return;
+    isDraggingOverviewRef.current = false;
+    if (overviewRef.current?.hasPointerCapture(event.pointerId)) {
+      overviewRef.current.releasePointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+  }, []);
+
+  const handleOverviewWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      const scrollContainer = mainScrollRef.current;
+      if (!scrollContainer) return;
+      scrollContainer.scrollTop += event.deltaY;
+      event.preventDefault();
+    },
+    [],
+  );
 
   return (
     <div className={cn("diff-editor-shell", embedded && "diff-editor-shell-embedded")}>
@@ -618,7 +797,7 @@ export function DiffEditor({
       ) : null}
 
       <div className="diff-editor-body">
-        <div className="diff-editor-main">
+        <div ref={mainScrollRef} className="diff-editor-main">
           {isLoading ? (
             <div className="diff-editor-state">Loading diff…</div>
           ) : error ? (
@@ -650,24 +829,49 @@ export function DiffEditor({
           )}
         </div>
         {!isLoading && !error && chunkCount > 0 ? (
-          <div className="diff-editor-overview" aria-label="Change overview">
-            <div
-              className="diff-editor-overview-viewport"
-              style={{ top: viewportTop, height: viewportHeight }}
-              aria-hidden
-            />
-            {overviewItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="diff-editor-overview-marker"
-                data-kind={item.kind}
-                data-active={item.active ? "true" : undefined}
-                style={{ top: item.top, height: item.height }}
-                onClick={() => jumpToChunk(item.index)}
-                aria-label={`Jump to change ${item.index + 1}`}
+          <div
+            ref={overviewRef}
+            className="diff-editor-overview"
+            aria-label="Change overview"
+            onPointerDown={handleOverviewPointerDown}
+            onPointerMove={handleOverviewPointerMove}
+            onPointerUp={handleOverviewPointerEnd}
+            onPointerCancel={handleOverviewPointerEnd}
+            onWheel={handleOverviewWheel}
+          >
+            <div className="diff-editor-overview-preview">
+              <div className="diff-editor-overview-lane is-left" aria-hidden>
+                {overviewSegments
+                  .filter((segment) => segment.lane === "left")
+                  .map((segment) => (
+                    <div
+                      key={segment.id}
+                      className="diff-editor-overview-marker"
+                      data-kind={segment.kind}
+                      data-active={segment.active ? "true" : undefined}
+                      style={{ top: segment.top, height: segment.height }}
+                    />
+                  ))}
+              </div>
+              <div className="diff-editor-overview-lane is-right" aria-hidden>
+                {overviewSegments
+                  .filter((segment) => segment.lane === "right")
+                  .map((segment) => (
+                    <div
+                      key={segment.id}
+                      className="diff-editor-overview-marker"
+                      data-kind={segment.kind}
+                      data-active={segment.active ? "true" : undefined}
+                      style={{ top: segment.top, height: segment.height }}
+                    />
+                  ))}
+              </div>
+              <div
+                className="diff-editor-overview-viewport"
+                data-overview-viewport="true"
+                style={{ top: viewportTop, height: viewportHeight }}
               />
-            ))}
+            </div>
           </div>
         ) : null}
       </div>

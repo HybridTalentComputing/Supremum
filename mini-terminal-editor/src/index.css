@@ -1917,47 +1917,71 @@ body {
 
 .diff-editor-overview {
   position: relative;
-  width: 0.9rem;
+  width: 0.56rem;
   flex: none;
   border-left: 1px solid rgba(255, 255, 255, 0.04);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+  background: #1e1e1e;
+  cursor: ns-resize;
+  user-select: none;
+  touch-action: none;
 }
 
-.diff-editor-overview-viewport {
-  position: absolute;
-  left: 0.12rem;
-  right: 0.12rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  pointer-events: none;
+.diff-editor-overview-preview {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  height: 100%;
+  gap: 0.5px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.diff-editor-overview-lane {
+  position: relative;
+  min-width: 0;
+}
+
+.diff-editor-overview-lane.is-left {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.diff-editor-overview-lane.is-right {
+  background: rgba(255, 255, 255, 0.01);
 }
 
 .diff-editor-overview-marker {
   position: absolute;
-  left: 0.22rem;
-  right: 0.22rem;
-  border: 0;
-  border-radius: 999px;
-  opacity: 0.92;
-  cursor: pointer;
+  left: 0;
+  right: 0;
+  opacity: 0.95;
+  min-height: 1px;
 }
 
 .diff-editor-overview-marker[data-kind="addition"] {
-  background: rgba(110, 201, 122, 0.92);
+  background: rgba(99, 180, 111, 0.38);
 }
 
 .diff-editor-overview-marker[data-kind="deletion"] {
-  background: rgba(229, 106, 106, 0.92);
-}
-
-.diff-editor-overview-marker[data-kind="modification"] {
-  background: rgba(210, 177, 92, 0.92);
+  background: rgba(203, 88, 88, 0.38);
 }
 
 .diff-editor-overview-marker[data-active] {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
   opacity: 1;
+}
+
+.diff-editor-overview-viewport {
+  position: absolute;
+  left: 0.04rem;
+  right: 0.04rem;
+  min-height: 0.24rem;
+  border-radius: 999px;
+  background: rgba(205, 211, 218, 0.24);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(0, 0, 0, 0.08);
+  cursor: ns-resize;
+  z-index: 2;
 }
 
 .diff-editor-surface .cm-editor,
