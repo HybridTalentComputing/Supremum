@@ -93,12 +93,20 @@ function getOverviewSegmentGeometry(
   to: number,
   totalHeight: number,
 ) {
-  const safeFrom = Math.max(0, Math.min(from, view.state.doc.length));
-  const safeTo = Math.max(safeFrom, Math.min(Math.max(to - 1, safeFrom), view.state.doc.length));
+  const doc = view.state.doc;
+  const totalLines = Math.max(doc.lines, 1);
+  const safeFrom = Math.max(0, Math.min(from, doc.length));
+  const safeTo = Math.max(safeFrom, Math.min(to, doc.length));
   const startBlock = view.lineBlockAt(safeFrom);
-  const endBlock = view.lineBlockAt(safeTo);
+  const startLine = doc.lineAt(safeFrom).number;
+  const endLine = safeTo > safeFrom ? doc.lineAt(Math.max(safeTo - 1, safeFrom)).number : startLine;
+  const lineSpan = Math.max(1, endLine - startLine + 1);
+  const lineHeight = Math.max(view.defaultLineHeight || 0, 1);
   const top = (startBlock.top / Math.max(totalHeight, 1)) * 100;
-  const height = Math.max(0.14, ((endBlock.bottom - startBlock.top) / Math.max(totalHeight, 1)) * 100);
+  const height = Math.max(
+    (lineHeight / Math.max(totalHeight, 1)) * 100,
+    ((lineSpan * lineHeight) / Math.max(totalHeight, 1)) * 100,
+  );
 
   return {
     top: `${top}%`,
@@ -633,9 +641,7 @@ export function DiffEditor({
     mergeState.chunks,
     mergeState.leftView,
     mergeState.rightView,
-    scrollPreview.clientHeight,
     scrollPreview.contentHeight,
-    scrollPreview.scrollHeight,
   ]);
   const fixedViewportHeightPx = 18;
   const maxScrollableContent = Math.max(scrollPreview.contentHeight - scrollPreview.clientHeight, 0);
