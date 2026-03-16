@@ -306,10 +306,6 @@ export function MainLayout() {
   const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
-  const [allDiffSelection, setAllDiffSelection] = useState<{
-    file: GitChangedFile;
-    category: GitDiffCategory;
-  } | null>(null);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
@@ -549,9 +545,6 @@ export function MainLayout() {
       return nextTabs;
     });
     setDiffTabDirty(tabId, false);
-    if (tabId === getAllDiffTabId()) {
-      setAllDiffSelection(null);
-    }
   }, [diffDirtyState, diffTabs, openTabs.length, setDiffTabDirty]);
 
   const handleCreateTerminal = useCallback(() => {
@@ -690,7 +683,6 @@ export function MainLayout() {
       setDiffTabs([]);
       setActiveDiffTabId(null);
       setDiffDirtyState({});
-      setAllDiffSelection(null);
       setEditorViewModes({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
@@ -728,7 +720,6 @@ export function MainLayout() {
       setDiffTabs([]);
       setActiveDiffTabId(null);
       setDiffDirtyState({});
-      setAllDiffSelection(null);
       return;
     }
 
@@ -789,16 +780,13 @@ export function MainLayout() {
       if (activeDiffTabId !== null) {
         setActiveDiffTabId(null);
       }
-      if (allDiffSelection !== null) {
-        setAllDiffSelection(null);
-      }
       return;
     }
 
     if (!activeDiffTabId || !diffTabs.some((tab) => tab.id === activeDiffTabId)) {
       setActiveDiffTabId(diffTabs[0].id);
     }
-  }, [activeDiffTabId, allDiffSelection, diffTabs]);
+  }, [activeDiffTabId, diffTabs]);
 
   useEffect(() => {
     setDiffDirtyState((currentState) => {
@@ -857,7 +845,7 @@ export function MainLayout() {
   const activeDiffSelection =
     activeDiffTab?.kind === "file"
       ? { file: activeDiffTab.file, category: activeDiffTab.category }
-      : allDiffSelection;
+      : null;
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
       ? (editorViewModes[activeTab.id] ?? "preview")
@@ -1482,24 +1470,20 @@ export function MainLayout() {
                                 </Button>
                               </div>
                             </div>
-                            <div className="diff-workspace-pathbar">
-                              {activeDiffSelection ? (
-                                <>
-                                  <EditorFileIcon path={activeDiffSelection.file.path} />
-                                  <span>
-                                    {activeDiffSelection.file.oldPath ? `${activeDiffSelection.file.oldPath} → ` : ""}
-                                    {activeDiffSelection.file.path}
-                                  </span>
-                                  <span className="diff-workspace-pathbar-source">
-                                    {getDiffSideLabels(activeDiffSelection.file, activeDiffSelection.category).tabSource}
-                                  </span>
-                                </>
-                              ) : activeDiffTab.kind === "all" ? (
-                                <>
-                                  <GitCompareArrows className="size-3.5" />
-                                  <span>Git: Changes</span>
-                                </>
-                              ) : (
+                            {activeDiffTab.kind === "all" ? null : (
+                              <div className="diff-workspace-pathbar">
+                                {activeDiffSelection ? (
+                                  <>
+                                    <EditorFileIcon path={activeDiffSelection.file.path} />
+                                    <span>
+                                      {activeDiffSelection.file.oldPath ? `${activeDiffSelection.file.oldPath} → ` : ""}
+                                      {activeDiffSelection.file.path}
+                                    </span>
+                                    <span className="diff-workspace-pathbar-source">
+                                      {getDiffSideLabels(activeDiffSelection.file, activeDiffSelection.category).tabSource}
+                                    </span>
+                                  </>
+                                ) : (
                                 <>
                                   <EditorFileIcon path={activeDiffTab.file.path} />
                                   <span>
@@ -1510,8 +1494,9 @@ export function MainLayout() {
                                     {getDiffSideLabels(activeDiffTab.file, activeDiffTab.category).tabSource}
                                   </span>
                                 </>
-                              )}
-                            </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="editor-content">
                             {activeDiffTab.kind === "all" ? (
@@ -1525,7 +1510,6 @@ export function MainLayout() {
                                 onUnstageFile={git.unstageFile}
                                 onDiscardFile={git.discardFile}
                                 onSaved={() => git.refresh({ silent: true })}
-                                onSelectionChange={setAllDiffSelection}
                                 onDirtyChange={(dirty) => {
                                   setDiffTabDirty(activeDiffTab.id, dirty);
                                 }}
