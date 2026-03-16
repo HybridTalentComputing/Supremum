@@ -60,6 +60,19 @@ type DiffEditorProps = {
   onDiscardFile?: (path: string) => Promise<unknown> | void;
   onSaved?: () => Promise<void> | void;
   onDirtyChange?: (dirty: boolean) => void;
+  onChromeChange?: (chrome: {
+    categoryLabel: string;
+    statusCode: string;
+    editableLabel: string | null;
+    chunkCount: number;
+    currentChunkNumber: number;
+    mode: DiffViewMode;
+    hideUnchanged: boolean;
+    navigatePrevious: () => void;
+    navigateNext: () => void;
+    toggleMode: () => void;
+    toggleUnchanged: () => void;
+  } | null) => void;
 };
 
 type MergeSurfaceState = {
@@ -376,6 +389,7 @@ export function DiffEditor({
   embedded = false,
   onSaved,
   onDirtyChange,
+  onChromeChange,
 }: DiffEditorProps) {
   const [contents, setContents] = useState<GitDiffContents | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -565,6 +579,16 @@ export function DiffEditor({
     }
   }, []);
 
+  const handleToggleMode = useCallback(() => {
+    setPreferredMode((currentMode) =>
+      currentMode === "side-by-side" ? "inline" : "side-by-side",
+    );
+  }, []);
+
+  const handleToggleUnchanged = useCallback(() => {
+    setHideUnchanged((value) => !value);
+  }, []);
+
   const navigateChunk = useCallback((direction: "next" | "previous") => {
     if (!mergeState.view) return;
     const command = direction === "next" ? goToNextChunk : goToPreviousChunk;
@@ -742,90 +766,127 @@ export function DiffEditor({
     [],
   );
 
+  const chromeState = useMemo(
+    () => ({
+      categoryLabel: sideLabels.categoryLabel,
+      statusCode,
+      editableLabel: editable ? (isSaving ? "Saving..." : dirty ? "Unsaved" : "Editable") : null,
+      chunkCount,
+      currentChunkNumber,
+      mode: preferredMode,
+      hideUnchanged,
+      navigatePrevious: () => navigateChunk("previous"),
+      navigateNext: () => navigateChunk("next"),
+      toggleMode: handleToggleMode,
+      toggleUnchanged: handleToggleUnchanged,
+    }),
+    [
+      chunkCount,
+      currentChunkNumber,
+      dirty,
+      editable,
+      handleToggleMode,
+      handleToggleUnchanged,
+      hideUnchanged,
+      isSaving,
+      navigateChunk,
+      preferredMode,
+      sideLabels.categoryLabel,
+      statusCode,
+    ],
+  );
+
+  useEffect(() => {
+    onChromeChange?.(chromeState);
+
+    return () => {
+      onChromeChange?.(null);
+    };
+  }, [chromeState, onChromeChange]);
+
   return (
     <div className={cn("diff-editor-shell", embedded && "diff-editor-shell-embedded")}>
-      <div className="diff-editor-toolbar">
-        <div className="diff-editor-toolbar-state">
-          <span className={cn("diff-editor-category", `is-${category}`)}>{sideLabels.categoryLabel}</span>
-          <span className="diff-editor-toolbar-separator">•</span>
-          <span className="diff-editor-status-code">{statusCode}</span>
-          {editable ? (
-            <>
-              <span className="diff-editor-toolbar-separator">•</span>
-              <span className="diff-editor-edit-state" data-dirty={dirty ? "true" : undefined}>
-                {isSaving ? "Saving..." : dirty ? "Unsaved" : "Editable"}
+      {embedded ? null : (
+        <div className="diff-editor-toolbar">
+          <div className="diff-editor-toolbar-state">
+            <span className={cn("diff-editor-category", `is-${category}`)}>{sideLabels.categoryLabel}</span>
+            <span className="diff-editor-toolbar-separator">•</span>
+            <span className="diff-editor-status-code">{statusCode}</span>
+            {editable ? (
+              <>
+                <span className="diff-editor-toolbar-separator">•</span>
+                <span className="diff-editor-edit-state" data-dirty={dirty ? "true" : undefined}>
+                  {isSaving ? "Saving..." : dirty ? "Unsaved" : "Editable"}
+                </span>
+              </>
+            ) : null}
+          </div>
+          <div className="diff-editor-actions">
+            <ToolbarTooltip
+              label={chunkCount > 0 ? `Change ${currentChunkNumber} of ${chunkCount}` : "No changes"}
+            >
+              <span className="diff-editor-chunk-count">
+                {currentChunkNumber}/{chunkCount || 0}
               </span>
-            </>
-          ) : null}
+            </ToolbarTooltip>
+            <ToolbarTooltip label="Previous change">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="diff-editor-action"
+                aria-label="Previous change"
+                disabled={chunkCount === 0}
+                onClick={() => navigateChunk("previous")}
+              >
+                <ChevronUp className="size-3.5" />
+              </Button>
+            </ToolbarTooltip>
+            <ToolbarTooltip label="Next change">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="diff-editor-action"
+                aria-label="Next change"
+                disabled={chunkCount === 0}
+                onClick={() => navigateChunk("next")}
+              >
+                <ChevronDown className="size-3.5" />
+              </Button>
+            </ToolbarTooltip>
+            <ToolbarTooltip label={toggleModeLabel}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="diff-editor-action"
+                aria-label={toggleModeLabel}
+                data-active="true"
+                onClick={handleToggleMode}
+              >
+                <ToggleModeIcon className="size-3.5" />
+              </Button>
+            </ToolbarTooltip>
+            <ToolbarTooltip label={hideUnchanged ? "Show unchanged lines" : "Hide unchanged lines"}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="diff-editor-action"
+                aria-label={hideUnchanged ? "Show all lines" : "Hide unchanged lines"}
+                data-active={hideUnchanged ? "true" : undefined}
+                onClick={handleToggleUnchanged}
+              >
+                <FoldVertical className="size-3.5" />
+              </Button>
+            </ToolbarTooltip>
+          </div>
         </div>
-        <div className="diff-editor-actions">
-          <ToolbarTooltip
-            label={chunkCount > 0 ? `Change ${currentChunkNumber} of ${chunkCount}` : "No changes"}
-          >
-            <span className="diff-editor-chunk-count">
-              {currentChunkNumber}/{chunkCount || 0}
-            </span>
-          </ToolbarTooltip>
-          <ToolbarTooltip label="Previous change">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="diff-editor-action"
-              aria-label="Previous change"
-              disabled={chunkCount === 0}
-              onClick={() => navigateChunk("previous")}
-            >
-              <ChevronUp className="size-3.5" />
-            </Button>
-          </ToolbarTooltip>
-          <ToolbarTooltip label="Next change">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="diff-editor-action"
-              aria-label="Next change"
-              disabled={chunkCount === 0}
-              onClick={() => navigateChunk("next")}
-            >
-              <ChevronDown className="size-3.5" />
-            </Button>
-          </ToolbarTooltip>
-          <ToolbarTooltip label={toggleModeLabel}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="diff-editor-action"
-              aria-label={toggleModeLabel}
-              data-active="true"
-              onClick={() =>
-                setPreferredMode((currentMode) =>
-                  currentMode === "side-by-side" ? "inline" : "side-by-side",
-                )
-              }
-            >
-              <ToggleModeIcon className="size-3.5" />
-            </Button>
-          </ToolbarTooltip>
-          <ToolbarTooltip label={hideUnchanged ? "Show unchanged lines" : "Hide unchanged lines"}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="diff-editor-action"
-              aria-label={hideUnchanged ? "Show all lines" : "Hide unchanged lines"}
-              data-active={hideUnchanged ? "true" : undefined}
-              onClick={() => setHideUnchanged((value) => !value)}
-            >
-              <FoldVertical className="size-3.5" />
-            </Button>
-          </ToolbarTooltip>
-        </div>
-      </div>
+      )}
 
-      {!isLoading &&
+      {!embedded &&
+      !isLoading &&
       !error &&
       contents &&
       !contents.isBinary &&

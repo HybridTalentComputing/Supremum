@@ -1766,6 +1766,10 @@ body {
   min-height: 0;
 }
 
+.diff-editor-shell-embedded .diff-editor-body {
+  border-top: 0;
+}
+
 .diff-editor-toolbar {
   display: flex;
   align-items: center;
@@ -2216,8 +2220,21 @@ body {
 .all-diffs-item-meta {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.28rem;
   flex: none;
+}
+
+.all-diffs-item-separator {
+  color: rgba(132, 140, 148, 0.58);
+  font-size: 0.7rem;
+}
+
+.all-diffs-item-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14rem;
+  margin-left: 0.25rem;
 }
 
 .all-diffs-item-stat,
@@ -2245,7 +2262,6 @@ body {
   display: flex;
   min-width: 0;
   min-height: 24rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .all-diffs-item[data-collapsed] .all-diffs-item-header {
