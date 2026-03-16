@@ -1559,9 +1559,9 @@ body {
 }
 
 .changes-file-name {
-  flex: 0 0 auto;
-  min-width: auto;
-  max-width: 60%;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1571,8 +1571,9 @@ body {
 }
 
 .changes-file-parent {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1607,8 +1608,14 @@ body {
   align-items: center;
   gap: 0.08rem;
   flex-shrink: 0;
+  max-width: 0;
+  overflow: hidden;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transform: translateX(0.2rem);
+  transition:
+    max-width 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
 .changes-file-code {
@@ -1640,7 +1647,9 @@ body {
 
 .changes-file-row:hover .changes-file-actions,
 .changes-file-row:focus-visible .changes-file-actions {
+  max-width: 4.5rem;
   opacity: 1;
+  transform: translateX(0);
 }
 
 .changes-file-action {
