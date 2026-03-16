@@ -2119,17 +2119,137 @@ body {
 .all-diffs-group-body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.5rem;
 }
 
 .all-diffs-item {
   display: flex;
+  flex-direction: column;
   min-width: 0;
-  min-height: 24rem;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   background: #181818;
+}
+
+.all-diffs-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 0;
+  background: #1c1c1c;
+  color: inherit;
+  text-align: left;
+}
+
+.all-diffs-item-header:hover {
+  background: #202020;
+}
+
+.all-diffs-item-header:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.all-diffs-item-header-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.all-diffs-item-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 0.9rem;
+  color: rgba(182, 190, 197, 0.7);
+}
+
+.all-diffs-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.all-diffs-item-icon-img,
+.all-diffs-item-icon-svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+}
+
+.all-diffs-item-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.38rem;
+}
+
+.all-diffs-item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(239, 243, 247, 0.92);
+}
+
+.all-diffs-item-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.76rem;
+  color: rgba(152, 160, 168, 0.72);
+}
+
+.all-diffs-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex: none;
+}
+
+.all-diffs-item-stat,
+.all-diffs-item-status {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.all-diffs-item-stat.is-addition {
+  color: rgba(110, 201, 122, 0.96);
+}
+
+.all-diffs-item-stat.is-deletion {
+  color: rgba(229, 106, 106, 0.96);
+}
+
+.all-diffs-item-status {
+  min-width: 0.9rem;
+  text-align: right;
+  color: rgba(225, 190, 108, 0.94);
+}
+
+.all-diffs-item-body {
+  display: flex;
+  min-width: 0;
+  min-height: 24rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.all-diffs-item[data-collapsed] .all-diffs-item-header {
+  background: #1a1a1a;
 }
 
 .all-diffs-placeholder {
