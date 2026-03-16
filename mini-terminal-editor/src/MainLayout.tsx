@@ -12,6 +12,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { CodeEditor, isPreviewablePath } from "./CodeEditor";
 import { AGENT_PRESETS, type AgentPreset, type AgentPresetId } from "./agentPresets";
 import { useFileIconUrl } from "./fileIcons";
+import { invokeReadFile } from "./fileTreeOps";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -46,6 +47,7 @@ import { useGitChanges } from "./useGitChanges";
 import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
 import { DiffEditor } from "./DiffEditor";
 import { AllDiffsView } from "./AllDiffsView";
+import { getDiffFileName, getDiffSideLabels, getDiffTabLabel } from "./diffPresentation";
 
 type FileEditorTab = {
   id: string;
@@ -303,6 +305,11 @@ export function MainLayout() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
+  const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
+  const [allDiffSelection, setAllDiffSelection] = useState<{
+    file: GitChangedFile;
+    category: GitDiffCategory;
+  } | null>(null);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
@@ -440,6 +447,31 @@ export function MainLayout() {
     setActiveWorkspace("diff");
   }, []);
 
+  const handleOpenDiffFile = useCallback(async (path: string) => {
+    if (!workspacePath) return;
+
+    try {
+      const content = await invokeReadFile(workspacePath, path);
+      handleOpenFile(path, content);
+    } catch (error) {
+      console.error(`Failed to open file ${path}:`, error);
+    }
+  }, [handleOpenFile, workspacePath]);
+
+  const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
+    setDiffDirtyState((currentState) => {
+      if (dirty) {
+        if (currentState[tabId]) return currentState;
+        return { ...currentState, [tabId]: true };
+      }
+
+      if (!(tabId in currentState)) return currentState;
+      const nextState = { ...currentState };
+      delete nextState[tabId];
+      return nextState;
+    });
+  }, []);
+
   const handleSave = async (path: string, content: string) => {
     await invoke("write_file", {
       payload: { workspacePath, path, content },
@@ -489,6 +521,16 @@ export function MainLayout() {
   };
 
   const handleCloseDiffTab = useCallback((tabId: string) => {
+    const targetTab = diffTabs.find((tab) => tab.id === tabId);
+    if (!targetTab) return;
+
+    if (diffDirtyState[tabId]) {
+      const label = targetTab.kind === "all" ? "Git: Changes" : getDiffFileName(targetTab.file.path);
+      if (!window.confirm(`"${label}" has unsaved changes. Close it anyway?`)) {
+        return;
+      }
+    }
+
     setDiffTabs((currentTabs) => {
       const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
       if (tabIndex === -1) return currentTabs;
@@ -506,7 +548,11 @@ export function MainLayout() {
 
       return nextTabs;
     });
-  }, [openTabs.length]);
+    setDiffTabDirty(tabId, false);
+    if (tabId === getAllDiffTabId()) {
+      setAllDiffSelection(null);
+    }
+  }, [diffDirtyState, diffTabs, openTabs.length, setDiffTabDirty]);
 
   const handleCreateTerminal = useCallback(() => {
     const nextIndex = terminalCounterRef.current;
@@ -643,6 +689,8 @@ export function MainLayout() {
       setActiveTabId(null);
       setDiffTabs([]);
       setActiveDiffTabId(null);
+      setDiffDirtyState({});
+      setAllDiffSelection(null);
       setEditorViewModes({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
@@ -679,6 +727,8 @@ export function MainLayout() {
     if (git.capability?.status && git.capability.status !== "available") {
       setDiffTabs([]);
       setActiveDiffTabId(null);
+      setDiffDirtyState({});
+      setAllDiffSelection(null);
       return;
     }
 
@@ -739,13 +789,34 @@ export function MainLayout() {
       if (activeDiffTabId !== null) {
         setActiveDiffTabId(null);
       }
+      if (allDiffSelection !== null) {
+        setAllDiffSelection(null);
+      }
       return;
     }
 
     if (!activeDiffTabId || !diffTabs.some((tab) => tab.id === activeDiffTabId)) {
       setActiveDiffTabId(diffTabs[0].id);
     }
-  }, [activeDiffTabId, diffTabs]);
+  }, [activeDiffTabId, allDiffSelection, diffTabs]);
+
+  useEffect(() => {
+    setDiffDirtyState((currentState) => {
+      const validIds = new Set(diffTabs.map((tab) => tab.id));
+      let changed = false;
+      const nextState: Record<string, boolean> = {};
+
+      for (const [tabId, dirty] of Object.entries(currentState)) {
+        if (!validIds.has(tabId)) {
+          changed = true;
+          continue;
+        }
+        nextState[tabId] = dirty;
+      }
+
+      return changed ? nextState : currentState;
+    });
+  }, [diffTabs]);
 
   useEffect(() => {
     const nativeTabs = terminalTabs.filter((tab) => tab.kind === "native");
@@ -783,6 +854,10 @@ export function MainLayout() {
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? null;
   const activeDiffTab = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
+  const activeDiffSelection =
+    activeDiffTab?.kind === "file"
+      ? { file: activeDiffTab.file, category: activeDiffTab.category }
+      : allDiffSelection;
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
       ? (editorViewModes[activeTab.id] ?? "preview")
@@ -1343,11 +1418,11 @@ export function MainLayout() {
                                     const tabLabel =
                                       tab.kind === "all"
                                         ? `Git: Changes (${totalChangedFiles} files)`
-                                        : `${getTabName(tab.file.path)} (Diff)`;
+                                        : getDiffTabLabel(tab.file, tab.category);
                                     const tooltipLabel =
                                       tab.kind === "all"
                                         ? "Open all changes"
-                                        : `${tab.file.path} • ${tab.category}`;
+                                        : `${tab.file.path} • ${getDiffSideLabels(tab.file, tab.category).tabSource}`;
                                     return (
                                       <Tooltip key={tab.id}>
                                         <TooltipTrigger
@@ -1362,6 +1437,9 @@ export function MainLayout() {
                                                 <EditorFileIcon path={tab.file.path} />
                                               )}
                                               <span className="editor-tab-label truncate">{tabLabel}</span>
+                                              {diffDirtyState[tab.id] ? (
+                                                <span className="editor-tab-dirty-indicator" aria-hidden />
+                                              ) : null}
                                               <span
                                                 role="button"
                                                 tabIndex={0}
@@ -1405,15 +1483,32 @@ export function MainLayout() {
                               </div>
                             </div>
                             <div className="diff-workspace-pathbar">
-                              {activeDiffTab.kind === "all" ? (
+                              {activeDiffSelection ? (
+                                <>
+                                  <EditorFileIcon path={activeDiffSelection.file.path} />
+                                  <span>
+                                    {activeDiffSelection.file.oldPath ? `${activeDiffSelection.file.oldPath} → ` : ""}
+                                    {activeDiffSelection.file.path}
+                                  </span>
+                                  <span className="diff-workspace-pathbar-source">
+                                    {getDiffSideLabels(activeDiffSelection.file, activeDiffSelection.category).tabSource}
+                                  </span>
+                                </>
+                              ) : activeDiffTab.kind === "all" ? (
                                 <>
                                   <GitCompareArrows className="size-3.5" />
-                                  <span>All repository changes</span>
+                                  <span>Git: Changes</span>
                                 </>
                               ) : (
                                 <>
                                   <EditorFileIcon path={activeDiffTab.file.path} />
-                                  <span>{activeDiffTab.file.oldPath ? `${activeDiffTab.file.oldPath} → ` : ""}{activeDiffTab.file.path}</span>
+                                  <span>
+                                    {activeDiffTab.file.oldPath ? `${activeDiffTab.file.oldPath} → ` : ""}
+                                    {activeDiffTab.file.path}
+                                  </span>
+                                  <span className="diff-workspace-pathbar-source">
+                                    {getDiffSideLabels(activeDiffTab.file, activeDiffTab.category).tabSource}
+                                  </span>
                                 </>
                               )}
                             </div>
@@ -1425,6 +1520,15 @@ export function MainLayout() {
                                 stagedFiles={git.status?.staged ?? []}
                                 unstagedFiles={git.combinedChanges}
                                 refreshToken={git.refreshToken}
+                                onOpenFile={handleOpenDiffFile}
+                                onStageFile={git.stageFile}
+                                onUnstageFile={git.unstageFile}
+                                onDiscardFile={git.discardFile}
+                                onSaved={() => git.refresh({ silent: true })}
+                                onSelectionChange={setAllDiffSelection}
+                                onDirtyChange={(dirty) => {
+                                  setDiffTabDirty(activeDiffTab.id, dirty);
+                                }}
                               />
                             ) : (
                               <DiffEditor
@@ -1432,6 +1536,14 @@ export function MainLayout() {
                                 file={activeDiffTab.file}
                                 category={activeDiffTab.category}
                                 refreshToken={git.refreshToken}
+                                onOpenFile={handleOpenDiffFile}
+                                onStageFile={git.stageFile}
+                                onUnstageFile={git.unstageFile}
+                                onDiscardFile={git.discardFile}
+                                onSaved={() => git.refresh({ silent: true })}
+                                onDirtyChange={(dirty) => {
+                                  setDiffTabDirty(activeDiffTab.id, dirty);
+                                }}
                               />
                             )}
                           </div>
