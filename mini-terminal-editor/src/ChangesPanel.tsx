@@ -22,7 +22,7 @@ import {
   GitCompareArrows,
   Minus,
   RefreshCw,
-  RotateCcw,
+  Trash2,
   TriangleAlert,
   Undo2,
 } from "lucide-react";
@@ -161,7 +161,7 @@ function FileActions({
       {category === "unstaged" ? (
         <IconActionButton
           label="Discard Changes"
-          icon={<RotateCcw className="size-3.5" />}
+          icon={<Trash2 className="size-3.5" />}
           className="changes-file-action"
           disabled={disabled}
           onClick={() => onDiscard(file.path)}
@@ -370,7 +370,7 @@ export function ChangesPanel({
     },
     {
       label: "Discard All Changes",
-      icon: <RotateCcw className="size-3.5" />,
+      icon: <Trash2 className="size-3.5" />,
       onClick: () => {
         void handleDiscardAll();
       },
