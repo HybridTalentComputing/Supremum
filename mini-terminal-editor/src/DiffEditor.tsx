@@ -75,6 +75,7 @@ type ScrollPreviewState = {
   scrollTop: number;
   scrollHeight: number;
   clientHeight: number;
+  contentHeight: number;
 };
 
 type OverviewSegment = {
@@ -381,7 +382,9 @@ export function DiffEditor({
     scrollTop: 0,
     scrollHeight: 1,
     clientHeight: 1,
+    contentHeight: 1,
   });
+  const [overviewHeight, setOverviewHeight] = useState(1);
   const activeDiffTargetRef = useRef("");
   const contentsRef = useRef<GitDiffContents | null>(null);
   const dirtyRef = useRef(false);
@@ -423,15 +426,22 @@ export function DiffEditor({
         scrollTop: 0,
         scrollHeight: 1,
         clientHeight: 1,
+        contentHeight: 1,
       });
       return;
     }
 
     const sync = () => {
+      const contentHeight = Math.max(
+        mergeState.leftView?.contentHeight ?? 0,
+        mergeState.rightView?.contentHeight ?? 0,
+        1,
+      );
       setScrollPreview({
         scrollTop: scrollContainer.scrollTop,
         scrollHeight: Math.max(scrollContainer.scrollHeight, 1),
         clientHeight: Math.max(scrollContainer.clientHeight, 1),
+        contentHeight,
       });
     };
 
@@ -445,6 +455,26 @@ export function DiffEditor({
       resizeObserver.disconnect();
     };
   }, [contents, hideUnchanged, mergeState.view, preferredMode]);
+
+  useEffect(() => {
+    const overview = overviewRef.current;
+    if (!overview) {
+      setOverviewHeight(1);
+      return;
+    }
+
+    const sync = () => {
+      setOverviewHeight(Math.max(overview.clientHeight, 1));
+    };
+
+    sync();
+    const resizeObserver = new ResizeObserver(sync);
+    resizeObserver.observe(overview);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [contents, hideUnchanged, preferredMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -551,7 +581,7 @@ export function DiffEditor({
   const overviewSegments = useMemo<OverviewSegment[]>(() => {
     if (!contents || !mergeState.leftView || !mergeState.rightView) return [];
 
-    const totalHeight = Math.max(scrollPreview.scrollHeight, scrollPreview.clientHeight, 1);
+    const totalHeight = Math.max(scrollPreview.contentHeight, 1);
     const segments: OverviewSegment[] = [];
 
     for (let index = 0; index < mergeState.chunks.length; index += 1) {
@@ -604,31 +634,36 @@ export function DiffEditor({
     mergeState.leftView,
     mergeState.rightView,
     scrollPreview.clientHeight,
+    scrollPreview.contentHeight,
     scrollPreview.scrollHeight,
   ]);
+  const fixedViewportHeightPx = 18;
+  const maxScrollableContent = Math.max(scrollPreview.contentHeight - scrollPreview.clientHeight, 0);
   const viewportTopRatio = useMemo(() => {
-    const maxScrollable = Math.max(scrollPreview.scrollHeight - scrollPreview.clientHeight, 1);
-    return (scrollPreview.scrollTop / maxScrollable) * Math.max(0, 1 - scrollPreview.clientHeight / scrollPreview.scrollHeight);
-  }, [scrollPreview.clientHeight, scrollPreview.scrollHeight, scrollPreview.scrollTop]);
-  const viewportTop = useMemo(() => `${viewportTopRatio * 100}%`, [viewportTopRatio]);
-  const viewportHeight = useMemo(
-    () => `${Math.max(4.5, (scrollPreview.clientHeight / scrollPreview.scrollHeight) * 100 * 0.72)}%`,
-    [scrollPreview.clientHeight, scrollPreview.scrollHeight],
-  );
+    if (maxScrollableContent <= 0) {
+      return 1;
+    }
+    return Math.max(0, Math.min(1, scrollPreview.scrollTop / maxScrollableContent));
+  }, [maxScrollableContent, scrollPreview.scrollTop]);
+  const viewportTop = useMemo(() => {
+    const available = Math.max(overviewHeight - fixedViewportHeightPx, 0);
+    return `${viewportTopRatio * available}px`;
+  }, [overviewHeight, viewportTopRatio]);
+  const viewportHeight = `${fixedViewportHeightPx}px`;
   const toggleModeLabel =
     preferredMode === "side-by-side" ? "Switch to inline diff" : "Switch to side by side diff";
   const ToggleModeIcon = preferredMode === "side-by-side" ? Columns2 : List;
-  const viewportHeightRatio = Math.min(1, scrollPreview.clientHeight / scrollPreview.scrollHeight);
+  const viewportHeightRatio = Math.min(1, fixedViewportHeightPx / Math.max(overviewHeight, 1));
 
   const setOverviewScrollPosition = useCallback(
     (ratio: number) => {
       const scrollContainer = mainScrollRef.current;
       if (!scrollContainer) return;
 
-      const maxScrollable = Math.max(scrollContainer.scrollHeight - scrollContainer.clientHeight, 0);
+      const maxScrollable = Math.max(scrollPreview.contentHeight - scrollContainer.clientHeight, 0);
       scrollContainer.scrollTop = Math.max(0, Math.min(maxScrollable, ratio * maxScrollable));
     },
-    [],
+    [scrollPreview.contentHeight],
   );
 
   const handleOverviewPointerPosition = useCallback(
