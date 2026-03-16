@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -18,9 +18,9 @@ import {
   Check,
   Ellipsis,
   FilePlus2,
-  Files,
   FolderGit2,
   GitBranch,
+  GitCompareArrows,
   Minus,
   RefreshCw,
   RotateCcw,
@@ -82,6 +82,44 @@ function getStatusLabel(file: GitChangedFile, category: GitDiffCategory) {
   }
 }
 
+function IconActionButton({
+  label,
+  icon,
+  disabled,
+  className,
+  onClick,
+}: {
+  label: string;
+  icon: ReactNode;
+  disabled?: boolean;
+  className?: string;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className={className}
+            disabled={disabled}
+            aria-label={label}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClick();
+            }}
+          >
+            {icon}
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function FileActions({
   category,
   file,
@@ -114,50 +152,29 @@ function FileActions({
 
   return (
     <div className="changes-file-actions">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
+      <IconActionButton
+        label={stageAction.label}
+        icon={stageAction.icon}
         className="changes-file-action"
         disabled={disabled}
-        aria-label={stageAction.label}
-        onClick={(event) => {
-          event.stopPropagation();
-          stageAction.onClick();
-        }}
-      >
-        {stageAction.icon}
-      </Button>
+        onClick={stageAction.onClick}
+      />
       {category === "unstaged" ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
+        <IconActionButton
+          label="Discard Changes"
+          icon={<RotateCcw className="size-3.5" />}
           className="changes-file-action"
           disabled={disabled}
-          aria-label="Discard Changes"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDiscard(file.path);
-          }}
-        >
-          <RotateCcw className="size-3.5" />
-        </Button>
+          onClick={() => onDiscard(file.path)}
+        />
       ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
+      <IconActionButton
+        label="Open Diff"
+        icon={<GitBranch className="size-3.5" />}
         className="changes-file-action"
         disabled={disabled}
-        aria-label="Open Diff"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenDiff(file, category);
-        }}
-      >
-        <GitBranch className="size-3.5" />
-      </Button>
+        onClick={() => onOpenDiff(file, category)}
+      />
     </div>
   );
 }
@@ -182,25 +199,34 @@ function FileRow({
   const pathParts = file.path.split("/");
   const name = pathParts[pathParts.length - 1] || file.path;
   const parent = pathParts.slice(0, -1).join("/");
+  const parentLabel = [parent || "", file.oldPath ? file.oldPath : ""].filter(Boolean).join(" • ");
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           className="changes-file-row"
+          aria-label={`Open diff for ${file.path}`}
           onClick={() => onOpenDiff(file, category)}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onOpenDiff(file, category);
+          }}
         >
           <span className={cn("changes-file-status", `is-${file.status}`)} />
           <span className="changes-file-icon">
             <ChangeFileIcon path={file.path} />
           </span>
-          <span className="changes-file-copy">
+          <span
+            className="changes-file-copy"
+            title={file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path}
+          >
             <span className="changes-file-name">{name}</span>
-            <span className="changes-file-parent">
-              {parent || "."}
-              {file.oldPath ? ` • ${file.oldPath}` : ""}
-            </span>
+            {parentLabel ? <span className="changes-file-parent">{parentLabel}</span> : null}
           </span>
           <span className="changes-file-stats">
             {file.additions > 0 ? <span className="is-add">+{file.additions}</span> : null}
@@ -218,7 +244,7 @@ function FileRow({
             onUnstage={onUnstage}
             onDiscard={onDiscard}
           />
-        </button>
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         {category === "staged" ? (
@@ -313,6 +339,43 @@ export function ChangesPanel({
     }
   };
 
+  const stagedSectionActions = [
+    {
+      label: "Open Changes",
+      icon: <GitCompareArrows className="size-3.5" />,
+      onClick: onOpenAllDiffs,
+    },
+    {
+      label: "Unstage All Changes",
+      icon: <Undo2 className="size-3.5" />,
+      onClick: () => {
+        void git.unstageAll();
+      },
+    },
+  ];
+
+  const unstagedSectionActions = [
+    {
+      label: "Open Changes",
+      icon: <GitCompareArrows className="size-3.5" />,
+      onClick: onOpenAllDiffs,
+    },
+    {
+      label: "Discard All Changes",
+      icon: <RotateCcw className="size-3.5" />,
+      onClick: () => {
+        void handleDiscardAll();
+      },
+    },
+    {
+      label: "Stage All Changes",
+      icon: <FilePlus2 className="size-3.5" />,
+      onClick: () => {
+        void git.stageAll();
+      },
+    },
+  ];
+
   if (git.isLoading && !git.capability) {
     return (
       <div className="changes-loading">
@@ -393,18 +456,6 @@ export function ChangesPanel({
       <div className="changes-header">
         <div className="changes-header-title">
           <span>Source Control</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="changes-refresh-button"
-            aria-label="Refresh Source Control"
-            onClick={() => {
-              void git.refresh();
-            }}
-          >
-            <RefreshCw className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")} />
-          </Button>
         </div>
         <Button type="button" variant="ghost" size="icon-xs" className="changes-more-button">
           <Ellipsis className="size-3.5" />
@@ -417,6 +468,10 @@ export function ChangesPanel({
           <span className="changes-repository-name">{workspaceName}</span>
         </div>
         <div className="changes-repository-meta">
+          <span className="changes-branch-badge">
+            <GitBranch className="size-3.5" />
+            {git.status?.branch ?? "HEAD"}
+          </span>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -425,20 +480,19 @@ export function ChangesPanel({
                   variant="ghost"
                   size="icon-xs"
                   className="changes-repository-action"
-                  aria-label="Open Changes"
-                  disabled={isBusy || !git.status?.hasChanges}
-                  onClick={onOpenAllDiffs}
+                  aria-label="Refresh Source Control"
+                  onClick={() => {
+                    void git.refresh();
+                  }}
                 >
-                  <Files className="size-3.5" />
+                  <RefreshCw
+                    className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")}
+                  />
                 </Button>
               }
             />
-            <TooltipContent side="bottom">Open Changes</TooltipContent>
+            <TooltipContent side="bottom">Refresh</TooltipContent>
           </Tooltip>
-          <span className="changes-branch-badge">
-            <GitBranch className="size-3.5" />
-            {git.status?.branch ?? "HEAD"}
-          </span>
         </div>
       </div>
 
@@ -493,26 +547,16 @@ export function ChangesPanel({
                   <span>{git.status?.staged.length ?? 0}</span>
                 </div>
                 <div className="changes-section-actions">
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="changes-section-action"
-                          disabled={isBusy}
-                          aria-label="Unstage All Changes"
-                          onClick={() => {
-                            void git.unstageAll();
-                          }}
-                        >
-                          <Undo2 className="size-3.5" />
-                        </Button>
-                      }
+                  {stagedSectionActions.map((action) => (
+                    <IconActionButton
+                      key={action.label}
+                      label={action.label}
+                      icon={action.icon}
+                      className="changes-section-action"
+                      disabled={isBusy}
+                      onClick={action.onClick}
                     />
-                    <TooltipContent side="bottom">Unstage All Changes</TooltipContent>
-                  </Tooltip>
+                  ))}
                 </div>
               </div>
               <div className="changes-file-list">
@@ -544,44 +588,16 @@ export function ChangesPanel({
                   <span>{combinedChanges.length}</span>
                 </div>
                 <div className="changes-section-actions">
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="changes-section-action"
-                          disabled={isBusy}
-                          aria-label="Discard All Changes"
-                          onClick={handleDiscardAll}
-                        >
-                          <RotateCcw className="size-3.5" />
-                        </Button>
-                      }
+                  {unstagedSectionActions.map((action) => (
+                    <IconActionButton
+                      key={action.label}
+                      label={action.label}
+                      icon={action.icon}
+                      className="changes-section-action"
+                      disabled={isBusy}
+                      onClick={action.onClick}
                     />
-                    <TooltipContent side="bottom">Discard All Changes</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="changes-section-action"
-                          disabled={isBusy}
-                          aria-label="Stage All Changes"
-                          onClick={() => {
-                            void git.stageAll();
-                          }}
-                        >
-                          <FilePlus2 className="size-3.5" />
-                        </Button>
-                      }
-                    />
-                    <TooltipContent side="bottom">Stage All Changes</TooltipContent>
-                  </Tooltip>
+                  ))}
                 </div>
               </div>
               <div className="changes-file-list">
