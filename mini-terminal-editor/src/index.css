@@ -1559,7 +1559,7 @@ body {
 .changes-file-status.is-modified,
 .changes-file-status.is-renamed,
 .changes-file-status.is-copied {
-  background: rgba(181, 189, 198, 0.95);
+  background: rgba(225, 190, 108, 0.94);
 }
 
 .changes-file-status.is-added,
@@ -1676,7 +1676,7 @@ body {
 .changes-file-code.is-modified,
 .changes-file-code.is-renamed,
 .changes-file-code.is-copied {
-  color: rgba(196, 203, 211, 0.94);
+  color: rgba(225, 190, 108, 0.94);
 }
 
 .changes-file-code.is-added,
@@ -1823,7 +1823,22 @@ body {
   min-width: 1rem;
   font-size: 0.72rem;
   font-weight: 700;
-  color: rgba(226, 191, 117, 0.96);
+  color: rgba(170, 178, 186, 0.85);
+}
+
+.diff-editor-status-code.is-modified,
+.diff-editor-status-code.is-renamed,
+.diff-editor-status-code.is-copied {
+  color: rgba(225, 190, 108, 0.94);
+}
+
+.diff-editor-status-code.is-added,
+.diff-editor-status-code.is-untracked {
+  color: rgba(110, 214, 130, 0.95);
+}
+
+.diff-editor-status-code.is-deleted {
+  color: rgba(246, 126, 126, 0.95);
 }
 
 .diff-editor-edit-state {
@@ -2104,20 +2119,6 @@ body {
 .all-diffs-group {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-}
-
-.all-diffs-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0 0.15rem;
-  color: rgba(188, 195, 202, 0.84);
-  font-size: 0.74rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .all-diffs-group-body {
@@ -2255,7 +2256,22 @@ body {
 .all-diffs-item-status {
   min-width: 0.9rem;
   text-align: right;
+  color: rgba(170, 178, 186, 0.85);
+}
+
+.all-diffs-item-status.is-modified,
+.all-diffs-item-status.is-renamed,
+.all-diffs-item-status.is-copied {
   color: rgba(225, 190, 108, 0.94);
+}
+
+.all-diffs-item-status.is-added,
+.all-diffs-item-status.is-untracked {
+  color: rgba(110, 214, 130, 0.95);
+}
+
+.all-diffs-item-status.is-deleted {
+  color: rgba(246, 126, 126, 0.95);
 }
 
 .all-diffs-item-body {

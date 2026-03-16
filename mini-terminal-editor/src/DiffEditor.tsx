@@ -811,7 +811,7 @@ export function DiffEditor({
           <div className="diff-editor-toolbar-state">
             <span className={cn("diff-editor-category", `is-${category}`)}>{sideLabels.categoryLabel}</span>
             <span className="diff-editor-toolbar-separator">•</span>
-            <span className="diff-editor-status-code">{statusCode}</span>
+            <span className={cn("diff-editor-status-code", `is-${file.status}`)}>{statusCode}</span>
             {editable ? (
               <>
                 <span className="diff-editor-toolbar-separator">•</span>

@@ -82,7 +82,6 @@ function HeaderTooltip({
 }
 
 function DiffGroup({
-  title,
   entries,
   workspacePath,
   refreshToken,
@@ -97,7 +96,6 @@ function DiffGroup({
   collapsedState,
   onToggleEntry,
 }: {
-  title: string;
   entries: DiffEntry[];
   workspacePath: string;
   refreshToken: number;
@@ -117,10 +115,6 @@ function DiffGroup({
 
   return (
     <section className="all-diffs-group">
-      <div className="all-diffs-group-header">
-        <span>{title}</span>
-        <span>{entries.length}</span>
-      </div>
       <div className="all-diffs-group-body">
         {entries.map((entry) => {
           const isCollapsed = collapsedState[entry.id] ?? false;
@@ -159,7 +153,9 @@ function DiffGroup({
                         {chrome.categoryLabel}
                       </span>
                       <span className="all-diffs-item-separator">•</span>
-                      <span className="diff-editor-status-code">{chrome.statusCode}</span>
+                      <span className={cn("diff-editor-status-code", `is-${entry.file.status}`)}>
+                        {chrome.statusCode}
+                      </span>
                       {chrome.editableLabel ? (
                         <>
                           <span className="all-diffs-item-separator">•</span>
@@ -427,7 +423,6 @@ export function AllDiffsView({
     <div className="all-diffs-layout">
       <div className="all-diffs-scroll">
         <DiffGroup
-          title="Changes"
           entries={unstagedEntries}
           workspacePath={workspacePath}
           refreshToken={refreshToken}
@@ -443,7 +438,6 @@ export function AllDiffsView({
           onToggleEntry={handleToggleEntry}
         />
         <DiffGroup
-          title="Staged Changes"
           entries={stagedEntries}
           workspacePath={workspacePath}
           refreshToken={refreshToken}
