@@ -319,7 +319,9 @@ export function ChangesPanel({
   const [commitMessage, setCommitMessage] = useState("");
   const combinedChanges = useMemo(() => git.combinedChanges, [git.combinedChanges]);
   const isBusy = git.pendingAction !== null;
-  const canCommit = Boolean(commitMessage.trim()) && (git.status?.staged.length ?? 0) > 0 && !isBusy;
+  const hasStagedChanges = (git.status?.staged.length ?? 0) > 0;
+  const hasAnyChanges = Boolean(git.status?.hasChanges);
+  const canCommit = Boolean(commitMessage.trim()) && hasAnyChanges && !isBusy;
   const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
 
   const handleDiscardFile = async (path: string) => {
@@ -336,6 +338,10 @@ export function ChangesPanel({
 
   const handleCommit = async () => {
     if (!canCommit) return;
+    if (!hasStagedChanges) {
+      const stageResult = await git.stageAll();
+      if (!stageResult.ok) return;
+    }
     const result = await git.commit(commitMessage.trim());
     if (result.ok) {
       setCommitMessage("");
