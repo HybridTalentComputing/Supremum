@@ -2030,17 +2030,28 @@ body {
 }
 
 .diff-editor-surface .cm-scroller::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 10px !important;
+  height: 10px !important;
 }
 
 .diff-editor-surface .cm-scroller::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .diff-editor-surface .cm-scroller::-webkit-scrollbar-thumb {
   background: rgba(120, 130, 142, 0.82);
   border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
+}
+
+.diff-editor-surface .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 164, 177, 0.9);
+}
+
+.diff-editor-surface .cm-scroller {
+  scrollbar-width: auto !important;
+  scrollbar-color: rgba(120, 130, 142, 0.82) rgba(255, 255, 255, 0.03) !important;
 }
 
 .editor-empty-shell {
@@ -2120,19 +2131,24 @@ body {
   overscroll-behavior: contain;
   padding: 0.75rem 0.9rem 1rem;
   gap: 1rem;
+  scrollbar-width: auto !important;
+  scrollbar-color: rgba(120, 130, 142, 0.78) rgba(255, 255, 255, 0.03) !important;
 }
 
 .all-diffs-scroll::-webkit-scrollbar {
-  width: 10px;
+  width: 10px !important;
+  height: 10px !important;
 }
 
 .all-diffs-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .all-diffs-scroll::-webkit-scrollbar-thumb {
   background: rgba(120, 130, 142, 0.72);
   border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
 }
 
 .all-diffs-scroll::-webkit-scrollbar-thumb:hover {
