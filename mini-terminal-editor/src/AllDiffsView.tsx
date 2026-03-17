@@ -22,6 +22,7 @@ type AllDiffsViewProps = {
   stagedFiles: GitChangedFile[];
   unstagedFiles: GitChangedFile[];
   refreshToken: number;
+  collapseAllRequest?: number;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
@@ -271,6 +272,7 @@ export function AllDiffsView({
   stagedFiles,
   unstagedFiles,
   refreshToken,
+  collapseAllRequest = 0,
   onOpenFile,
   onStageFile,
   onUnstageFile,
@@ -337,6 +339,9 @@ export function AllDiffsView({
       for (const entry of entries) {
         if (entry.id in currentState) {
           nextState[entry.id] = currentState[entry.id];
+        } else {
+          nextState[entry.id] = null;
+          changed = true;
         }
       }
 
@@ -353,6 +358,23 @@ export function AllDiffsView({
   }, [entries]);
 
   useEffect(() => {
+    if (collapseAllRequest <= 0) return;
+    setCollapsedState((currentState) => {
+      const nextState: Record<string, boolean> = {};
+      let changed = false;
+
+      for (const entry of entries) {
+        nextState[entry.id] = true;
+        if (currentState[entry.id] !== true) {
+          changed = true;
+        }
+      }
+
+      return changed ? nextState : currentState;
+    });
+  }, [collapseAllRequest, entries]);
+
+  useEffect(() => {
     setCollapsedState((currentState) => {
       const nextState: Record<string, boolean> = {};
       let changed = false;
@@ -360,6 +382,9 @@ export function AllDiffsView({
       for (const entry of entries) {
         if (entry.id in currentState) {
           nextState[entry.id] = currentState[entry.id];
+        } else {
+          nextState[entry.id] = true;
+          changed = true;
         }
       }
 

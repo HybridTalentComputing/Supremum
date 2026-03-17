@@ -34,6 +34,7 @@ import {
   GitCompareArrows,
   FileText,
   FileCode2,
+  FoldVertical,
   FolderOpen,
   FolderClosed,
   PanelLeft,
@@ -306,6 +307,7 @@ export function MainLayout() {
   const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
+  const [allDiffsCollapseRequest, setAllDiffsCollapseRequest] = useState(0);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
@@ -439,6 +441,7 @@ export function MainLayout() {
         ? currentTabs
         : [{ id: allDiffTabId, kind: "all" }, ...currentTabs]
     );
+    setAllDiffsCollapseRequest((current) => current + 1);
     setActiveDiffTabId(allDiffTabId);
     setActiveWorkspace("diff");
   }, []);
@@ -1334,6 +1337,27 @@ export function MainLayout() {
                                 <ScrollBar orientation="horizontal" />
                               </ScrollArea>
                               <div className="editor-tabs-actions">
+                                {activeDiffTab?.kind === "all" ? (
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      render={
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="editor-overlay-close"
+                                          onClick={() => {
+                                            setAllDiffsCollapseRequest((current) => current + 1);
+                                          }}
+                                          aria-label="折叠所有文件"
+                                        >
+                                          <FoldVertical className="size-3.5" />
+                                        </Button>
+                                      }
+                                    />
+                                    <TooltipContent>Collapse all files</TooltipContent>
+                                  </Tooltip>
+                                ) : null}
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -1505,6 +1529,7 @@ export function MainLayout() {
                                 stagedFiles={git.status?.staged ?? []}
                                 unstagedFiles={git.combinedChanges}
                                 refreshToken={git.refreshToken}
+                                collapseAllRequest={allDiffsCollapseRequest}
                                 onOpenFile={handleOpenDiffFile}
                                 onStageFile={git.stageFile}
                                 onUnstageFile={git.unstageFile}
