@@ -928,7 +928,7 @@ export function MainLayout() {
         className="main-layout"
       >
         <ResizablePanel
-          defaultSize={20}
+          defaultSize={30}
           minSize={20}
           collapsible
           collapsedSize={0}
@@ -949,7 +949,7 @@ export function MainLayout() {
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={80} minSize={30} className="flex min-h-0 flex-col">
+        <ResizablePanel defaultSize={70} minSize={30} className="flex min-h-0 flex-col">
           <div className="main-layout-terminal">
             <TooltipProvider delay={250}>
               <div className="workspace-manager-bar">
