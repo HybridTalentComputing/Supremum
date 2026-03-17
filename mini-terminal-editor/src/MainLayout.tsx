@@ -1299,8 +1299,8 @@ export function MainLayout() {
                   className="workspace-panel workspace-panel-editor"
                   data-active={activeWorkspace === "editor" ? "true" : undefined}
                 >
-                  <div className="editor-workspace">
-                    <div className="editor-workspace-inner">
+                  <div className="code-workspace">
+                    <div className="code-workspace-inner">
                       {activeTab ? (
                         <Tabs
                           value={activeTab.id}
@@ -1308,14 +1308,14 @@ export function MainLayout() {
                           className="flex h-full min-h-0 flex-col gap-0"
                         >
                           <div className="editor-header">
-                            <div className="editor-tabs-bar">
+                            <div className="code-tabs-bar">
                               <ScrollArea
-                                className="editor-tabs-scroll min-w-0 flex-1"
+                                className="code-tabs-scroll min-w-0 flex-1"
                                 onWheel={handleTabsWheel}
                               >
                                 <TabsList
                                   variant="line"
-                                  className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                  className="code-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
                                 >
                                   {openTabs.map((tab) => {
                                     const isDirty = tab.content !== tab.savedContent;
@@ -1326,17 +1326,17 @@ export function MainLayout() {
                                           render={
                                             <TabsTrigger
                                               value={tab.id}
-                                              className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                              className="code-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
                                             >
                                               <EditorFileIcon path={tab.path} />
                                               {isDirty && (
                                                 <Circle className="size-2 fill-current stroke-none text-cyan-300" />
                                               )}
-                                              <span className="editor-tab-label truncate">{tabLabel}</span>
+                                              <span className="code-tab-label truncate">{tabLabel}</span>
                                               <span
                                                 role="button"
                                                 tabIndex={0}
-                                                className="editor-tab-close"
+                                                className="code-tab-close"
                                                 onClick={(event) => {
                                                   event.preventDefault();
                                                   event.stopPropagation();
@@ -1362,12 +1362,12 @@ export function MainLayout() {
                                 </TabsList>
                                 <ScrollBar orientation="horizontal" />
                               </ScrollArea>
-                              <div className="editor-workspace-tabs-actions">
+                              <div className="code-workspace-tabs-actions">
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="icon-xs"
-                                  className="editor-workspace-close"
+                                  className="code-workspace-close"
                                   onClick={() => setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal")}
                                   aria-label="关闭编辑区"
                                 >
@@ -1413,8 +1413,8 @@ export function MainLayout() {
                   className="workspace-panel workspace-panel-diff"
                   data-active={activeWorkspace === "diff" ? "true" : undefined}
                 >
-                  <div className="editor-workspace diff-workspace">
-                    <div className="editor-workspace-inner">
+                  <div className="diff-workspace">
+                    <div className="diff-workspace-inner">
                       {activeDiffTab ? (
                         <Tabs
                           value={activeDiffTab.id}
@@ -1422,14 +1422,14 @@ export function MainLayout() {
                           className="flex h-full min-h-0 flex-col gap-0"
                         >
                           <div className="editor-header">
-                            <div className="editor-tabs-bar">
+                            <div className="diff-tabs-bar">
                               <ScrollArea
-                                className="editor-tabs-scroll min-w-0 flex-1"
+                                className="diff-tabs-scroll min-w-0 flex-1"
                                 onWheel={handleTabsWheel}
                               >
                                 <TabsList
                                   variant="line"
-                                  className="editor-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                  className="diff-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
                                 >
                                   {diffTabs.map((tab) => {
                                     const tabLabel =
@@ -1446,21 +1446,21 @@ export function MainLayout() {
                                           render={
                                             <TabsTrigger
                                               value={tab.id}
-                                              className="editor-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                              className="diff-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
                                             >
                                               {tab.kind === "all" ? (
                                                 <GitCompareArrows className="editor-tab-icon-svg" />
                                               ) : (
                                                 <EditorFileIcon path={tab.file.path} />
                                               )}
-                                              <span className="editor-tab-label truncate">{tabLabel}</span>
+                                              <span className="diff-tab-label truncate">{tabLabel}</span>
                                               {diffDirtyState[tab.id] ? (
-                                                <span className="editor-tab-dirty-indicator" aria-hidden />
+                                                <span className="diff-tab-dirty-indicator" aria-hidden />
                                               ) : null}
                                               <span
                                                 role="button"
                                                 tabIndex={0}
-                                                className="editor-tab-close"
+                                                className="diff-tab-close"
                                                 onClick={(event) => {
                                                   event.preventDefault();
                                                   event.stopPropagation();
