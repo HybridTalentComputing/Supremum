@@ -308,6 +308,12 @@ export function MainLayout() {
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
   const [allDiffsCollapseRequest, setAllDiffsCollapseRequest] = useState(0);
+  const [allDiffsExpandRequest, setAllDiffsExpandRequest] = useState(0);
+  const [allDiffsAreCollapsed, setAllDiffsAreCollapsed] = useState(true);
+  const [activeFileDiffChrome, setActiveFileDiffChrome] = useState<{
+    hideUnchanged: boolean;
+    toggleUnchanged: () => void;
+  } | null>(null);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
@@ -849,6 +855,11 @@ export function MainLayout() {
     activeDiffTab?.kind === "file"
       ? { file: activeDiffTab.file, category: activeDiffTab.category }
       : null;
+  useEffect(() => {
+    if (activeDiffTab?.kind !== "file") {
+      setActiveFileDiffChrome(null);
+    }
+  }, [activeDiffTab]);
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
       ? (editorViewModes[activeTab.id] ?? "preview")
@@ -1347,15 +1358,49 @@ export function MainLayout() {
                                           size="icon-xs"
                                           className="editor-overlay-close"
                                           onClick={() => {
-                                            setAllDiffsCollapseRequest((current) => current + 1);
+                                            if (allDiffsAreCollapsed) {
+                                              setAllDiffsExpandRequest((current) => current + 1);
+                                            } else {
+                                              setAllDiffsCollapseRequest((current) => current + 1);
+                                            }
                                           }}
-                                          aria-label="折叠所有文件"
+                                          aria-label={allDiffsAreCollapsed ? "展开所有文件" : "折叠所有文件"}
                                         >
                                           <FoldVertical className="size-3.5" />
                                         </Button>
                                       }
                                     />
-                                    <TooltipContent>Collapse all files</TooltipContent>
+                                    <TooltipContent>
+                                      {allDiffsAreCollapsed ? "Expand all files" : "Collapse all files"}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : activeFileDiffChrome ? (
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      render={
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="editor-overlay-close"
+                                          onClick={() => {
+                                            activeFileDiffChrome.toggleUnchanged();
+                                          }}
+                                          aria-label={
+                                            activeFileDiffChrome.hideUnchanged
+                                              ? "显示未修改内容"
+                                              : "折叠未修改内容"
+                                          }
+                                        >
+                                          <FoldVertical className="size-3.5" />
+                                        </Button>
+                                      }
+                                    />
+                                    <TooltipContent>
+                                      {activeFileDiffChrome.hideUnchanged
+                                        ? "Show unchanged lines"
+                                        : "Hide unchanged lines"}
+                                    </TooltipContent>
                                   </Tooltip>
                                 ) : null}
                                 <Button
@@ -1530,11 +1575,13 @@ export function MainLayout() {
                                 unstagedFiles={git.combinedChanges}
                                 refreshToken={git.refreshToken}
                                 collapseAllRequest={allDiffsCollapseRequest}
+                                expandAllRequest={allDiffsExpandRequest}
                                 onOpenFile={handleOpenDiffFile}
                                 onStageFile={git.stageFile}
                                 onUnstageFile={git.unstageFile}
                                 onDiscardFile={git.discardFile}
                                 onSaved={() => git.refresh({ silent: true })}
+                                onAllCollapsedChange={setAllDiffsAreCollapsed}
                                 onDirtyChange={(dirty) => {
                                   setDiffTabDirty(activeDiffTab.id, dirty);
                                 }}
@@ -1550,6 +1597,16 @@ export function MainLayout() {
                                 onUnstageFile={git.unstageFile}
                                 onDiscardFile={git.discardFile}
                                 onSaved={() => git.refresh({ silent: true })}
+                                onChromeChange={(chrome) => {
+                                  setActiveFileDiffChrome(
+                                    chrome
+                                      ? {
+                                          hideUnchanged: chrome.hideUnchanged,
+                                          toggleUnchanged: chrome.toggleUnchanged,
+                                        }
+                                      : null,
+                                  );
+                                }}
                                 onDirtyChange={(dirty) => {
                                   setDiffTabDirty(activeDiffTab.id, dirty);
                                 }}

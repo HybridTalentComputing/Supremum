@@ -1,4 +1,4 @@
-import { type ReactElement, useEffect, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -23,6 +23,7 @@ type AllDiffsViewProps = {
   unstagedFiles: GitChangedFile[];
   refreshToken: number;
   collapseAllRequest?: number;
+  expandAllRequest?: number;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
@@ -30,6 +31,7 @@ type AllDiffsViewProps = {
   onSaved?: () => Promise<void> | void;
   onSelectionChange?: (selection: { file: GitChangedFile; category: GitDiffCategory } | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onAllCollapsedChange?: (collapsed: boolean) => void;
 };
 
 type DiffEntry = {
@@ -273,6 +275,7 @@ export function AllDiffsView({
   unstagedFiles,
   refreshToken,
   collapseAllRequest = 0,
+  expandAllRequest = 0,
   onOpenFile,
   onStageFile,
   onUnstageFile,
@@ -280,7 +283,10 @@ export function AllDiffsView({
   onSaved,
   onSelectionChange,
   onDirtyChange,
+  onAllCollapsedChange,
 }: AllDiffsViewProps) {
+  const lastHandledCollapseRequestRef = useRef(0);
+  const lastHandledExpandRequestRef = useRef(0);
   const entries = useMemo<DiffEntry[]>(
     () => [
       ...unstagedFiles.map((file) => ({ id: `unstaged:${file.path}`, category: "unstaged" as const, file })),
@@ -358,7 +364,8 @@ export function AllDiffsView({
   }, [entries]);
 
   useEffect(() => {
-    if (collapseAllRequest <= 0) return;
+    if (collapseAllRequest <= 0 || collapseAllRequest === lastHandledCollapseRequestRef.current) return;
+    lastHandledCollapseRequestRef.current = collapseAllRequest;
     setCollapsedState((currentState) => {
       const nextState: Record<string, boolean> = {};
       let changed = false;
@@ -373,6 +380,24 @@ export function AllDiffsView({
       return changed ? nextState : currentState;
     });
   }, [collapseAllRequest, entries]);
+
+  useEffect(() => {
+    if (expandAllRequest <= 0 || expandAllRequest === lastHandledExpandRequestRef.current) return;
+    lastHandledExpandRequestRef.current = expandAllRequest;
+    setCollapsedState((currentState) => {
+      const nextState: Record<string, boolean> = {};
+      let changed = false;
+
+      for (const entry of entries) {
+        nextState[entry.id] = false;
+        if (currentState[entry.id] !== false) {
+          changed = true;
+        }
+      }
+
+      return changed ? nextState : currentState;
+    });
+  }, [entries, expandAllRequest]);
 
   useEffect(() => {
     setCollapsedState((currentState) => {
@@ -403,6 +428,12 @@ export function AllDiffsView({
   useEffect(() => {
     onDirtyChange?.(Object.values(dirtyState).some(Boolean));
   }, [dirtyState, onDirtyChange]);
+
+  useEffect(() => {
+    const isAllCollapsed =
+      entries.length === 0 || entries.every((entry) => (collapsedState[entry.id] ?? true) === true);
+    onAllCollapsedChange?.(isAllCollapsed);
+  }, [collapsedState, entries, onAllCollapsedChange]);
 
   const handleEntryDirtyChange = (id: string, dirty: boolean) => {
     setDirtyState((currentState) => {
