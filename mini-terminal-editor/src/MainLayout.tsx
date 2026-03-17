@@ -526,7 +526,7 @@ export function MainLayout() {
     if (!targetTab) return;
 
     if (diffDirtyState[tabId]) {
-      const label = targetTab.kind === "all" ? "Git: Changes" : getDiffFileName(targetTab.file.path);
+      const label = targetTab.kind === "all" ? "All Changes" : getDiffFileName(targetTab.file.path);
       if (!window.confirm(`"${label}" has unsaved changes. Close it anyway?`)) {
         return;
       }
@@ -1410,7 +1410,7 @@ export function MainLayout() {
                                   {diffTabs.map((tab) => {
                                     const tabLabel =
                                       tab.kind === "all"
-                                        ? `Git: Changes (${totalChangedFiles} files)`
+                                        ? `All Changes (${totalChangedFiles} files)`
                                         : getDiffTabLabel(tab.file, tab.category);
                                     const tooltipLabel =
                                       tab.kind === "all"
