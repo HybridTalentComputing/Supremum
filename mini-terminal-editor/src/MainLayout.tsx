@@ -310,10 +310,6 @@ export function MainLayout() {
   const [allDiffsCollapseRequest, setAllDiffsCollapseRequest] = useState(0);
   const [allDiffsExpandRequest, setAllDiffsExpandRequest] = useState(0);
   const [allDiffsAreCollapsed, setAllDiffsAreCollapsed] = useState(true);
-  const [activeFileDiffChrome, setActiveFileDiffChrome] = useState<{
-    hideUnchanged: boolean;
-    toggleUnchanged: () => void;
-  } | null>(null);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
@@ -855,11 +851,6 @@ export function MainLayout() {
     activeDiffTab?.kind === "file"
       ? { file: activeDiffTab.file, category: activeDiffTab.category }
       : null;
-  useEffect(() => {
-    if (activeDiffTab?.kind !== "file") {
-      setActiveFileDiffChrome(null);
-    }
-  }, [activeDiffTab]);
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
       ? (editorViewModes[activeTab.id] ?? "preview")
@@ -1347,67 +1338,12 @@ export function MainLayout() {
                                 </TabsList>
                                 <ScrollBar orientation="horizontal" />
                               </ScrollArea>
-                              <div className="editor-tabs-actions">
-                                {activeDiffTab?.kind === "all" ? (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      render={
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="editor-overlay-close"
-                                          onClick={() => {
-                                            if (allDiffsAreCollapsed) {
-                                              setAllDiffsExpandRequest((current) => current + 1);
-                                            } else {
-                                              setAllDiffsCollapseRequest((current) => current + 1);
-                                            }
-                                          }}
-                                          aria-label={allDiffsAreCollapsed ? "展开所有文件" : "折叠所有文件"}
-                                        >
-                                          <FoldVertical className="size-3.5" />
-                                        </Button>
-                                      }
-                                    />
-                                    <TooltipContent>
-                                      {allDiffsAreCollapsed ? "Expand all files" : "Collapse all files"}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ) : activeFileDiffChrome ? (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      render={
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="editor-overlay-close"
-                                          onClick={() => {
-                                            activeFileDiffChrome.toggleUnchanged();
-                                          }}
-                                          aria-label={
-                                            activeFileDiffChrome.hideUnchanged
-                                              ? "显示未修改内容"
-                                              : "折叠未修改内容"
-                                          }
-                                        >
-                                          <FoldVertical className="size-3.5" />
-                                        </Button>
-                                      }
-                                    />
-                                    <TooltipContent>
-                                      {activeFileDiffChrome.hideUnchanged
-                                        ? "Show unchanged lines"
-                                        : "Hide unchanged lines"}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ) : null}
+                              <div className="editor-workspace-tabs-actions">
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="icon-xs"
-                                  className="editor-overlay-close"
+                                  className="editor-workspace-close"
                                   onClick={() => setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal")}
                                   aria-label="关闭编辑区"
                                 >
@@ -1526,12 +1462,39 @@ export function MainLayout() {
                                 </TabsList>
                                 <ScrollBar orientation="horizontal" />
                               </ScrollArea>
-                              <div className="editor-tabs-actions">
+                              <div className="diff-workspace-tabs-actions">
+                                {activeDiffTab?.kind === "all" ? (
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      render={
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="diff-workspace-close"
+                                          onClick={() => {
+                                            if (allDiffsAreCollapsed) {
+                                              setAllDiffsExpandRequest((current) => current + 1);
+                                            } else {
+                                              setAllDiffsCollapseRequest((current) => current + 1);
+                                            }
+                                          }}
+                                          aria-label={allDiffsAreCollapsed ? "展开所有文件" : "折叠所有文件"}
+                                        >
+                                          <FoldVertical className="size-3.5" />
+                                        </Button>
+                                      }
+                                    />
+                                    <TooltipContent>
+                                      {allDiffsAreCollapsed ? "Expand all files" : "Collapse all files"}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : null}
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="icon-xs"
-                                  className="editor-overlay-close"
+                                  className="diff-workspace-close"
                                   onClick={() => setActiveWorkspace(openTabs.length > 0 ? "editor" : "terminal")}
                                   aria-label="关闭 Diff 工作区"
                                 >
@@ -1597,16 +1560,6 @@ export function MainLayout() {
                                 onUnstageFile={git.unstageFile}
                                 onDiscardFile={git.discardFile}
                                 onSaved={() => git.refresh({ silent: true })}
-                                onChromeChange={(chrome) => {
-                                  setActiveFileDiffChrome(
-                                    chrome
-                                      ? {
-                                          hideUnchanged: chrome.hideUnchanged,
-                                          toggleUnchanged: chrome.toggleUnchanged,
-                                        }
-                                      : null,
-                                  );
-                                }}
                                 onDirtyChange={(dirty) => {
                                   setDiffTabDirty(activeDiffTab.id, dirty);
                                 }}

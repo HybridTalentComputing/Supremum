@@ -2485,7 +2485,8 @@ body {
   outline: none;
 }
 
-.editor-tabs-actions {
+.editor-workspace-tabs-actions,
+.diff-workspace-tabs-actions {
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -2494,13 +2495,15 @@ body {
   background: #090909;
 }
 
-.editor-overlay-close {
+.editor-workspace-close,
+.diff-workspace-close {
   color: rgba(196, 202, 210, 0.66);
   width: 1.5rem;
   height: 1.5rem;
 }
 
-.editor-overlay-close:hover {
+.editor-workspace-close:hover,
+.diff-workspace-close:hover {
   color: rgba(244, 251, 255, 0.95);
   background: rgba(255, 255, 255, 0.06);
 }
