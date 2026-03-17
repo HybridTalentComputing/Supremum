@@ -94,7 +94,9 @@ function estimateExpandedBodyHeight(file: GitChangedFile, category: GitDiffCateg
 }
 
 const ALL_DIFFS_HEADER_HEIGHT = 44;
-const ALL_DIFFS_MOUNT_BUFFER = 320;
+const ALL_DIFFS_MOUNT_BUFFER = 120;
+const ALL_DIFFS_INITIAL_HYDRATE_COUNT = 2;
+const ALL_DIFFS_HYDRATE_BATCH_SIZE = 1;
 
 function DiffEntrySection({
   entry,
@@ -390,6 +392,7 @@ export function AllDiffsView({
 }: AllDiffsViewProps) {
   const lastHandledCollapseRequestRef = useRef(0);
   const lastHandledExpandRequestRef = useRef(0);
+  const hydrateFrameRef = useRef<number | null>(null);
   const entries = useMemo<DiffEntry[]>(
     () => [
       ...unstagedFiles.map((file) => ({ id: `unstaged:${file.path}`, category: "unstaged" as const, file })),
@@ -409,6 +412,7 @@ export function AllDiffsView({
   const [chromeState, setChromeState] = useState<Record<string, DiffChromeState | null>>({});
   const [collapsedState, setCollapsedState] = useState<Record<string, boolean>>({});
   const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
+  const [hydratedEntryIds, setHydratedEntryIds] = useState<Set<string>>(() => new Set());
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({ scrollTop: 0, clientHeight: 1 });
 
@@ -486,6 +490,23 @@ export function AllDiffsView({
         changed = true;
       } else {
         changed = currentKeys.some((key) => currentState[key] !== nextState[key]);
+      }
+
+      return changed ? nextState : currentState;
+    });
+  }, [entries]);
+
+  useEffect(() => {
+    setHydratedEntryIds((currentState) => {
+      const nextState = new Set<string>();
+      let changed = false;
+
+      for (const id of currentState) {
+        if (entries.some((entry) => entry.id === id)) {
+          nextState.add(id);
+        } else {
+          changed = true;
+        }
       }
 
       return changed ? nextState : currentState;
@@ -631,8 +652,8 @@ export function AllDiffsView({
     };
   }, []);
 
-  const mountedEntryIds = useMemo(() => {
-    const next = new Set<string>();
+  const targetMountedEntryIds = useMemo(() => {
+    const next: string[] = [];
     const viewportTop = scrollState.scrollTop - ALL_DIFFS_MOUNT_BUFFER;
     const viewportBottom = scrollState.scrollTop + scrollState.clientHeight + ALL_DIFFS_MOUNT_BUFFER;
     let offset = 0;
@@ -647,7 +668,7 @@ export function AllDiffsView({
       const bottom = offset + totalHeight;
 
       if (!isCollapsed && bottom >= viewportTop && top <= viewportBottom) {
-        next.add(entry.id);
+        next.push(entry.id);
       }
 
       offset = bottom;
@@ -655,6 +676,95 @@ export function AllDiffsView({
 
     return next;
   }, [collapsedState, entries, measuredHeights, scrollState.clientHeight, scrollState.scrollTop]);
+
+  const targetMountedEntryIdSet = useMemo(
+    () => new Set(targetMountedEntryIds),
+    [targetMountedEntryIds],
+  );
+
+  useEffect(() => {
+    if (hydrateFrameRef.current !== null) {
+      window.cancelAnimationFrame(hydrateFrameRef.current);
+      hydrateFrameRef.current = null;
+    }
+
+    let cancelled = false;
+    let remainingIds: string[] = [];
+
+    setHydratedEntryIds((currentState) => {
+      const nextState = new Set<string>();
+      let changed = false;
+
+      for (const id of currentState) {
+        if (targetMountedEntryIdSet.has(id)) {
+          nextState.add(id);
+        } else {
+          changed = true;
+        }
+      }
+
+      let initialAdds = 0;
+      for (const id of targetMountedEntryIds) {
+        if (nextState.has(id)) continue;
+        if (initialAdds < ALL_DIFFS_INITIAL_HYDRATE_COUNT) {
+          nextState.add(id);
+          initialAdds += 1;
+          changed = true;
+        } else {
+          remainingIds.push(id);
+        }
+      }
+
+      return changed ? nextState : currentState;
+    });
+
+    const hydrateRemaining = () => {
+      if (cancelled) return;
+
+      let shouldContinue = false;
+      setHydratedEntryIds((currentState) => {
+        if (remainingIds.length === 0) return currentState;
+
+        const nextState = new Set(currentState);
+        let added = 0;
+        const nextRemaining: string[] = [];
+
+        for (const id of remainingIds) {
+          if (!targetMountedEntryIdSet.has(id)) {
+            continue;
+          }
+          if (added < ALL_DIFFS_HYDRATE_BATCH_SIZE) {
+            if (!nextState.has(id)) {
+              nextState.add(id);
+              added += 1;
+            }
+          } else {
+            nextRemaining.push(id);
+          }
+        }
+
+        remainingIds = nextRemaining;
+        shouldContinue = remainingIds.length > 0;
+        return added > 0 ? nextState : currentState;
+      });
+
+      if (!cancelled && shouldContinue) {
+        hydrateFrameRef.current = window.requestAnimationFrame(hydrateRemaining);
+      }
+    };
+
+    if (remainingIds.length > 0) {
+      hydrateFrameRef.current = window.requestAnimationFrame(hydrateRemaining);
+    }
+
+    return () => {
+      cancelled = true;
+      if (hydrateFrameRef.current !== null) {
+        window.cancelAnimationFrame(hydrateFrameRef.current);
+        hydrateFrameRef.current = null;
+      }
+    };
+  }, [targetMountedEntryIdSet, targetMountedEntryIds]);
 
   if (entries.length === 0) {
     return (
@@ -671,7 +781,7 @@ export function AllDiffsView({
         <DiffGroup
           entries={unstagedEntries}
           workspacePath={workspacePath}
-          mountedEntryIds={mountedEntryIds}
+          mountedEntryIds={hydratedEntryIds}
           placeholderHeights={measuredHeights}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
@@ -688,7 +798,7 @@ export function AllDiffsView({
         <DiffGroup
           entries={stagedEntries}
           workspacePath={workspacePath}
-          mountedEntryIds={mountedEntryIds}
+          mountedEntryIds={hydratedEntryIds}
           placeholderHeights={measuredHeights}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
