@@ -140,7 +140,6 @@ pub fn git_get_status(payload: GitWorkspacePayload) -> Result<GitChangesStatus, 
     let mut branch = "HEAD".to_string();
     let mut staged = Vec::new();
     let mut unstaged = Vec::new();
-    let mut untracked = Vec::new();
     let mut parts = output.stdout.split(|byte| *byte == 0).peekable();
 
     while let Some(raw_part) = parts.next() {
@@ -173,13 +172,6 @@ pub fn git_get_status(payload: GitWorkspacePayload) -> Result<GitChangesStatus, 
         };
 
         if index_status == '?' && worktree_status == '?' {
-            untracked.push(GitChangedFile {
-                path,
-                old_path: None,
-                status: GitFileStatus::Untracked,
-                additions: 0,
-                deletions: 0,
-            });
             continue;
         }
 
@@ -215,6 +207,7 @@ pub fn git_get_status(payload: GitWorkspacePayload) -> Result<GitChangesStatus, 
 
     apply_stats(&mut staged, &staged_stats);
     apply_stats(&mut unstaged, &unstaged_stats);
+    let mut untracked = list_untracked_files(&workspace)?;
     apply_untracked_line_counts(&workspace, &mut untracked);
 
     let has_changes = !(staged.is_empty() && unstaged.is_empty() && untracked.is_empty());
@@ -648,6 +641,28 @@ fn apply_untracked_line_counts(workspace: &Path, files: &mut [GitChangedFile]) {
         file.additions = count_lines(&bytes);
         file.deletions = 0;
     }
+}
+
+fn list_untracked_files(workspace: &Path) -> Result<Vec<GitChangedFile>, String> {
+    let output = run_git_checked(workspace, ["ls-files", "--others", "--exclude-standard", "-z"])?;
+    let mut files = Vec::new();
+
+    for raw_part in output.stdout.split(|byte| *byte == 0) {
+        if raw_part.is_empty() {
+            continue;
+        }
+
+        let path = String::from_utf8_lossy(raw_part).to_string();
+        files.push(GitChangedFile {
+            path,
+            old_path: None,
+            status: GitFileStatus::Untracked,
+            additions: 0,
+            deletions: 0,
+        });
+    }
+
+    Ok(files)
 }
 
 fn count_lines(bytes: &[u8]) -> u32 {
