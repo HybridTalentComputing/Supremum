@@ -1536,7 +1536,6 @@ export function MainLayout() {
                                 workspacePath={workspacePath!}
                                 stagedFiles={git.status?.staged ?? []}
                                 unstagedFiles={git.combinedChanges}
-                                refreshToken={git.refreshToken}
                                 collapseAllRequest={allDiffsCollapseRequest}
                                 expandAllRequest={allDiffsExpandRequest}
                                 onOpenFile={handleOpenDiffFile}

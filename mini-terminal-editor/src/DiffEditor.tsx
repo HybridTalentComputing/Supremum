@@ -52,7 +52,8 @@ type DiffEditorProps = {
   workspacePath: string;
   file: GitChangedFile;
   category: GitDiffCategory;
-  refreshToken: number;
+  refreshToken?: number;
+  contentVersion?: string | number;
   embedded?: boolean;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
@@ -386,6 +387,7 @@ export function DiffEditor({
   file,
   category,
   refreshToken,
+  contentVersion,
   embedded = false,
   onSaved,
   onDirtyChange,
@@ -411,11 +413,14 @@ export function DiffEditor({
   const contentsRef = useRef<GitDiffContents | null>(null);
   const dirtyRef = useRef(false);
   const editableModifiedRef = useRef("");
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  const onChromeChangeRef = useRef(onChromeChange);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const overviewRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRatioRef = useRef(0);
   const isDraggingOverviewRef = useRef(false);
   const effectiveMode = preferredMode;
+  const effectiveContentVersion = contentVersion ?? refreshToken ?? 0;
 
   const sideLabels = useMemo(() => getDiffSideLabels(file, category), [category, file]);
   const statusCode = getGitStatusCode(file.status);
@@ -428,18 +433,20 @@ export function DiffEditor({
   }, [contents]);
 
   useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange;
+  }, [onDirtyChange]);
+
+  useEffect(() => {
+    onChromeChangeRef.current = onChromeChange;
+  }, [onChromeChange]);
+
+  useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
 
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
-
-  useEffect(() => {
-    return () => {
-      onDirtyChange?.(false);
-    };
-  }, [onDirtyChange]);
+    onDirtyChangeRef.current?.(dirty);
+  }, [dirty]);
 
   useEffect(() => {
     const scrollContainer = mainScrollRef.current;
@@ -540,7 +547,7 @@ export function DiffEditor({
     return () => {
       cancelled = true;
     };
-  }, [category, file.oldPath, file.path, refreshToken, workspacePath]);
+  }, [category, effectiveContentVersion, file.oldPath, file.path, workspacePath]);
 
   const handleSave = useCallback(async () => {
     if (!editable || !dirtyRef.current) return;
@@ -797,12 +804,15 @@ export function DiffEditor({
   );
 
   useEffect(() => {
-    onChromeChange?.(chromeState);
+    onChromeChangeRef.current?.(chromeState);
+  }, [chromeState]);
 
+  useEffect(() => {
     return () => {
-      onChromeChange?.(null);
+      onDirtyChangeRef.current?.(false);
+      onChromeChangeRef.current?.(null);
     };
-  }, [chromeState, onChromeChange]);
+  }, []);
 
   return (
     <div className={cn("diff-editor-shell", embedded && "diff-editor-shell-embedded")}>

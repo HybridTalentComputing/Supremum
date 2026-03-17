@@ -1,4 +1,4 @@
-import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -21,7 +21,6 @@ type AllDiffsViewProps = {
   workspacePath: string;
   stagedFiles: GitChangedFile[];
   unstagedFiles: GitChangedFile[];
-  refreshToken: number;
   collapseAllRequest?: number;
   expandAllRequest?: number;
   onOpenFile?: (path: string) => Promise<void> | void;
@@ -84,10 +83,259 @@ function HeaderTooltip({
   );
 }
 
+function estimateExpandedBodyHeight(file: GitChangedFile, category: GitDiffCategory) {
+  const changedLines = Math.max(file.additions + file.deletions, 1);
+  const baseLines =
+    category === "unstaged"
+      ? changedLines + 8
+      : changedLines + 6;
+  const estimated = baseLines * 22 + 12;
+  return Math.max(180, Math.min(estimated, 1400));
+}
+
+function DiffEntrySection({
+  entry,
+  workspacePath,
+  scrollRoot,
+  onOpenFile,
+  onStageFile,
+  onUnstageFile,
+  onDiscardFile,
+  onSaved,
+  onEntryDirtyChange,
+  chromeState,
+  onChromeChange,
+  isCollapsed,
+  onToggleEntry,
+}: {
+  entry: DiffEntry;
+  workspacePath: string;
+  scrollRoot: HTMLDivElement | null;
+  onOpenFile?: (path: string) => Promise<void> | void;
+  onStageFile?: (path: string) => Promise<unknown> | void;
+  onUnstageFile?: (path: string) => Promise<unknown> | void;
+  onDiscardFile?: (path: string) => Promise<unknown> | void;
+  onSaved?: () => Promise<void> | void;
+  onEntryDirtyChange: (id: string, dirty: boolean) => void;
+  chromeState: DiffChromeState | null;
+  onChromeChange: (id: string, chrome: DiffChromeState | null) => void;
+  isCollapsed: boolean;
+  onToggleEntry: (id: string) => void;
+}) {
+  const workspaceName = getWorkspaceName(workspacePath);
+  const fileName = getDiffFileName(entry.file.path);
+  const directory = getDiffFileDirectory(entry.file.path);
+  const pathLabel = [workspaceName, directory].filter(Boolean).join("/");
+  const chrome = chromeState;
+  const ModeIcon = chrome?.mode === "inline" ? List : Columns2;
+  const modeLabel =
+    chrome?.mode === "inline" ? "Switch to side by side diff" : "Switch to inline diff";
+  const contentVersion = [
+    entry.category,
+    entry.file.status,
+    entry.file.path,
+    entry.file.oldPath ?? "",
+    entry.file.additions,
+    entry.file.deletions,
+  ].join(":");
+  const hostRef = useRef<HTMLElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [isNearViewport, setIsNearViewport] = useState(false);
+  const [measuredHeight, setMeasuredHeight] = useState(() =>
+    estimateExpandedBodyHeight(entry.file, entry.category),
+  );
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    setMeasuredHeight((current) => Math.max(current, estimateExpandedBodyHeight(entry.file, entry.category)));
+  }, [entry.category, entry.file]);
+
+  useEffect(() => {
+    if (!scrollRoot || !hostRef.current || isCollapsed) {
+      setIsNearViewport(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const next = entries[0];
+        setIsNearViewport(next?.isIntersecting ?? false);
+      },
+      {
+        root: scrollRoot,
+        rootMargin: "900px 0px 900px 0px",
+        threshold: 0,
+      },
+    );
+
+    observer.observe(hostRef.current);
+    return () => observer.disconnect();
+  }, [isCollapsed, scrollRoot]);
+
+  useEffect(() => {
+    if (!bodyRef.current || isCollapsed) return;
+
+    const updateHeight = () => {
+      const nextHeight = Math.max(bodyRef.current?.offsetHeight ?? 0, 1);
+      setMeasuredHeight((current) => (Math.abs(current - nextHeight) > 1 ? nextHeight : current));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bodyRef.current);
+    return () => observer.disconnect();
+  }, [isCollapsed, isNearViewport]);
+
+  const shouldMountDiff = !isCollapsed && (isNearViewport || isDirty);
+
+  return (
+    <section ref={hostRef} className="all-diffs-item" data-collapsed={isCollapsed ? "true" : undefined}>
+      <button
+        type="button"
+        className="all-diffs-item-header"
+        onClick={() => onToggleEntry(entry.id)}
+        title={entry.file.oldPath ? `${entry.file.oldPath} -> ${entry.file.path}` : entry.file.path}
+      >
+        <span className="all-diffs-item-header-main">
+          <span className="all-diffs-item-chevron">
+            {isCollapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </span>
+          <span className="all-diffs-item-icon">
+            <DiffFileIcon path={entry.file.path} />
+          </span>
+          <span className="all-diffs-item-copy">
+            <span className="all-diffs-item-name">{fileName}</span>
+            {pathLabel ? <span className="all-diffs-item-path">{pathLabel}</span> : null}
+          </span>
+        </span>
+        <span className="all-diffs-item-meta">
+          {chrome ? (
+            <>
+              <span className={cn("diff-editor-category", `is-${entry.category}`)}>
+                {chrome.categoryLabel}
+              </span>
+              <span className="all-diffs-item-separator">•</span>
+              <span className={cn("diff-editor-status-code", `is-${entry.file.status}`)}>
+                {chrome.statusCode}
+              </span>
+              {chrome.editableLabel ? (
+                <>
+                  <span className="all-diffs-item-separator">•</span>
+                  <span className="diff-editor-edit-state">{chrome.editableLabel}</span>
+                </>
+              ) : null}
+              <span className="all-diffs-item-controls">
+                <span className="diff-editor-chunk-count">
+                  {chrome.currentChunkNumber}/{chrome.chunkCount || 0}
+                </span>
+                <HeaderTooltip label="Previous change">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="diff-editor-action"
+                    disabled={chrome.chunkCount === 0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      chrome.navigatePrevious();
+                    }}
+                  >
+                    <ChevronUp className="size-3.5" />
+                  </Button>
+                </HeaderTooltip>
+                <HeaderTooltip label="Next change">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="diff-editor-action"
+                    disabled={chrome.chunkCount === 0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      chrome.navigateNext();
+                    }}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </HeaderTooltip>
+                <HeaderTooltip label={modeLabel}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="diff-editor-action"
+                    data-active="true"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      chrome.toggleMode();
+                    }}
+                  >
+                    <ModeIcon className="size-3.5" />
+                  </Button>
+                </HeaderTooltip>
+                <HeaderTooltip label={chrome.hideUnchanged ? "Show unchanged lines" : "Hide unchanged lines"}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="diff-editor-action"
+                    data-active={chrome.hideUnchanged ? "true" : undefined}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      chrome.toggleUnchanged();
+                    }}
+                  >
+                    <FoldVertical className="size-3.5" />
+                  </Button>
+                </HeaderTooltip>
+              </span>
+            </>
+          ) : null}
+          {entry.file.additions > 0 ? (
+            <span className="all-diffs-item-stat is-addition">+{entry.file.additions}</span>
+          ) : null}
+          {entry.file.deletions > 0 ? (
+            <span className="all-diffs-item-stat is-deletion">-{entry.file.deletions}</span>
+          ) : null}
+          <span className={cn("all-diffs-item-status", `is-${entry.file.status}`)}>
+            {getGitStatusCode(entry.file.status)}
+          </span>
+        </span>
+      </button>
+      {isCollapsed ? null : shouldMountDiff ? (
+        <div ref={bodyRef} className="all-diffs-item-body">
+          <DiffEditor
+            workspacePath={workspacePath}
+            file={entry.file}
+            category={entry.category}
+            contentVersion={contentVersion}
+            embedded
+            onOpenFile={onOpenFile}
+            onStageFile={onStageFile}
+            onUnstageFile={onUnstageFile}
+            onDiscardFile={onDiscardFile}
+            onSaved={onSaved}
+            onChromeChange={(chrome) => onChromeChange(entry.id, chrome)}
+            onDirtyChange={(dirty) => {
+              setIsDirty(dirty);
+              onEntryDirtyChange(entry.id, dirty);
+            }}
+          />
+        </div>
+      ) : (
+        <div
+          className="all-diffs-item-body all-diffs-item-body-placeholder"
+          style={{ minHeight: `${measuredHeight}px` }}
+        />
+      )}
+    </section>
+  );
+}
+
 function DiffGroup({
   entries,
   workspacePath,
-  refreshToken,
+  scrollRoot,
   onOpenFile,
   onStageFile,
   onUnstageFile,
@@ -101,7 +349,7 @@ function DiffGroup({
 }: {
   entries: DiffEntry[];
   workspacePath: string;
-  refreshToken: number;
+  scrollRoot: HTMLDivElement | null;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
@@ -114,154 +362,28 @@ function DiffGroup({
   onToggleEntry: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
-  const workspaceName = getWorkspaceName(workspacePath);
 
   return (
     <section className="all-diffs-group">
       <div className="all-diffs-group-body">
         {entries.map((entry) => {
-          const isCollapsed = collapsedState[entry.id] ?? false;
-          const fileName = getDiffFileName(entry.file.path);
-          const directory = getDiffFileDirectory(entry.file.path);
-          const pathLabel = [workspaceName, directory].filter(Boolean).join("/");
-          const chrome = chromeState[entry.id] ?? null;
-          const ModeIcon = chrome?.mode === "inline" ? List : Columns2;
-          const modeLabel =
-            chrome?.mode === "inline" ? "Switch to side by side diff" : "Switch to inline diff";
-
           return (
-            <section key={entry.id} className="all-diffs-item" data-collapsed={isCollapsed ? "true" : undefined}>
-              <button
-                type="button"
-                className="all-diffs-item-header"
-                onClick={() => onToggleEntry(entry.id)}
-                title={entry.file.oldPath ? `${entry.file.oldPath} -> ${entry.file.path}` : entry.file.path}
-              >
-                <span className="all-diffs-item-header-main">
-                  <span className="all-diffs-item-chevron">
-                    {isCollapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                  </span>
-                  <span className="all-diffs-item-icon">
-                    <DiffFileIcon path={entry.file.path} />
-                  </span>
-                  <span className="all-diffs-item-copy">
-                    <span className="all-diffs-item-name">{fileName}</span>
-                    {pathLabel ? <span className="all-diffs-item-path">{pathLabel}</span> : null}
-                  </span>
-                </span>
-                <span className="all-diffs-item-meta">
-                  {chrome ? (
-                    <>
-                      <span className={cn("diff-editor-category", `is-${entry.category}`)}>
-                        {chrome.categoryLabel}
-                      </span>
-                      <span className="all-diffs-item-separator">•</span>
-                      <span className={cn("diff-editor-status-code", `is-${entry.file.status}`)}>
-                        {chrome.statusCode}
-                      </span>
-                      {chrome.editableLabel ? (
-                        <>
-                          <span className="all-diffs-item-separator">•</span>
-                          <span className="diff-editor-edit-state">{chrome.editableLabel}</span>
-                        </>
-                      ) : null}
-                      <span className="all-diffs-item-controls">
-                        <span className="diff-editor-chunk-count">
-                          {chrome.currentChunkNumber}/{chrome.chunkCount || 0}
-                        </span>
-                        <HeaderTooltip label="Previous change">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="diff-editor-action"
-                            disabled={chrome.chunkCount === 0}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              chrome.navigatePrevious();
-                            }}
-                          >
-                            <ChevronUp className="size-3.5" />
-                          </Button>
-                        </HeaderTooltip>
-                        <HeaderTooltip label="Next change">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="diff-editor-action"
-                            disabled={chrome.chunkCount === 0}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              chrome.navigateNext();
-                            }}
-                          >
-                            <ChevronDown className="size-3.5" />
-                          </Button>
-                        </HeaderTooltip>
-                        <HeaderTooltip label={modeLabel}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="diff-editor-action"
-                            data-active="true"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              chrome.toggleMode();
-                            }}
-                          >
-                            <ModeIcon className="size-3.5" />
-                          </Button>
-                        </HeaderTooltip>
-                        <HeaderTooltip label={chrome.hideUnchanged ? "Show unchanged lines" : "Hide unchanged lines"}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="diff-editor-action"
-                            data-active={chrome.hideUnchanged ? "true" : undefined}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              chrome.toggleUnchanged();
-                            }}
-                          >
-                            <FoldVertical className="size-3.5" />
-                          </Button>
-                        </HeaderTooltip>
-                      </span>
-                    </>
-                  ) : null}
-                  {entry.file.additions > 0 ? (
-                    <span className="all-diffs-item-stat is-addition">+{entry.file.additions}</span>
-                  ) : null}
-                  {entry.file.deletions > 0 ? (
-                    <span className="all-diffs-item-stat is-deletion">-{entry.file.deletions}</span>
-                  ) : null}
-                  <span className={cn("all-diffs-item-status", `is-${entry.file.status}`)}>
-                    {getGitStatusCode(entry.file.status)}
-                  </span>
-                </span>
-              </button>
-              {isCollapsed ? null : (
-                <div className="all-diffs-item-body">
-                  <DiffEditor
-                    workspacePath={workspacePath}
-                    file={entry.file}
-                    category={entry.category}
-                    refreshToken={refreshToken}
-                    embedded
-                    onOpenFile={onOpenFile}
-                    onStageFile={onStageFile}
-                    onUnstageFile={onUnstageFile}
-                    onDiscardFile={onDiscardFile}
-                    onSaved={onSaved}
-                    onChromeChange={(chrome) => onChromeChange(entry.id, chrome)}
-                    onDirtyChange={(dirty) => onEntryDirtyChange(entry.id, dirty)}
-                  />
-                </div>
-              )}
-            </section>
+            <DiffEntrySection
+              key={entry.id}
+              entry={entry}
+              workspacePath={workspacePath}
+              scrollRoot={scrollRoot}
+              onOpenFile={onOpenFile}
+              onStageFile={onStageFile}
+              onUnstageFile={onUnstageFile}
+              onDiscardFile={onDiscardFile}
+              onSaved={onSaved}
+              onEntryDirtyChange={onEntryDirtyChange}
+              chromeState={chromeState[entry.id] ?? null}
+              onChromeChange={onChromeChange}
+              isCollapsed={collapsedState[entry.id] ?? true}
+              onToggleEntry={onToggleEntry}
+            />
           );
         })}
       </div>
@@ -273,7 +395,6 @@ export function AllDiffsView({
   workspacePath,
   stagedFiles,
   unstagedFiles,
-  refreshToken,
   collapseAllRequest = 0,
   expandAllRequest = 0,
   onOpenFile,
@@ -305,6 +426,7 @@ export function AllDiffsView({
   const [dirtyState, setDirtyState] = useState<Record<string, boolean>>({});
   const [chromeState, setChromeState] = useState<Record<string, DiffChromeState | null>>({});
   const [collapsedState, setCollapsedState] = useState<Record<string, boolean>>({});
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     onSelectionChange?.(null);
@@ -435,7 +557,7 @@ export function AllDiffsView({
     onAllCollapsedChange?.(isAllCollapsed);
   }, [collapsedState, entries, onAllCollapsedChange]);
 
-  const handleEntryDirtyChange = (id: string, dirty: boolean) => {
+  const handleEntryDirtyChange = useCallback((id: string, dirty: boolean) => {
     setDirtyState((currentState) => {
       if (dirty) {
         if (currentState[id]) return currentState;
@@ -447,16 +569,16 @@ export function AllDiffsView({
       delete nextState[id];
       return nextState;
     });
-  };
+  }, []);
 
-  const handleToggleEntry = (id: string) => {
+  const handleToggleEntry = useCallback((id: string) => {
     setCollapsedState((currentState) => ({
       ...currentState,
-      [id]: !currentState[id],
+      [id]: !(currentState[id] ?? true),
     }));
-  };
+  }, []);
 
-  const handleChromeChange = (id: string, chrome: DiffChromeState | null) => {
+  const handleChromeChange = useCallback((id: string, chrome: DiffChromeState | null) => {
     setChromeState((currentState) => {
       if (currentState[id] === chrome) return currentState;
       return {
@@ -464,7 +586,7 @@ export function AllDiffsView({
         [id]: chrome,
       };
     });
-  };
+  }, []);
 
   if (entries.length === 0) {
     return (
@@ -477,11 +599,11 @@ export function AllDiffsView({
 
   return (
     <div className="all-diffs-layout">
-      <div className="all-diffs-scroll">
+      <div className="all-diffs-scroll" ref={setScrollRoot}>
         <DiffGroup
           entries={unstagedEntries}
           workspacePath={workspacePath}
-          refreshToken={refreshToken}
+          scrollRoot={scrollRoot}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
@@ -496,7 +618,7 @@ export function AllDiffsView({
         <DiffGroup
           entries={stagedEntries}
           workspacePath={workspacePath}
-          refreshToken={refreshToken}
+          scrollRoot={scrollRoot}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
