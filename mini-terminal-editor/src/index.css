@@ -2384,7 +2384,7 @@ body {
   height: 32px;
   min-height: 32px;
   overflow: hidden;
-  border-bottom: 1px solid rgba(201, 216, 230, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: #090909;
 }
 
@@ -2416,7 +2416,7 @@ body {
   max-width: 15rem;
   height: 32px;
   font-size: 0.84rem;
-  color: rgba(155, 169, 182, 0.76);
+  color: rgba(255, 255, 255, 0.48);
   background: transparent;
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
@@ -2448,14 +2448,14 @@ body {
 
 .editor-tab:hover {
   background: transparent;
-  color: rgba(213, 221, 228, 0.9);
+  color: rgba(255, 255, 255, 0.84);
 }
 
 .editor-tab[data-active] {
   background: transparent;
-  color: rgba(243, 247, 250, 0.97);
+  color: rgba(255, 255, 255, 0.97);
   box-shadow:
-    inset 0 -1px 0 rgba(242, 246, 250, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
     inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -2467,7 +2467,7 @@ body {
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 999px;
-  color: rgba(196, 202, 210, 0.54);
+  color: rgba(255, 255, 255, 0.42);
   opacity: 0;
   transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
 }
@@ -2481,7 +2481,7 @@ body {
 .editor-tab-close:hover,
 .editor-tab-close:focus-visible {
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(244, 251, 255, 0.95);
+  color: rgba(255, 255, 255, 0.95);
   outline: none;
 }
 
@@ -2491,20 +2491,20 @@ body {
   align-items: center;
   flex-shrink: 0;
   padding: 0 0.25rem;
-  border-left: 1px solid rgba(201, 216, 230, 0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
   background: #090909;
 }
 
 .editor-workspace-close,
 .diff-workspace-close {
-  color: rgba(196, 202, 210, 0.66);
+  color: rgba(255, 255, 255, 0.42);
   width: 1.5rem;
   height: 1.5rem;
 }
 
 .editor-workspace-close:hover,
 .diff-workspace-close:hover {
-  color: rgba(244, 251, 255, 0.95);
+  color: rgba(255, 255, 255, 0.95);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -2516,8 +2516,8 @@ body {
   min-height: 33px;
   padding: 0 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: #252526;
-  color: rgba(170, 170, 170, 0.92);
+  background: #181818;
+  color: rgba(255, 255, 255, 0.68);
   font-size: 0.81rem;
   overflow: hidden;
   white-space: nowrap;
@@ -2532,7 +2532,7 @@ body {
 }
 
 .editor-workspace-inner > [data-slot="tabs"] {
-  background: #252526;
+  background: #181818;
 }
 
 .editor-path-segment,
