@@ -2043,6 +2043,8 @@ body {
   border-radius: 999px;
   border: 2px solid rgba(0, 0, 0, 0);
   background-clip: padding-box;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
 }
 
 .diff-editor-surface .cm-scroller::-webkit-scrollbar-thumb:hover {
@@ -2901,6 +2903,8 @@ body {
 .editor-workspace .cm-scroller::-webkit-scrollbar-thumb {
   background: transparent;
   border-radius: 999px;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
 }
 
 .editor-workspace .cm-scroller {
