@@ -93,17 +93,21 @@ function estimateExpandedBodyHeight(file: GitChangedFile, category: GitDiffCateg
   return Math.max(180, Math.min(estimated, 1400));
 }
 
+const ALL_DIFFS_HEADER_HEIGHT = 44;
+const ALL_DIFFS_MOUNT_BUFFER = 320;
+
 function DiffEntrySection({
   entry,
   workspacePath,
-  scrollRoot,
-  priorityMount,
+  shouldMountDiff,
+  placeholderHeight,
   onOpenFile,
   onStageFile,
   onUnstageFile,
   onDiscardFile,
   onSaved,
   onEntryDirtyChange,
+  onMeasuredHeightChange,
   chromeState,
   onChromeChange,
   isCollapsed,
@@ -111,14 +115,15 @@ function DiffEntrySection({
 }: {
   entry: DiffEntry;
   workspacePath: string;
-  scrollRoot: HTMLDivElement | null;
-  priorityMount: boolean;
+  shouldMountDiff: boolean;
+  placeholderHeight: number;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
   onDiscardFile?: (path: string) => Promise<unknown> | void;
   onSaved?: () => Promise<void> | void;
   onEntryDirtyChange: (id: string, dirty: boolean) => void;
+  onMeasuredHeightChange: (id: string, height: number) => void;
   chromeState: DiffChromeState | null;
   onChromeChange: (id: string, chrome: DiffChromeState | null) => void;
   isCollapsed: boolean;
@@ -140,65 +145,27 @@ function DiffEntrySection({
     entry.file.additions,
     entry.file.deletions,
   ].join(":");
-  const hostRef = useRef<HTMLElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [isNearViewport, setIsNearViewport] = useState(false);
-  const [measuredHeight, setMeasuredHeight] = useState(() =>
-    estimateExpandedBodyHeight(entry.file, entry.category),
-  );
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    setMeasuredHeight((current) => Math.max(current, estimateExpandedBodyHeight(entry.file, entry.category)));
-  }, [entry.category, entry.file]);
-
-  useEffect(() => {
-    if (!scrollRoot || !hostRef.current || isCollapsed) {
-      setIsNearViewport(false);
-      return;
-    }
-
-    const buffer = 250;
-    const rootRect = scrollRoot.getBoundingClientRect();
-    const hostRect = hostRef.current.getBoundingClientRect();
-    const initiallyVisible =
-      hostRect.bottom >= rootRect.top - buffer && hostRect.top <= rootRect.bottom + buffer;
-    setIsNearViewport(initiallyVisible);
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const next = entries[0];
-        setIsNearViewport(next?.isIntersecting ?? false);
-      },
-      {
-        root: scrollRoot,
-        rootMargin: "250px 0px 250px 0px",
-        threshold: 0,
-      },
-    );
-
-    observer.observe(hostRef.current);
-    return () => observer.disconnect();
-  }, [isCollapsed, scrollRoot]);
-
-  useEffect(() => {
-    if (!bodyRef.current || isCollapsed) return;
+    if (!bodyRef.current || isCollapsed || !shouldMountDiff) return;
 
     const updateHeight = () => {
       const nextHeight = Math.max(bodyRef.current?.offsetHeight ?? 0, 1);
-      setMeasuredHeight((current) => (Math.abs(current - nextHeight) > 1 ? nextHeight : current));
+      onMeasuredHeightChange(entry.id, nextHeight);
     };
 
     updateHeight();
     const observer = new ResizeObserver(updateHeight);
     observer.observe(bodyRef.current);
     return () => observer.disconnect();
-  }, [isCollapsed, isNearViewport]);
+  }, [entry.id, isCollapsed, onMeasuredHeightChange, shouldMountDiff]);
 
-  const shouldMountDiff = !isCollapsed && (priorityMount || isNearViewport || isDirty);
+  const shouldRenderMountedDiff = !isCollapsed && (shouldMountDiff || isDirty);
 
   return (
-    <section ref={hostRef} className="all-diffs-item" data-collapsed={isCollapsed ? "true" : undefined}>
+    <section className="all-diffs-item" data-collapsed={isCollapsed ? "true" : undefined}>
       <button
         type="button"
         className="all-diffs-item-header"
@@ -311,7 +278,7 @@ function DiffEntrySection({
           </span>
         </span>
       </button>
-      {isCollapsed ? null : shouldMountDiff ? (
+      {isCollapsed ? null : shouldRenderMountedDiff ? (
         <div ref={bodyRef} className="all-diffs-item-body">
           <DiffEditor
             workspacePath={workspacePath}
@@ -334,7 +301,7 @@ function DiffEntrySection({
       ) : (
         <div
           className="all-diffs-item-body all-diffs-item-body-placeholder"
-          style={{ minHeight: `${measuredHeight}px` }}
+          style={{ minHeight: `${placeholderHeight}px` }}
         />
       )}
     </section>
@@ -344,14 +311,15 @@ function DiffEntrySection({
 function DiffGroup({
   entries,
   workspacePath,
-  scrollRoot,
-  priorityMountCount,
+  mountedEntryIds,
+  placeholderHeights,
   onOpenFile,
   onStageFile,
   onUnstageFile,
   onDiscardFile,
   onSaved,
   onEntryDirtyChange,
+  onMeasuredHeightChange,
   chromeState,
   onChromeChange,
   collapsedState,
@@ -359,14 +327,15 @@ function DiffGroup({
 }: {
   entries: DiffEntry[];
   workspacePath: string;
-  scrollRoot: HTMLDivElement | null;
-  priorityMountCount: number;
+  mountedEntryIds: Set<string>;
+  placeholderHeights: Record<string, number>;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
   onDiscardFile?: (path: string) => Promise<unknown> | void;
   onSaved?: () => Promise<void> | void;
   onEntryDirtyChange: (id: string, dirty: boolean) => void;
+  onMeasuredHeightChange: (id: string, height: number) => void;
   chromeState: Record<string, DiffChromeState | null>;
   onChromeChange: (id: string, chrome: DiffChromeState | null) => void;
   collapsedState: Record<string, boolean>;
@@ -377,20 +346,21 @@ function DiffGroup({
   return (
     <section className="all-diffs-group">
       <div className="all-diffs-group-body">
-        {entries.map((entry, index) => {
+        {entries.map((entry) => {
           return (
             <DiffEntrySection
               key={entry.id}
               entry={entry}
               workspacePath={workspacePath}
-              scrollRoot={scrollRoot}
-              priorityMount={index < priorityMountCount}
+              shouldMountDiff={mountedEntryIds.has(entry.id)}
+              placeholderHeight={placeholderHeights[entry.id] ?? estimateExpandedBodyHeight(entry.file, entry.category)}
               onOpenFile={onOpenFile}
               onStageFile={onStageFile}
               onUnstageFile={onUnstageFile}
               onDiscardFile={onDiscardFile}
               onSaved={onSaved}
               onEntryDirtyChange={onEntryDirtyChange}
+              onMeasuredHeightChange={onMeasuredHeightChange}
               chromeState={chromeState[entry.id] ?? null}
               onChromeChange={onChromeChange}
               isCollapsed={collapsedState[entry.id] ?? true}
@@ -438,7 +408,9 @@ export function AllDiffsView({
   const [dirtyState, setDirtyState] = useState<Record<string, boolean>>({});
   const [chromeState, setChromeState] = useState<Record<string, DiffChromeState | null>>({});
   const [collapsedState, setCollapsedState] = useState<Record<string, boolean>>({});
-  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+  const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
+  const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const [scrollState, setScrollState] = useState({ scrollTop: 0, clientHeight: 1 });
 
   useEffect(() => {
     onSelectionChange?.(null);
@@ -482,6 +454,29 @@ export function AllDiffsView({
         } else {
           nextState[entry.id] = null;
           changed = true;
+        }
+      }
+
+      const currentKeys = Object.keys(currentState);
+      const nextKeys = Object.keys(nextState);
+      if (currentKeys.length !== nextKeys.length) {
+        changed = true;
+      } else {
+        changed = currentKeys.some((key) => currentState[key] !== nextState[key]);
+      }
+
+      return changed ? nextState : currentState;
+    });
+  }, [entries]);
+
+  useEffect(() => {
+    setMeasuredHeights((currentState) => {
+      const nextState: Record<string, number> = {};
+      let changed = false;
+
+      for (const entry of entries) {
+        if (entry.id in currentState) {
+          nextState[entry.id] = currentState[entry.id];
         }
       }
 
@@ -600,6 +595,67 @@ export function AllDiffsView({
     });
   }, []);
 
+  const handleMeasuredHeightChange = useCallback((id: string, height: number) => {
+    setMeasuredHeights((currentState) => {
+      if (Math.abs((currentState[id] ?? 0) - height) <= 1) return currentState;
+      return {
+        ...currentState,
+        [id]: height,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    const scrollRoot = scrollRootRef.current;
+    if (!scrollRoot) return;
+
+    const sync = () => {
+      setScrollState((current) => {
+        const next = {
+          scrollTop: scrollRoot.scrollTop,
+          clientHeight: Math.max(scrollRoot.clientHeight, 1),
+        };
+        return current.scrollTop === next.scrollTop && current.clientHeight === next.clientHeight
+          ? current
+          : next;
+      });
+    };
+
+    sync();
+    scrollRoot.addEventListener("scroll", sync, { passive: true });
+    const observer = new ResizeObserver(sync);
+    observer.observe(scrollRoot);
+    return () => {
+      scrollRoot.removeEventListener("scroll", sync);
+      observer.disconnect();
+    };
+  }, []);
+
+  const mountedEntryIds = useMemo(() => {
+    const next = new Set<string>();
+    const viewportTop = scrollState.scrollTop - ALL_DIFFS_MOUNT_BUFFER;
+    const viewportBottom = scrollState.scrollTop + scrollState.clientHeight + ALL_DIFFS_MOUNT_BUFFER;
+    let offset = 0;
+
+    for (const entry of entries) {
+      const isCollapsed = collapsedState[entry.id] ?? true;
+      const bodyHeight = isCollapsed
+        ? 0
+        : measuredHeights[entry.id] ?? estimateExpandedBodyHeight(entry.file, entry.category);
+      const totalHeight = ALL_DIFFS_HEADER_HEIGHT + bodyHeight;
+      const top = offset;
+      const bottom = offset + totalHeight;
+
+      if (!isCollapsed && bottom >= viewportTop && top <= viewportBottom) {
+        next.add(entry.id);
+      }
+
+      offset = bottom;
+    }
+
+    return next;
+  }, [collapsedState, entries, measuredHeights, scrollState.clientHeight, scrollState.scrollTop]);
+
   if (entries.length === 0) {
     return (
       <div className="all-diffs-empty">
@@ -611,18 +667,19 @@ export function AllDiffsView({
 
   return (
     <div className="all-diffs-layout">
-      <div className="all-diffs-scroll" ref={setScrollRoot}>
+      <div className="all-diffs-scroll" ref={scrollRootRef}>
         <DiffGroup
           entries={unstagedEntries}
           workspacePath={workspacePath}
-          scrollRoot={scrollRoot}
-          priorityMountCount={2}
+          mountedEntryIds={mountedEntryIds}
+          placeholderHeights={measuredHeights}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
           onDiscardFile={onDiscardFile}
           onSaved={onSaved}
           onEntryDirtyChange={handleEntryDirtyChange}
+          onMeasuredHeightChange={handleMeasuredHeightChange}
           chromeState={chromeState}
           onChromeChange={handleChromeChange}
           collapsedState={collapsedState}
@@ -631,14 +688,15 @@ export function AllDiffsView({
         <DiffGroup
           entries={stagedEntries}
           workspacePath={workspacePath}
-          scrollRoot={scrollRoot}
-          priorityMountCount={0}
+          mountedEntryIds={mountedEntryIds}
+          placeholderHeights={measuredHeights}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
           onDiscardFile={onDiscardFile}
           onSaved={onSaved}
           onEntryDirtyChange={handleEntryDirtyChange}
+          onMeasuredHeightChange={handleMeasuredHeightChange}
           chromeState={chromeState}
           onChromeChange={handleChromeChange}
           collapsedState={collapsedState}

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   GitCapabilityResponse,
+  GitChangedFile,
   GitChangesStatus,
   GitCommitResult,
   GitDiffCategory,
@@ -21,12 +22,17 @@ export function gitGetStatus(workspacePath: string): Promise<GitChangesStatus> {
 
 export function gitGetDiffContents(
   workspacePath: string,
-  path: string,
+  file: GitChangedFile,
   category: GitDiffCategory,
-  oldPath?: string | null,
 ): Promise<GitDiffContents> {
   return invoke("git_get_diff_contents", {
-    payload: { workspacePath, path, oldPath, category },
+    payload: {
+      workspacePath,
+      path: file.path,
+      oldPath: file.oldPath,
+      category,
+      status: file.status,
+    },
   });
 }
 

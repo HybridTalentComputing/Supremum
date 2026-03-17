@@ -449,6 +449,16 @@ export function DiffEditor({
   }, [dirty]);
 
   useEffect(() => {
+    if (embedded) {
+      setScrollPreview({
+        scrollTop: 0,
+        scrollHeight: 1,
+        clientHeight: 1,
+        contentHeight: 1,
+      });
+      return;
+    }
+
     const scrollContainer = mainScrollRef.current;
     if (!scrollContainer) {
       setScrollPreview({
@@ -483,9 +493,14 @@ export function DiffEditor({
       scrollContainer.removeEventListener("scroll", sync);
       resizeObserver.disconnect();
     };
-  }, [contents, hideUnchanged, mergeState.view, preferredMode]);
+  }, [contents, embedded, hideUnchanged, mergeState.view, preferredMode]);
 
   useEffect(() => {
+    if (embedded) {
+      setOverviewHeight(1);
+      return;
+    }
+
     const overview = overviewRef.current;
     if (!overview) {
       setOverviewHeight(1);
@@ -503,7 +518,7 @@ export function DiffEditor({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [contents, hideUnchanged, preferredMode]);
+  }, [contents, embedded, hideUnchanged, preferredMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -522,7 +537,7 @@ export function DiffEditor({
       setError(null);
     }
 
-    gitGetDiffContents(workspacePath, file.path, category, file.oldPath)
+    gitGetDiffContents(workspacePath, file, category)
       .then((nextContents) => {
         if (cancelled) return;
         setContents(nextContents);
@@ -568,6 +583,8 @@ export function DiffEditor({
   }, [editable, file.path, onSaved, workspacePath]);
 
   useEffect(() => {
+    if (embedded) return;
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "s") {
         event.preventDefault();
@@ -577,7 +594,7 @@ export function DiffEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave]);
+  }, [embedded, handleSave]);
 
   const handleEdit = useCallback((value: string) => {
     editableModifiedRef.current = value;
@@ -618,6 +635,7 @@ export function DiffEditor({
   }, [mergeState.chunks, mergeState.view]);
 
   const overviewSegments = useMemo<OverviewSegment[]>(() => {
+    if (embedded) return [];
     if (!contents || !mergeState.leftView || !mergeState.rightView) return [];
 
     const totalHeight = Math.max(scrollPreview.contentHeight, 1);
@@ -668,6 +686,7 @@ export function DiffEditor({
     return segments;
   }, [
     contents,
+    embedded,
     mergeState.activeChunkIndex,
     mergeState.chunks,
     mergeState.leftView,
@@ -940,7 +959,7 @@ export function DiffEditor({
             />
           )}
         </div>
-        {!isLoading && !error && chunkCount > 0 ? (
+        {!embedded && !isLoading && !error && chunkCount > 0 ? (
           <div
             ref={overviewRef}
             className="diff-editor-overview"

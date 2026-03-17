@@ -23,6 +23,7 @@ pub struct GitDiffPayload {
     pub path: String,
     pub old_path: Option<String>,
     pub category: GitDiffCategory,
+    pub status: GitFileStatus,
 }
 
 #[derive(Deserialize)]
@@ -56,7 +57,7 @@ pub enum GitCapabilityStatus {
     GitError,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitFileStatus {
     Added,
@@ -230,22 +231,18 @@ pub fn git_get_diff_contents(payload: GitDiffPayload) -> Result<GitDiffContents,
     }
 
     let language = detect_language(&payload.path);
-    let status = git_get_status(GitWorkspacePayload {
-        workspace_path: payload.workspace_path.clone(),
-    })?;
+    let file = GitChangedFile {
+        path: payload.path.clone(),
+        old_path: payload.old_path.clone(),
+        status: payload.status,
+        additions: 0,
+        deletions: 0,
+    };
 
-    let file = match payload.category {
-        GitDiffCategory::Staged => status.staged.iter().find(|file| file.path == payload.path),
-        GitDiffCategory::Unstaged => status
-            .unstaged
-            .iter()
-            .chain(status.untracked.iter())
-            .find(|file| file.path == payload.path),
-    }
-    .cloned()
-    .ok_or_else(|| format!("No diff entry found for {}", payload.path))?;
-
-    let original_path = payload.old_path.or(file.old_path.clone()).unwrap_or_else(|| payload.path.clone());
+    let original_path = payload
+        .old_path
+        .or(file.old_path.clone())
+        .unwrap_or_else(|| payload.path.clone());
     let original_bytes = match payload.category {
         GitDiffCategory::Staged => read_original_for_staged(&workspace, &file, &original_path)?,
         GitDiffCategory::Unstaged => read_original_for_unstaged(&workspace, &file, &original_path)?,
