@@ -2086,7 +2086,8 @@ body {
 .diff-workspace-pathbar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   min-height: 2.2rem;
   padding: 0 0.85rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -2095,21 +2096,33 @@ body {
   font-size: 0.8rem;
 }
 
-.diff-workspace-pathbar > span {
+.diff-workspace-pathbar-main,
+.diff-workspace-pathbar-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.diff-workspace-pathbar-main {
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.diff-workspace-pathbar-meta {
+  gap: 0.42rem;
+  flex: none;
+}
+
+.diff-workspace-pathbar > span,
+.diff-workspace-pathbar-path {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.diff-workspace-pathbar-source {
-  flex: none;
-  padding: 0.1rem 0.38rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(194, 201, 208, 0.72);
-  font-size: 0.68rem;
-  font-weight: 700;
+.diff-workspace-pathbar .all-diffs-item-controls {
+  gap: 0.18rem;
 }
 
 .all-diffs-layout {

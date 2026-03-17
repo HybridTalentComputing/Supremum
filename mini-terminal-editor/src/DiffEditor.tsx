@@ -48,6 +48,20 @@ import {
 
 type DiffViewMode = "side-by-side" | "inline";
 
+export type DiffEditorChrome = {
+  categoryLabel: string;
+  statusCode: string;
+  editableLabel: string | null;
+  chunkCount: number;
+  currentChunkNumber: number;
+  mode: DiffViewMode;
+  hideUnchanged: boolean;
+  navigatePrevious: () => void;
+  navigateNext: () => void;
+  toggleMode: () => void;
+  toggleUnchanged: () => void;
+};
+
 type DiffEditorProps = {
   workspacePath: string;
   file: GitChangedFile;
@@ -61,19 +75,8 @@ type DiffEditorProps = {
   onDiscardFile?: (path: string) => Promise<unknown> | void;
   onSaved?: () => Promise<void> | void;
   onDirtyChange?: (dirty: boolean) => void;
-  onChromeChange?: (chrome: {
-    categoryLabel: string;
-    statusCode: string;
-    editableLabel: string | null;
-    chunkCount: number;
-    currentChunkNumber: number;
-    mode: DiffViewMode;
-    hideUnchanged: boolean;
-    navigatePrevious: () => void;
-    navigateNext: () => void;
-    toggleMode: () => void;
-    toggleUnchanged: () => void;
-  } | null) => void;
+  onChromeChange?: (chrome: DiffEditorChrome | null) => void;
+  chromePlacement?: "internal" | "external";
 };
 
 type MergeSurfaceState = {
@@ -392,6 +395,7 @@ export function DiffEditor({
   onSaved,
   onDirtyChange,
   onChromeChange,
+  chromePlacement = "internal",
 }: DiffEditorProps) {
   const [contents, setContents] = useState<GitDiffContents | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -835,7 +839,7 @@ export function DiffEditor({
 
   return (
     <div className={cn("diff-editor-shell", embedded && "diff-editor-shell-embedded")}>
-      {embedded ? null : (
+      {embedded || chromePlacement === "external" ? null : (
         <div className="diff-editor-toolbar">
           <div className="diff-editor-toolbar-state">
             <span className={cn("diff-editor-category", `is-${category}`)}>{sideLabels.categoryLabel}</span>
@@ -915,6 +919,7 @@ export function DiffEditor({
       )}
 
       {!embedded &&
+      chromePlacement !== "external" &&
       !isLoading &&
       !error &&
       contents &&

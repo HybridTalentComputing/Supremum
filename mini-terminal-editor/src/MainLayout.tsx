@@ -26,10 +26,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Circle,
+  Columns2,
   Eye,
   GitCompareArrows,
   FileText,
@@ -37,6 +40,7 @@ import {
   FoldVertical,
   FolderOpen,
   FolderClosed,
+  List,
   PanelLeft,
   Plus,
   Sparkles,
@@ -46,7 +50,7 @@ import {
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useGitChanges } from "./useGitChanges";
 import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
-import { DiffEditor } from "./DiffEditor";
+import { DiffEditor, type DiffEditorChrome } from "./DiffEditor";
 import { AllDiffsView } from "./AllDiffsView";
 import { getDiffFileName, getDiffSideLabels, getDiffTabLabel } from "./diffPresentation";
 
@@ -307,6 +311,7 @@ export function MainLayout() {
   const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
+  const [diffChromeState, setDiffChromeState] = useState<Record<string, DiffEditorChrome | null>>({});
   const [allDiffsCollapseRequest, setAllDiffsCollapseRequest] = useState(0);
   const [allDiffsExpandRequest, setAllDiffsExpandRequest] = useState(0);
   const [allDiffsAreCollapsed, setAllDiffsAreCollapsed] = useState(true);
@@ -855,6 +860,8 @@ export function MainLayout() {
     activeDiffTab?.kind === "file"
       ? { file: activeDiffTab.file, category: activeDiffTab.category }
       : null;
+  const activeDiffChrome =
+    activeDiffTab?.kind === "file" ? (diffChromeState[activeDiffTab.id] ?? null) : null;
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
       ? (editorViewModes[activeTab.id] ?? "preview")
@@ -888,6 +895,19 @@ export function MainLayout() {
       ))}
     </div>
   ) : null;
+
+  const handleDiffChromeChange = useCallback((tabId: string, chrome: DiffEditorChrome | null) => {
+    setDiffChromeState((current) => {
+      if ((current[tabId] ?? null) === chrome) return current;
+      if (chrome === null) {
+        if (!(tabId in current)) return current;
+        const next = { ...current };
+        delete next[tabId];
+        return next;
+      }
+      return { ...current, [tabId]: chrome };
+    });
+  }, []);
 
   return (
     <div className="main-layout-shell">
@@ -1510,25 +1530,130 @@ export function MainLayout() {
                               <div className="diff-workspace-pathbar">
                                 {activeDiffSelection ? (
                                   <>
-                                    <EditorFileIcon path={activeDiffSelection.file.path} />
-                                    <span>
-                                      {activeDiffSelection.file.oldPath ? `${activeDiffSelection.file.oldPath} → ` : ""}
-                                      {activeDiffSelection.file.path}
-                                    </span>
-                                    <span className="diff-workspace-pathbar-source">
-                                      {getDiffSideLabels(activeDiffSelection.file, activeDiffSelection.category).tabSource}
-                                    </span>
+                                    <div className="diff-workspace-pathbar-main">
+                                      <EditorFileIcon path={activeDiffSelection.file.path} />
+                                      <span className="diff-workspace-pathbar-path">
+                                        {activeDiffSelection.file.oldPath ? `${activeDiffSelection.file.oldPath} → ` : ""}
+                                        {activeDiffSelection.file.path}
+                                      </span>
+                                    </div>
+                                    {activeDiffChrome ? (
+                                      <div className="diff-workspace-pathbar-meta">
+                                        <span className={cn("diff-editor-category", `is-${activeDiffSelection.category}`)}>
+                                          {activeDiffChrome.categoryLabel}
+                                        </span>
+                                        <span className="all-diffs-item-separator">•</span>
+                                        <span className={cn("diff-editor-status-code", `is-${activeDiffSelection.file.status}`)}>
+                                          {activeDiffChrome.statusCode}
+                                        </span>
+                                        {activeDiffChrome.editableLabel ? (
+                                          <>
+                                            <span className="all-diffs-item-separator">•</span>
+                                            <span
+                                              className="diff-editor-edit-state"
+                                              data-dirty={diffDirtyState[activeDiffTab.id] ? "true" : undefined}
+                                            >
+                                              {activeDiffChrome.editableLabel}
+                                            </span>
+                                          </>
+                                        ) : null}
+                                        <span className="all-diffs-item-controls">
+                                          <span className="diff-editor-chunk-count">
+                                            {activeDiffChrome.currentChunkNumber}/{activeDiffChrome.chunkCount || 0}
+                                          </span>
+                                          <Tooltip>
+                                            <TooltipTrigger
+                                              render={
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon-xs"
+                                                  className="diff-editor-action"
+                                                  disabled={activeDiffChrome.chunkCount === 0}
+                                                  onClick={activeDiffChrome.navigatePrevious}
+                                                >
+                                                  <ChevronUp className="size-3.5" />
+                                                </Button>
+                                              }
+                                            />
+                                            <TooltipContent>Previous change</TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger
+                                              render={
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon-xs"
+                                                  className="diff-editor-action"
+                                                  disabled={activeDiffChrome.chunkCount === 0}
+                                                  onClick={activeDiffChrome.navigateNext}
+                                                >
+                                                  <ChevronDown className="size-3.5" />
+                                                </Button>
+                                              }
+                                            />
+                                            <TooltipContent>Next change</TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger
+                                              render={
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon-xs"
+                                                  className="diff-editor-action"
+                                                  data-active="true"
+                                                  onClick={activeDiffChrome.toggleMode}
+                                                >
+                                                  {activeDiffChrome.mode === "inline" ? (
+                                                    <List className="size-3.5" />
+                                                  ) : (
+                                                    <Columns2 className="size-3.5" />
+                                                  )}
+                                                </Button>
+                                              }
+                                            />
+                                            <TooltipContent>
+                                              {activeDiffChrome.mode === "inline"
+                                                ? "Switch to side by side diff"
+                                                : "Switch to inline diff"}
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger
+                                              render={
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon-xs"
+                                                  className="diff-editor-action"
+                                                  data-active={activeDiffChrome.hideUnchanged ? "true" : undefined}
+                                                  onClick={activeDiffChrome.toggleUnchanged}
+                                                >
+                                                  <FoldVertical className="size-3.5" />
+                                                </Button>
+                                              }
+                                            />
+                                            <TooltipContent>
+                                              {activeDiffChrome.hideUnchanged
+                                                ? "Show unchanged lines"
+                                                : "Hide unchanged lines"}
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </span>
+                                      </div>
+                                    ) : null}
                                   </>
                                 ) : (
                                 <>
-                                  <EditorFileIcon path={activeDiffTab.file.path} />
-                                  <span>
-                                    {activeDiffTab.file.oldPath ? `${activeDiffTab.file.oldPath} → ` : ""}
-                                    {activeDiffTab.file.path}
-                                  </span>
-                                  <span className="diff-workspace-pathbar-source">
-                                    {getDiffSideLabels(activeDiffTab.file, activeDiffTab.category).tabSource}
-                                  </span>
+                                  <div className="diff-workspace-pathbar-main">
+                                    <EditorFileIcon path={activeDiffTab.file.path} />
+                                    <span className="diff-workspace-pathbar-path">
+                                      {activeDiffTab.file.oldPath ? `${activeDiffTab.file.oldPath} → ` : ""}
+                                      {activeDiffTab.file.path}
+                                    </span>
+                                  </div>
                                 </>
                                 )}
                               </div>
@@ -1558,11 +1683,15 @@ export function MainLayout() {
                                 file={activeDiffTab.file}
                                 category={activeDiffTab.category}
                                 refreshToken={git.refreshToken}
+                                chromePlacement="external"
                                 onOpenFile={handleOpenDiffFile}
                                 onStageFile={git.stageFile}
                                 onUnstageFile={git.unstageFile}
                                 onDiscardFile={git.discardFile}
                                 onSaved={() => git.refresh({ silent: true })}
+                                onChromeChange={(chrome) => {
+                                  handleDiffChromeChange(activeDiffTab.id, chrome);
+                                }}
                                 onDirtyChange={(dirty) => {
                                   setDiffTabDirty(activeDiffTab.id, dirty);
                                 }}
