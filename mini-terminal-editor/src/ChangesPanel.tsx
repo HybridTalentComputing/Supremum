@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { openExternalUrl } from "./gitApi";
 import { useFileIconUrl } from "./fileIcons";
@@ -326,13 +327,23 @@ export function ChangesPanel({
   const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
 
   const handleDiscardFile = async (path: string) => {
-    const confirmed = window.confirm(`Discard changes for "${path}"?`);
+    const confirmed = await confirm(`Discard changes for "${path}"?`, {
+      title: "Subset",
+      kind: "warning",
+      okLabel: "OK",
+      cancelLabel: "Cancel",
+    });
     if (!confirmed) return;
     await git.discardFile(path);
   };
 
   const handleDiscardAll = async () => {
-    const confirmed = window.confirm("Discard all unstaged changes and remove untracked files?");
+    const confirmed = await confirm("Discard all unstaged changes and remove untracked files?", {
+      title: "Subset",
+      kind: "warning",
+      okLabel: "OK",
+      cancelLabel: "Cancel",
+    });
     if (!confirmed) return;
     await git.discardAll();
   };

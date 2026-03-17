@@ -36,6 +36,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import type { FileNode } from "./fileTreeTypes";
 import { getFileIconUrl } from "./fileTreeTypes";
@@ -580,7 +581,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     const msg = hasDir
       ? `删除 ${ids.length} 个项目（含文件夹，将递归删除）？`
       : `删除 ${ids.length} 个文件？`;
-    if (!window.confirm(msg)) return;
+    if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       for (let i = 0; i < ids.length; i++) {
         await invokeDelete(workspacePath, ids[i], nodes[i].data.isDir);
@@ -640,7 +641,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
   const doDelete = useCallback(async (path: string, isDir: boolean) => {
     const msg = isDir ? "删除文件夹（将递归删除）？" : "删除文件？";
-    if (!window.confirm(msg)) return;
+    if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       await invokeDelete(workspacePath, path, isDir);
       await refreshDir(parentOf(path));

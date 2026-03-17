@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open } from "@tauri-apps/plugin-dialog";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -499,66 +499,81 @@ export function MainLayout() {
     );
   };
 
-  const handleCloseTab = (tabId: string) => {
-    setOpenTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
-      if (tabIndex === -1) return currentTabs;
+  const handleCloseTab = useCallback((tabId: string) => {
+    void (async () => {
+      const targetTab = openTabs.find((tab) => tab.id === tabId);
+      if (!targetTab) return;
 
-      const targetTab = currentTabs[tabIndex];
       const isDirty = targetTab.content !== targetTab.savedContent;
-      const targetPath = targetTab.path;
-      if (isDirty && !window.confirm(`"${getTabName(targetPath)}" 尚未保存，确认关闭？`)) {
-        return currentTabs;
+      if (isDirty) {
+        const confirmed = await confirm(`"${getTabName(targetTab.path)}" 尚未保存，确认关闭？`, {
+          title: "Subset",
+          kind: "warning",
+          okLabel: "OK",
+          cancelLabel: "Cancel",
+        });
+        if (!confirmed) return;
       }
 
-      const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
-      setActiveTabId((currentActiveId) => {
-        if (currentActiveId !== tabId) return currentActiveId;
-        if (nextTabs.length === 0) return null;
-        return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
+      setOpenTabs((currentTabs) => {
+        const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+        if (tabIndex === -1) return currentTabs;
+
+        const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+        setActiveTabId((currentActiveId) => {
+          if (currentActiveId !== tabId) return currentActiveId;
+          if (nextTabs.length === 0) return null;
+          return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
+        });
+        setEditorViewModes((currentModes) => {
+          if (!(tabId in currentModes)) return currentModes;
+          const nextModes = { ...currentModes };
+          delete nextModes[tabId];
+          return nextModes;
+        });
+        if (nextTabs.length === 0) {
+          setActiveWorkspace(diffTabs.length > 0 ? "diff" : "agent");
+        }
+        return nextTabs;
       });
-      setEditorViewModes((currentModes) => {
-        if (!(tabId in currentModes)) return currentModes;
-        const nextModes = { ...currentModes };
-        delete nextModes[tabId];
-        return nextModes;
-      });
-      if (nextTabs.length === 0) {
-        setActiveWorkspace(diffTabs.length > 0 ? "diff" : "agent");
-      }
-      return nextTabs;
-    });
-  };
+    })();
+  }, [diffTabs.length, openTabs]);
 
   const handleCloseDiffTab = useCallback((tabId: string) => {
-    const targetTab = diffTabs.find((tab) => tab.id === tabId);
-    if (!targetTab) return;
+    void (async () => {
+      const targetTab = diffTabs.find((tab) => tab.id === tabId);
+      if (!targetTab) return;
 
-    if (diffDirtyState[tabId]) {
-      const label = targetTab.kind === "all" ? "All Changes" : getDiffFileName(targetTab.file.path);
-      if (!window.confirm(`"${label}" has unsaved changes. Close it anyway?`)) {
-        return;
+      if (diffDirtyState[tabId]) {
+        const label = targetTab.kind === "all" ? "All Changes" : getDiffFileName(targetTab.file.path);
+        const confirmed = await confirm(`"${label}" has unsaved changes. Close it anyway?`, {
+          title: "Subset",
+          kind: "warning",
+          okLabel: "OK",
+          cancelLabel: "Cancel",
+        });
+        if (!confirmed) return;
       }
-    }
 
-    setDiffTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
-      if (tabIndex === -1) return currentTabs;
+      setDiffTabs((currentTabs) => {
+        const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+        if (tabIndex === -1) return currentTabs;
 
-      const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
-      setActiveDiffTabId((currentActiveId) => {
-        if (currentActiveId !== tabId) return currentActiveId;
-        if (nextTabs.length === 0) return null;
-        return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
+        const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+        setActiveDiffTabId((currentActiveId) => {
+          if (currentActiveId !== tabId) return currentActiveId;
+          if (nextTabs.length === 0) return null;
+          return nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0].id;
+        });
+
+        if (nextTabs.length === 0) {
+          setActiveWorkspace(openTabs.length > 0 ? "editor" : "agent");
+        }
+
+        return nextTabs;
       });
-
-      if (nextTabs.length === 0) {
-        setActiveWorkspace(openTabs.length > 0 ? "editor" : "agent");
-      }
-
-      return nextTabs;
-    });
-    setDiffTabDirty(tabId, false);
+      setDiffTabDirty(tabId, false);
+    })();
   }, [diffDirtyState, diffTabs, openTabs.length, setDiffTabDirty]);
 
   const handleCreateTerminal = useCallback(() => {
