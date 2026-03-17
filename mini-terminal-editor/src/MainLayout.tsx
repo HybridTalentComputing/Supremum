@@ -314,9 +314,13 @@ export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
+  const activeDiffTabForPolling = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
   const git = useGitChanges({
     workspacePath,
-    active: Boolean(workspacePath) && activeSidebarTab === "changes",
+    active:
+      Boolean(workspacePath) &&
+      activeSidebarTab === "changes" &&
+      !(activeWorkspace === "diff" && activeDiffTabForPolling?.kind === "all"),
   });
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
@@ -846,7 +850,7 @@ export function MainLayout() {
   }, [activeAgentTerminalId, terminalTabs]);
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? null;
-  const activeDiffTab = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
+  const activeDiffTab = activeDiffTabForPolling;
   const activeDiffSelection =
     activeDiffTab?.kind === "file"
       ? { file: activeDiffTab.file, category: activeDiffTab.category }

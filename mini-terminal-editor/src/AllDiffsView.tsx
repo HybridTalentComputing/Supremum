@@ -97,6 +97,7 @@ function DiffEntrySection({
   entry,
   workspacePath,
   scrollRoot,
+  priorityMount,
   onOpenFile,
   onStageFile,
   onUnstageFile,
@@ -111,6 +112,7 @@ function DiffEntrySection({
   entry: DiffEntry;
   workspacePath: string;
   scrollRoot: HTMLDivElement | null;
+  priorityMount: boolean;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
@@ -156,6 +158,13 @@ function DiffEntrySection({
       return;
     }
 
+    const buffer = 250;
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const hostRect = hostRef.current.getBoundingClientRect();
+    const initiallyVisible =
+      hostRect.bottom >= rootRect.top - buffer && hostRect.top <= rootRect.bottom + buffer;
+    setIsNearViewport(initiallyVisible);
+
     const observer = new IntersectionObserver(
       (entries) => {
         const next = entries[0];
@@ -163,7 +172,7 @@ function DiffEntrySection({
       },
       {
         root: scrollRoot,
-        rootMargin: "900px 0px 900px 0px",
+        rootMargin: "250px 0px 250px 0px",
         threshold: 0,
       },
     );
@@ -186,7 +195,7 @@ function DiffEntrySection({
     return () => observer.disconnect();
   }, [isCollapsed, isNearViewport]);
 
-  const shouldMountDiff = !isCollapsed && (isNearViewport || isDirty);
+  const shouldMountDiff = !isCollapsed && (priorityMount || isNearViewport || isDirty);
 
   return (
     <section ref={hostRef} className="all-diffs-item" data-collapsed={isCollapsed ? "true" : undefined}>
@@ -336,6 +345,7 @@ function DiffGroup({
   entries,
   workspacePath,
   scrollRoot,
+  priorityMountCount,
   onOpenFile,
   onStageFile,
   onUnstageFile,
@@ -350,6 +360,7 @@ function DiffGroup({
   entries: DiffEntry[];
   workspacePath: string;
   scrollRoot: HTMLDivElement | null;
+  priorityMountCount: number;
   onOpenFile?: (path: string) => Promise<void> | void;
   onStageFile?: (path: string) => Promise<unknown> | void;
   onUnstageFile?: (path: string) => Promise<unknown> | void;
@@ -366,13 +377,14 @@ function DiffGroup({
   return (
     <section className="all-diffs-group">
       <div className="all-diffs-group-body">
-        {entries.map((entry) => {
+        {entries.map((entry, index) => {
           return (
             <DiffEntrySection
               key={entry.id}
               entry={entry}
               workspacePath={workspacePath}
               scrollRoot={scrollRoot}
+              priorityMount={index < priorityMountCount}
               onOpenFile={onOpenFile}
               onStageFile={onStageFile}
               onUnstageFile={onUnstageFile}
@@ -604,6 +616,7 @@ export function AllDiffsView({
           entries={unstagedEntries}
           workspacePath={workspacePath}
           scrollRoot={scrollRoot}
+          priorityMountCount={2}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
@@ -619,6 +632,7 @@ export function AllDiffsView({
           entries={stagedEntries}
           workspacePath={workspacePath}
           scrollRoot={scrollRoot}
+          priorityMountCount={0}
           onOpenFile={onOpenFile}
           onStageFile={onStageFile}
           onUnstageFile={onUnstageFile}
