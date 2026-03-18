@@ -2739,6 +2739,63 @@ body {
   scrollbar-color: rgba(120, 120, 120, 0.72) rgba(255, 255, 255, 0.03);
 }
 
+.image-preview-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #252526;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(120, 130, 142, 0.82) rgba(255, 255, 255, 0.03);
+}
+
+.image-preview-shell::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.image-preview-shell::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.image-preview-shell::-webkit-scrollbar-thumb {
+  background: rgba(120, 130, 142, 0.82);
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0);
+  background-clip: padding-box;
+}
+
+.image-preview-shell::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 164, 177, 0.9);
+}
+
+.image-preview-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 2rem;
+}
+
+.image-preview-media {
+  display: block;
+  max-width: min(100%, 96rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.image-preview-empty {
+  margin: auto;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.9rem;
+}
+
 .markdown-preview {
   width: min(52rem, 100%);
   min-width: 0;

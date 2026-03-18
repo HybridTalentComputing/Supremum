@@ -4,6 +4,7 @@
 
 mod git_backend;
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git_backend::{
     git_commit, git_discard_all, git_discard_file, git_get_capability, git_get_diff_contents,
     git_get_status, git_init_repository, git_stage_all, git_stage_file, git_unstage_all,
@@ -156,6 +157,38 @@ fn read_file(payload: ReadFilePayload) -> Result<String, String> {
         return Err("path is not a file".to_string());
     }
     fs::read_to_string(&file_path).map_err(|e| format!("failed to read file: {e}"))
+}
+
+fn image_mime_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("bmp") => "image/bmp",
+        Some("ico") => "image/x-icon",
+        Some("avif") => "image/avif",
+        Some("svg") => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+fn read_image_data_url(payload: ReadFilePayload) -> Result<String, String> {
+    let workspace = PathBuf::from(&payload.workspace_path);
+    let file_path = safe_workspace_child(&workspace, &payload.path)?;
+    if !file_path.is_file() {
+        return Err("path is not a file".to_string());
+    }
+
+    let bytes = fs::read(&file_path).map_err(|e| format!("failed to read file: {e}"))?;
+    let mime = image_mime_type(&file_path);
+    Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 #[tauri::command]
@@ -663,6 +696,7 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             read_file,
+            read_image_data_url,
             write_file,
             list_dir,
             create_file,

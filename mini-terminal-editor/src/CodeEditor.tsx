@@ -1,7 +1,8 @@
 /**
  * CodeEditor: CodeMirror 6 封装，支持多语言、深色主题、保存逻辑
  */
-import { useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
@@ -14,22 +15,21 @@ import { xml } from "@codemirror/lang-xml";
 import type { Extension } from "@codemirror/state";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import "@uiw/react-markdown-preview/markdown.css";
+import {
+  getFileExtensionForPreview,
+  getPreviewKind,
+  isPreviewablePath,
+} from "./filePreview";
 
 type CodeEditorProps = {
   path: string;
+  workspacePath: string | null;
   content: string;
   dirty?: boolean;
   mode?: "code" | "preview";
   onChange: (path: string, content: string) => void;
   onSave: (path: string, content: string) => void | Promise<void>;
 };
-
-const PREVIEWABLE_EXTENSIONS = new Set(["md", "markdown", "mdown", "mkd", "mkdn"]);
-
-export function isPreviewablePath(path: string) {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return PREVIEWABLE_EXTENSIONS.has(ext);
-}
 
 function getLanguageExtension(path: string): Extension | null {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -53,6 +53,7 @@ function getLanguageExtension(path: string): Extension | null {
 
 export function CodeEditor({
   path,
+  workspacePath,
   content,
   dirty = false,
   mode = "code",
@@ -79,9 +80,71 @@ export function CodeEditor({
 
   const langExt = getLanguageExtension(path);
   const extensions = [oneDark, ...(langExt ? [langExt] : [])];
+  const previewKind = getPreviewKind(path);
+  const previewExtension = getFileExtensionForPreview(path);
   const shouldRenderPreview = mode === "preview" && isPreviewablePath(path);
+  const [binaryImagePreviewSrc, setBinaryImagePreviewSrc] = useState<string | null>(null);
+  const imagePreviewSrc = useMemo(() => {
+    if (previewKind !== "image") return null;
+
+    if (previewExtension === "svg") {
+      const svgSource = content.trim();
+      if (!svgSource) return null;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgSource)}`;
+    }
+
+    return binaryImagePreviewSrc;
+  }, [binaryImagePreviewSrc, content, previewExtension, previewKind]);
+
+  useEffect(() => {
+    if (previewKind !== "image" || previewExtension === "svg") {
+      setBinaryImagePreviewSrc(null);
+      return;
+    }
+
+    if (!workspacePath || mode !== "preview") {
+      setBinaryImagePreviewSrc(null);
+      return;
+    }
+
+    let cancelled = false;
+    void invoke<string>("read_image_data_url", {
+      payload: { workspacePath, path },
+    })
+      .then((src) => {
+        if (!cancelled) {
+          setBinaryImagePreviewSrc(src);
+        }
+      })
+      .catch((error) => {
+        console.error(`Failed to load image preview for ${path}:`, error);
+        if (!cancelled) {
+          setBinaryImagePreviewSrc(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, path, previewExtension, previewKind, workspacePath]);
 
   if (shouldRenderPreview) {
+    if (previewKind === "image") {
+      return (
+        <div className="code-editor-shell">
+          <div className="image-preview-shell">
+            {imagePreviewSrc ? (
+              <div className="image-preview-stage">
+                <img src={imagePreviewSrc} alt={path} className="image-preview-media" draggable={false} />
+              </div>
+            ) : (
+              <div className="image-preview-empty">Image preview is unavailable.</div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="code-editor-shell">
         <div className="markdown-preview-shell">

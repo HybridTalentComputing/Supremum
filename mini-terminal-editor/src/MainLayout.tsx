@@ -9,7 +9,7 @@ import {
 import { TerminalComponent } from "./Terminal";
 import { EditorPanel } from "./EditorPanel";
 import { useWorkspace } from "./WorkspaceContext";
-import { CodeEditor, isPreviewablePath } from "./CodeEditor";
+import { CodeEditor } from "./CodeEditor";
 import { AGENT_PRESETS, type AgentPreset, type AgentPresetId } from "./agentPresets";
 import { useFileIconUrl } from "./fileIcons";
 import { invokeReadFile } from "./fileTreeOps";
@@ -53,6 +53,13 @@ import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
 import { DiffEditor, type DiffEditorChrome } from "./DiffEditor";
 import { AllDiffsView } from "./AllDiffsView";
 import { getDiffFileName, getDiffSideLabels, getDiffTabLabel } from "./diffPresentation";
+import {
+  getPreviewKind,
+  isPreviewablePath,
+  shouldReadFileContentForOpen,
+  supportsCodeViewForPath,
+  type PreviewKind,
+} from "./filePreview";
 
 type FileEditorTab = {
   id: string;
@@ -124,12 +131,14 @@ function EditorFileIcon({ path }: { path: string }) {
 
 function ActivePathBar({
   path,
-  previewable,
+  previewKind,
+  supportsCodeView,
   mode,
   onModeChange,
 }: {
   path: string;
-  previewable?: boolean;
+  previewKind?: PreviewKind | null;
+  supportsCodeView?: boolean;
   mode?: "code" | "preview";
   onModeChange?: (mode: "code" | "preview") => void;
 }) {
@@ -151,7 +160,7 @@ function ActivePathBar({
           <span className="editor-path-text editor-path-text-active">{fileName}</span>
         </div>
       </div>
-      {previewable ? (
+      {previewKind ? (
         <div className="editor-view-switch" data-tauri-drag-region="false">
           <Button
             type="button"
@@ -164,17 +173,19 @@ function ActivePathBar({
             <Eye className="size-3.5" />
             <span>Preview</span>
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="editor-view-switch-button"
-            data-active={mode === "code" ? "true" : undefined}
-            onClick={() => onModeChange?.("code")}
-          >
-            <FileCode2 className="size-3.5" />
-            <span>Code</span>
-          </Button>
+          {supportsCodeView ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="editor-view-switch-button"
+              data-active={mode === "code" ? "true" : undefined}
+              onClick={() => onModeChange?.("code")}
+            >
+              <FileCode2 className="size-3.5" />
+              <span>Code</span>
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -472,6 +483,11 @@ export function MainLayout() {
     if (!workspacePath) return;
 
     try {
+      if (!shouldReadFileContentForOpen(path)) {
+        handleOpenFile(path, "");
+        return;
+      }
+
       const content = await invokeReadFile(workspacePath, path);
       handleOpenFile(path, content);
     } catch (error) {
@@ -890,7 +906,9 @@ export function MainLayout() {
     activeDiffTab?.kind === "file" ? (diffChromeState[activeDiffTab.id] ?? null) : null;
   const activeEditorMode =
     activeTab && isPreviewablePath(activeTab.path)
-      ? (editorViewModes[activeTab.id] ?? "preview")
+      ? supportsCodeViewForPath(activeTab.path)
+        ? (editorViewModes[activeTab.id] ?? "preview")
+        : "preview"
       : "code";
   const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
@@ -1403,7 +1421,8 @@ export function MainLayout() {
                             </div>
                             <ActivePathBar
                               path={activeTab.path}
-                              previewable={isPreviewablePath(activeTab.path)}
+                              previewKind={getPreviewKind(activeTab.path)}
+                              supportsCodeView={supportsCodeViewForPath(activeTab.path)}
                               mode={activeEditorMode}
                               onModeChange={(mode) => {
                                 handleSetEditorViewMode(activeTab.id, mode);
@@ -1413,6 +1432,7 @@ export function MainLayout() {
                           <div className="editor-content">
                             <CodeEditor
                               path={activeTab.path}
+                              workspacePath={workspacePath}
                               content={activeTab.content}
                               dirty={activeTab.content !== activeTab.savedContent}
                               mode={activeEditorMode}

@@ -51,6 +51,7 @@ import {
   invokeReveal,
 } from "./fileTreeOps";
 import { useFileTreeDnd, type DragState } from "./fileTreeDnd";
+import { shouldReadFileContentForOpen } from "./filePreview";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -542,6 +543,11 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const handleActivate = useCallback(async (node: NodeApi<FileNode>) => {
     if (!node.data.isDir) {
       try {
+        if (!shouldReadFileContentForOpen(node.id)) {
+          onSelectFile(node.id, "");
+          return;
+        }
+
         const content = await invokeReadFile(workspacePath, node.id);
         onSelectFile(node.id, content);
       } catch (err) {
@@ -630,6 +636,11 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
   const doOpenFile  = useCallback(async (path: string) => {
     try {
+      if (!shouldReadFileContentForOpen(path)) {
+        onSelectFile(path, "");
+        return;
+      }
+
       const content = await invokeReadFile(workspacePath, path);
       onSelectFile(path, content);
     } catch (err) { window.alert(String(err)); }
