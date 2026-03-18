@@ -1794,13 +1794,18 @@ export function MainLayout() {
                           </div>
                         </Tabs>
                       ) : (
-                        <div className="editor-empty-shell">
-                          <WorkspaceEmptyState
-                            visual={<FolderOpen className="workspace-empty-icon" />}
-                            title="Editor is empty"
-                            description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
-                            meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
-                          />
+                        <div className="terminal-shell terminal-shell-empty">
+                          <div className="terminal-tabs-bar terminal-tabs-bar-empty">
+                            <div className="terminal-tabs-empty-label">No file open yet</div>
+                          </div>
+                          <div className="terminal-stage">
+                            <WorkspaceEmptyState
+                              visual={<FolderOpen className="workspace-empty-icon" />}
+                              title="Editor is empty"
+                              description="Choose a file from the Files panel when you want to edit. Until then, this space stays quiet and focused."
+                              meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2098,22 +2103,27 @@ export function MainLayout() {
                           </div>
                         </Tabs>
                       ) : (
-                        <div className="editor-empty-shell">
-                          <WorkspaceEmptyState
-                            visual={<GitCompareArrows className="workspace-empty-icon" />}
-                            title="Diff workspace is empty"
-                            description="Open a changed file or use Open Changes from Source Control when you want a repository-level diff view."
-                            meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
-                            actions={[
-                              {
-                                icon: <GitCompareArrows className="size-4" />,
-                                label: "Open Changes",
-                                hint: "review",
-                                onClick: handleOpenAllDiffs,
-                                emphasis: true,
-                              },
-                            ]}
-                          />
+                        <div className="terminal-shell terminal-shell-empty">
+                          <div className="terminal-tabs-bar terminal-tabs-bar-empty">
+                            <div className="terminal-tabs-empty-label">No diff yet</div>
+                          </div>
+                          <div className="terminal-stage">
+                            <WorkspaceEmptyState
+                              visual={<GitCompareArrows className="workspace-empty-icon" />}
+                              title="Diff workspace is empty"
+                              description="Open a changed file or use Open Changes from Source Control when you want a repository-level diff view."
+                              meta={workspaceDisplayPath ? `Workspace: ${workspaceDisplayPath}` : undefined}
+                              actions={[
+                                {
+                                  icon: <GitCompareArrows className="size-4" />,
+                                  label: "Open Changes",
+                                  hint: "review",
+                                  onClick: handleOpenAllDiffs,
+                                  emphasis: true,
+                                },
+                              ]}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
