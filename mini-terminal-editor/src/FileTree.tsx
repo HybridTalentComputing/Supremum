@@ -68,6 +68,7 @@ type ContextTarget =
 
 type CreateState = { parentDir: string; type: "file" | "dir" } | null;
 type OpenStateSnapshot = Record<string, boolean>;
+type RecentlyCreatedState = { parentDir: string; path: string } | null;
 const CREATE_PLACEHOLDER_PREFIX = "__create__:";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -131,6 +132,33 @@ function injectCreatePlaceholder(
   };
 
   return [placeholderNode, ...nextNodes];
+}
+
+function promoteRecentlyCreated(
+  nodes: FileNode[],
+  recent: RecentlyCreatedState,
+  parentPath = ""
+): FileNode[] {
+  const nextNodes = nodes.map((node) => {
+    if (!node.isDir || !node.children) return node;
+    const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+    return {
+      ...node,
+      children: promoteRecentlyCreated(node.children, recent, nodePath),
+    };
+  });
+
+  if (!recent || recent.parentDir !== parentPath) {
+    return nextNodes;
+  }
+
+  const index = nextNodes.findIndex((node) => node.id === recent.path);
+  if (index <= 0) return nextNodes;
+
+  const reordered = [...nextNodes];
+  const [createdNode] = reordered.splice(index, 1);
+  reordered.unshift(createdNode);
+  return reordered;
 }
 
 /** Get the best parent dir for toolbar create: selected node → focused node → root */
@@ -463,7 +491,9 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [contextTarget, setContextTarget] = useState<ContextTarget>({ type: "blank" });
   const [createState, setCreateState] = useState<CreateState>(null);
+  const [recentlyCreated, setRecentlyCreated] = useState<RecentlyCreatedState>(null);
   const [treeVersion, setTreeVersion] = useState(0);
+  const recentlyCreatedTimeoutRef = useRef<number | null>(null);
 
   const { treeData, loading, error, loadDir, loadRoot, refreshDir } = useTreeData(workspacePath);
 
@@ -629,6 +659,14 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
       else await invokeCreateFile(workspacePath, fullPath);
       setCreateState(null);
       await refreshDir(parentDir);
+      setRecentlyCreated({ parentDir, path: fullPath });
+      if (recentlyCreatedTimeoutRef.current !== null) {
+        window.clearTimeout(recentlyCreatedTimeoutRef.current);
+      }
+      recentlyCreatedTimeoutRef.current = window.setTimeout(() => {
+        setRecentlyCreated((current) => (current?.path === fullPath ? null : current));
+        recentlyCreatedTimeoutRef.current = null;
+      }, 1200);
     } catch (err) {
       setCreateState(null);
       window.alert(String(err));
@@ -637,9 +675,17 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
   const cancelCreate = useCallback(() => setCreateState(null), []);
   const displayTreeData = useMemo(
-    () => injectCreatePlaceholder(treeData, createState),
-    [treeData, createState],
+    () => promoteRecentlyCreated(injectCreatePlaceholder(treeData, createState), recentlyCreated),
+    [treeData, createState, recentlyCreated],
   );
+
+  useEffect(() => {
+    return () => {
+      if (recentlyCreatedTimeoutRef.current !== null) {
+        window.clearTimeout(recentlyCreatedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ─── Tree handlers ─────────────────────────────────────────────────────────
 
