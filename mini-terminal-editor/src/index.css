@@ -623,6 +623,21 @@ body {
   background: transparent;
 }
 
+.workspace-manager-switch + .workspace-manager-switch {
+  position: relative;
+}
+
+.workspace-manager-switch + .workspace-manager-switch::before {
+  content: "";
+  position: absolute;
+  left: -0.125rem;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
 .workspace-manager-switch:hover {
   color: rgba(255, 255, 255, 0.84);
   background: transparent;
@@ -692,6 +707,21 @@ body {
   color: rgba(255, 255, 255, 0.46);
   background: transparent;
   box-shadow: none;
+}
+
+.sidebar-workspace-tab + .sidebar-workspace-tab {
+  position: relative;
+}
+
+.sidebar-workspace-tab + .sidebar-workspace-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
 }
 
 .sidebar-workspace-tab::after {
