@@ -9,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   createContext,
@@ -67,6 +68,7 @@ type ContextTarget =
 
 type CreateState = { parentDir: string; type: "file" | "dir" } | null;
 type OpenStateSnapshot = Record<string, boolean>;
+const CREATE_PLACEHOLDER_PREFIX = "__create__:";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -75,18 +77,60 @@ type FileTreeCtx = {
   dragState: DragState | null;
   isDragging: (id: string) => boolean;
   startDrag: (ids: string[], clientY: number) => void;
+  submitCreate?: (name: string) => void;
+  cancelCreate?: () => void;
 };
 const FileTreeContext = createContext<FileTreeCtx>({
   setContextTarget: () => {},
   dragState: null,
   isDragging: () => false,
   startDrag: () => {},
+  submitCreate: undefined,
+  cancelCreate: undefined,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parentOf(id: string) {
   return id.includes("/") ? id.substring(0, id.lastIndexOf("/")) : "";
+}
+
+function getCreatePlaceholderId(parentDir: string, type: "file" | "dir") {
+  const name = `${CREATE_PLACEHOLDER_PREFIX}${type}`;
+  return parentDir ? `${parentDir}/${name}` : name;
+}
+
+function isCreatePlaceholderId(id: string) {
+  return (id.split("/").pop() ?? "").startsWith(CREATE_PLACEHOLDER_PREFIX);
+}
+
+function injectCreatePlaceholder(
+  nodes: FileNode[],
+  createState: CreateState,
+  parentPath = ""
+): FileNode[] {
+  const nextNodes = nodes.map((node) => {
+    if (!node.isDir || !node.children) return node;
+    const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+    return {
+      ...node,
+      children: injectCreatePlaceholder(node.children, createState, nodePath),
+    };
+  });
+
+  if (!createState || createState.parentDir !== parentPath) {
+    return nextNodes;
+  }
+
+  const placeholderName = `${CREATE_PLACEHOLDER_PREFIX}${createState.type}`;
+  const placeholderNode: FileNode = {
+    id: getCreatePlaceholderId(parentPath, createState.type),
+    name: placeholderName,
+    isDir: false,
+    children: undefined,
+  };
+
+  return [placeholderNode, ...nextNodes];
 }
 
 /** Get the best parent dir for toolbar create: selected node → focused node → root */
@@ -98,7 +142,7 @@ function resolveParentDir(tree: TreeApi<FileNode> | undefined): string {
   return node.data.isDir ? node.id : parentOf(node.id);
 }
 
-// ─── Inline create input (replaces window.prompt — unreliable in Tauri) ───────
+// ─── Inline create input ──────────────────────────────────────────────────────
 
 type CreateInputProps = {
   type: "file" | "dir";
@@ -106,12 +150,27 @@ type CreateInputProps = {
   onCancel: () => void;
 };
 
-function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
+function CreateInlineInput({ type, onSubmit, onCancel }: CreateInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const done = useRef(false);
+  const cancelByOutsidePointer = useRef(false);
 
-  useEffect(() => {
-    inputRef.current?.focus();
+  useLayoutEffect(() => {
+    const focusInput = () => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    };
+
+    focusInput();
+    const rafId = requestAnimationFrame(focusInput);
+    const timeoutId = window.setTimeout(focusInput, 0);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
   }, []);
 
   const commit = () => {
@@ -128,38 +187,46 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
     onCancel();
   };
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const input = inputRef.current;
+      const target = event.target;
+      if (!input || !(target instanceof Node)) return;
+      if (input.contains(target)) return;
+      cancelByOutsidePointer.current = true;
+      cancel();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, []);
+
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) cancel(); }}
-    >
-      <div className="w-56 rounded-xl border border-border/50 bg-background/95 p-4 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <p className="mb-3 text-sm font-semibold text-foreground">
-          {type === "dir" ? "New Folder" : "New File"}
-        </p>
-        <input
-          ref={inputRef}
-          className={cn(
-            "mb-4 w-full rounded-md border border-border/60 bg-input/30 px-3 py-1.5",
-            "text-sm text-foreground placeholder:text-muted-foreground",
-            "outline-none focus:border-ring focus:ring-1 focus:ring-ring/40"
-          )}
-          placeholder={type === "dir" ? "Folder name" : "File name"}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); commit(); }
-            if (e.key === "Escape") { e.preventDefault(); cancel(); }
-          }}
-        />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onMouseDown={(e) => { e.preventDefault(); cancel(); }}>
-            Cancel
-          </Button>
-          <Button size="sm" onMouseDown={(e) => { e.preventDefault(); commit(); }}>
-            Create
-          </Button>
-        </div>
-      </div>
-    </div>
+    <input
+      ref={inputRef}
+      autoFocus
+      className="file-tree-create-input"
+      placeholder={type === "dir" ? "Folder name" : "File name"}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+        }
+      }}
+      onBlur={() => {
+        window.setTimeout(() => {
+          if (done.current || cancelByOutsidePointer.current) return;
+          inputRef.current?.focus();
+        }, 0);
+      }}
+      onClick={(e) => e.stopPropagation()}
+    />
   );
 }
 
@@ -209,6 +276,10 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
   const ctx = useContext(FileTreeContext);
   const rowRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const isCreatePlaceholder = isCreatePlaceholderId(node.id);
+  const createType = isCreatePlaceholder
+    ? (((node.id.split("/").pop() ?? "").slice(CREATE_PLACEHOLDER_PREFIX.length)) as "file" | "dir")
+    : null;
 
   const isBeingDragged = ctx.isDragging(node.id);
   const isDropTarget = ctx.dragState?.dropTargetId === node.id && node.data.isDir;
@@ -255,17 +326,19 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
   }, [ctx, node]);
 
   const handleRowClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isCreatePlaceholder) return;
     node.handleClick(e);
     if (node.data.isDir) {
       node.toggle();
     }
-  }, [node]);
+  }, [isCreatePlaceholder, node]);
 
   return (
     <div
       ref={rowRef}
       style={style}
       className="file-tree-row"
+      data-creating={isCreatePlaceholder ? "true" : undefined}
       data-node-id={node.id}
       data-selected={node.isSelected ? "true" : undefined}
       data-drop-target={isDropTarget ? "true" : undefined}
@@ -274,6 +347,7 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
       onClick={handleRowClick}
       onPointerDown={handlePointerDown}
       onContextMenu={() => {
+        if (isCreatePlaceholder) return;
         ctx.setContextTarget(
           node.data.isDir
             ? { type: "folder", path: node.id, name: node.data.name }
@@ -300,14 +374,28 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
 
       {/* Icon */}
       <span className="file-tree-icon">
-        {node.data.isDir
+        {isCreatePlaceholder && createType
+          ? createType === "dir"
+            ? <Folder className="size-3.5 file-tree-icon-svg" />
+            : <FilePlus className="size-3.5 file-tree-icon-svg" />
+          : node.data.isDir
           ? <FolderIcon folderName={node.data.name} isOpen={node.isOpen} />
           : <FileIcon fileName={node.data.name} />
         }
       </span>
 
       {/* Name or rename input */}
-      {node.isEditing ? <RenameInput node={node} /> : (
+      {isCreatePlaceholder && createType ? (
+        <CreateInlineInput
+          type={createType}
+          onSubmit={(name) => {
+            ctx.submitCreate?.(name);
+          }}
+          onCancel={() => {
+            ctx.cancelCreate?.();
+          }}
+        />
+      ) : node.isEditing ? <RenameInput node={node} /> : (
         <span className="file-tree-name truncate">{node.data.name}</span>
       )}
     </div>
@@ -515,9 +603,20 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
   // ─── Create file/folder ────────────────────────────────────────────────────
 
-  const startCreate = useCallback((type: "file" | "dir", parentDir: string) => {
+  const startCreate = useCallback(async (type: "file" | "dir", parentDir: string) => {
+    if (parentDir) {
+      const node = treeRef.current?.get(parentDir) as NodeApi<FileNode> | null;
+      if (node?.data.isDir && node.data.children === null) {
+        await loadDir(parentDir);
+      }
+      treeRef.current?.open(parentDir);
+      requestAnimationFrame(() => {
+        syncOpenStateSnapshot();
+      });
+    }
+
     setCreateState({ type, parentDir });
-  }, []);
+  }, [loadDir, syncOpenStateSnapshot]);
 
   const submitCreate = useCallback(async (name: string) => {
     if (!createState) return;
@@ -537,10 +636,15 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   }, [createState, workspacePath, refreshDir]);
 
   const cancelCreate = useCallback(() => setCreateState(null), []);
+  const displayTreeData = useMemo(
+    () => injectCreatePlaceholder(treeData, createState),
+    [treeData, createState],
+  );
 
   // ─── Tree handlers ─────────────────────────────────────────────────────────
 
   const handleActivate = useCallback(async (node: NodeApi<FileNode>) => {
+    if (isCreatePlaceholderId(node.id)) return;
     if (!node.data.isDir) {
       try {
         if (!shouldReadFileContentForOpen(node.id)) {
@@ -706,6 +810,8 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
         dragState,
         isDragging,
         startDrag,
+        submitCreate,
+        cancelCreate,
       }}
     >
       <div className="file-tree-panel">
@@ -775,7 +881,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
               <Tree<FileNode>
                 key={treeKey}
                 ref={treeRef}
-                data={treeData}
+                data={displayTreeData}
                 idAccessor="id"
                 childrenAccessor={(d: FileNode): readonly FileNode[] | null => {
                   if (!d.isDir) return null;
@@ -845,15 +951,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
             </>}
           </ContextMenuContent>
         </ContextMenu>
-
-        {/* Inline create dialog */}
-        {createState && (
-          <CreateInputDialog
-            type={createState.type}
-            onSubmit={submitCreate}
-            onCancel={cancelCreate}
-          />
-        )}
 
         {/* Drag preview */}
         {dragState && (
