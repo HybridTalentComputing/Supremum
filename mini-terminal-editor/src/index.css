@@ -1568,9 +1568,56 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0 0.75rem 0.65rem;
+  padding: 0.45rem 0.75rem 0.65rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: #090909;
+}
+
+.changes-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem 0.4rem;
+  background: #090909;
+}
+
+.changes-list-toolbar-title {
+  min-width: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(202, 210, 218, 0.84);
+}
+
+.changes-list-toolbar-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+}
+
+.changes-list-toolbar-action {
+  color: rgba(188, 197, 206, 0.72);
+}
+
+.changes-list-toolbar-action:hover {
+  color: rgba(246, 248, 250, 0.96);
+}
+
+.changes-list-toolbar-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.36rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(236, 240, 244, 0.96);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .changes-commit-input {

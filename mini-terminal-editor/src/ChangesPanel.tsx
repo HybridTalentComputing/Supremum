@@ -325,6 +325,8 @@ export function ChangesPanel({
   const hasAnyChanges = Boolean(git.status?.hasChanges);
   const canCommit = Boolean(commitMessage.trim()) && hasAnyChanges && !isBusy;
   const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
+  const totalChangeCount =
+    (git.status?.staged.length ?? 0) + combinedChanges.length;
 
   const handleDiscardFile = async (path: string) => {
     const confirmed = await confirm(`Discard changes for "${path}"?`, {
@@ -474,40 +476,6 @@ export function ChangesPanel({
 
   return (
     <div className="changes-panel">
-      <div className="changes-repository-row">
-        <div className="changes-repository-main">
-          <FolderGit2 className="size-4" />
-          <span className="changes-repository-name">{workspaceName}</span>
-        </div>
-        <div className="changes-repository-meta">
-          <span className="changes-branch-badge">
-            <GitBranch className="size-3.5" />
-            {git.status?.branch ?? "HEAD"}
-          </span>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="changes-repository-action"
-                  aria-label="Refresh Source Control"
-                  onClick={() => {
-                    void git.refresh();
-                  }}
-                >
-                  <RefreshCw
-                    className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")}
-                  />
-                </Button>
-              }
-            />
-            <TooltipContent side="bottom">Refresh</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       <div className="changes-commit-box">
         <textarea
           value={commitMessage}
@@ -534,6 +502,22 @@ export function ChangesPanel({
             <Check className="size-3.5" />
             Commit
           </Button>
+        </div>
+      </div>
+
+      <div className="changes-list-toolbar">
+        <div className="changes-list-toolbar-title">Changes</div>
+        <div className="changes-list-toolbar-meta">
+          <IconActionButton
+            label="Refresh Source Control"
+            icon={<RefreshCw className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")} />}
+            className="changes-list-toolbar-action"
+            disabled={isBusy}
+            onClick={() => {
+              void git.refresh();
+            }}
+          />
+          <span className="changes-list-toolbar-count">{totalChangeCount}</span>
         </div>
       </div>
 
