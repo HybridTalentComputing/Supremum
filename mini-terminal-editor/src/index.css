@@ -1628,6 +1628,12 @@ body {
   flex: none;
 }
 
+.changes-list-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .changes-list-toolbar-action {
   color: rgba(188, 197, 206, 0.72);
 }

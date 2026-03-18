@@ -327,6 +327,7 @@ export function ChangesPanel({
   const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
   const totalChangeCount =
     (git.status?.staged.length ?? 0) + combinedChanges.length;
+  const mergeUnstagedSectionIntoToolbar = !hasStagedChanges && combinedChanges.length > 0;
 
   const handleDiscardFile = async (path: string) => {
     const confirmed = await confirm(`Discard changes for "${path}"?`, {
@@ -508,6 +509,20 @@ export function ChangesPanel({
       <div className="changes-list-toolbar">
         <div className="changes-list-toolbar-title">Changes</div>
         <div className="changes-list-toolbar-meta">
+          {mergeUnstagedSectionIntoToolbar ? (
+            <div className="changes-list-toolbar-actions">
+              {unstagedSectionActions.map((action) => (
+                <IconActionButton
+                  key={action.label}
+                  label={action.label}
+                  icon={action.icon}
+                  className="changes-list-toolbar-action"
+                  disabled={isBusy}
+                  onClick={action.onClick}
+                />
+              ))}
+            </div>
+          ) : null}
           <IconActionButton
             label="Refresh Source Control"
             icon={<RefreshCw className={cn("size-3.5", git.pendingAction === "refresh" && "animate-spin")} />}
@@ -581,26 +596,28 @@ export function ChangesPanel({
 
           {(combinedChanges.length ?? 0) > 0 ? (
             <section className="changes-section">
-              <div className="changes-section-header">
-                <div className="changes-section-title">
-                  <span>Changes</span>
-                </div>
-                <div className="changes-section-meta">
-                  <div className="changes-section-actions">
-                    {unstagedSectionActions.map((action) => (
-                      <IconActionButton
-                        key={action.label}
-                        label={action.label}
-                        icon={action.icon}
-                        className="changes-section-action"
-                        disabled={isBusy}
-                        onClick={action.onClick}
-                      />
-                    ))}
+              {!mergeUnstagedSectionIntoToolbar ? (
+                <div className="changes-section-header">
+                  <div className="changes-section-title">
+                    <span>Changes</span>
                   </div>
-                  <span className="changes-section-count">{combinedChanges.length}</span>
+                  <div className="changes-section-meta">
+                    <div className="changes-section-actions">
+                      {unstagedSectionActions.map((action) => (
+                        <IconActionButton
+                          key={action.label}
+                          label={action.label}
+                          icon={action.icon}
+                          className="changes-section-action"
+                          disabled={isBusy}
+                          onClick={action.onClick}
+                        />
+                      ))}
+                    </div>
+                    <span className="changes-section-count">{combinedChanges.length}</span>
+                  </div>
                 </div>
-              </div>
+              ) : null}
               <div className="changes-file-list">
                 {combinedChanges.map((file) => (
                   <FileRow
