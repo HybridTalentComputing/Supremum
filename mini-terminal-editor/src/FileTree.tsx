@@ -273,16 +273,16 @@ function FileIcon({ fileName, isOpen }: { fileName: string; isOpen?: boolean }) 
 
   if (!iconUrl) {
     // Show placeholder while loading
-    return <div className="size-3.5" style={{ width: 14, height: 14 }} />;
+    return <div className="size-4" style={{ width: 16, height: 16 }} />;
   }
 
   return (
     <img
       src={iconUrl}
       alt=""
-      className="size-3.5 file-tree-icon-img"
+      className="size-4 file-tree-icon-img"
       draggable={false}
-      style={{ width: 14, height: 14 }}
+      style={{ width: 16, height: 16 }}
     />
   );
 }
@@ -292,16 +292,16 @@ function FolderIcon({ folderName, isOpen }: { folderName: string; isOpen: boolea
 
   if (!iconUrl) {
     // Show placeholder while loading
-    return <div className="size-3.5" style={{ width: 14, height: 14 }} />;
+    return <div className="size-4" style={{ width: 16, height: 16 }} />;
   }
 
   return (
     <img
       src={iconUrl}
       alt=""
-      className="size-3.5 file-tree-icon-img"
+      className="size-4 file-tree-icon-img"
       draggable={false}
-      style={{ width: 14, height: 14 }}
+      style={{ width: 16, height: 16 }}
     />
   );
 }
@@ -409,8 +409,8 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
             onClick={(e) => { e.stopPropagation(); node.toggle(); }}
           >
             {node.isOpen
-              ? <ChevronDown className="size-3.5 file-tree-icon-svg" />
-              : <ChevronRight className="size-3.5 file-tree-icon-svg" />}
+              ? <ChevronDown className="size-4 file-tree-icon-svg" />
+              : <ChevronRight className="size-4 file-tree-icon-svg" />}
           </span>
         ) : (
           <span className="file-tree-spacer" />
@@ -420,8 +420,8 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
         <span className="file-tree-icon">
           {isCreatePlaceholder && createType
             ? createType === "dir"
-              ? <Folder className="size-3.5 file-tree-icon-svg" />
-              : <FilePlus className="size-3.5 file-tree-icon-svg" />
+              ? <Folder className="size-4 file-tree-icon-svg" />
+              : <FilePlus className="size-4 file-tree-icon-svg" />
             : node.data.isDir
             ? <FolderIcon folderName={node.data.name} isOpen={node.isOpen} />
             : <FileIcon fileName={node.data.name} />

@@ -27,6 +27,8 @@ body {
   background: #090909;
   color: #e6e6e6;
   font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 430;
+  font-variation-settings: "wght" 430;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* 让系统原生控件（如滚动条）使用深色主题 */
@@ -525,6 +527,7 @@ body {
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.8rem;
+  font-weight: 430;
   pointer-events: auto;
 }
 
@@ -544,6 +547,7 @@ body {
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.78rem;
+  font-weight: 430;
   pointer-events: auto;
 }
 
@@ -658,7 +662,7 @@ body {
 .workspace-manager-title {
   margin-left: 0.375rem;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 450;
 }
 
 .workspace-manager-count {
@@ -704,6 +708,7 @@ body {
   border-radius: 0;
   white-space: nowrap;
   font-size: 0.76rem;
+  font-weight: 430;
   color: rgba(255, 255, 255, 0.46);
   background: transparent;
   box-shadow: none;
@@ -977,7 +982,7 @@ body {
 
 .agent-preset-title {
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 500;
   color: inherit;
 }
 
@@ -1865,15 +1870,15 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
 }
 
 .changes-file-icon-img,
 .changes-file-icon-svg {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .changes-file-copy {
@@ -1893,7 +1898,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 430;
   color: rgba(235, 239, 242, 0.96);
 }
 
@@ -2525,14 +2530,14 @@ body {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .all-diffs-item-icon-img,
 .all-diffs-item-icon-svg {
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 1.05rem;
+  height: 1.05rem;
   flex: none;
 }
 
@@ -2549,7 +2554,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 460;
   color: rgba(239, 243, 247, 0.92);
 }
 
@@ -2774,7 +2779,7 @@ body {
 .diff-tab-label {
   min-width: 0;
   max-width: 100%;
-  font-weight: 600;
+  font-weight: 450;
 }
 
 .code-tab-dirty-indicator,
@@ -2788,8 +2793,8 @@ body {
 
 .editor-tab-icon-img,
 .editor-tab-icon-svg {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
 }
 
@@ -2878,6 +2883,7 @@ body {
   background: #181818;
   color: rgba(255, 255, 255, 0.68);
   font-size: 0.81rem;
+  font-weight: 430;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -3430,7 +3436,7 @@ body {
 .file-tree-row-main {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.32rem;
   min-width: 0;
 }
 .file-tree-row:hover {
@@ -3475,7 +3481,7 @@ body.file-tree-dragging * {
 }
 .file-tree-chevron,
 .file-tree-spacer {
-  width: 1rem;
+  width: 1.05rem;
   flex-shrink: 0;
 }
 .file-tree-icon {
@@ -3483,14 +3489,18 @@ body.file-tree-dragging * {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 1rem;
+  height: 1rem;
 }
 .file-tree-icon-img {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 .file-tree-icon-svg {
   stroke-width: 1.6;
+  width: 16px;
+  height: 16px;
 }
 .file-tree-icon-chevron {
   color: rgba(255, 255, 255, 0.42);
@@ -3502,7 +3512,8 @@ body.file-tree-dragging * {
   text-overflow: clip !important;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.9);
-  font-weight: 500;
+  font-weight: 430;
+  font-size: 0.92rem;
   letter-spacing: 0;
 }
 .file-tree-row[data-selected="true"] .file-tree-name {
