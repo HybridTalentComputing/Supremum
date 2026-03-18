@@ -64,7 +64,7 @@ type FileTreeProps = {
 type ContextTarget =
   | { type: "file"; path: string; name: string }
   | { type: "folder"; path: string; name: string }
-  | { type: "blank" };
+  | { type: "blank"; parentDir: string };
 
 type CreateState = { parentDir: string; type: "file" | "dir" } | null;
 type OpenStateSnapshot = Record<string, boolean>;
@@ -94,6 +94,14 @@ const FileTreeContext = createContext<FileTreeCtx>({
 
 function parentOf(id: string) {
   return id.includes("/") ? id.substring(0, id.lastIndexOf("/")) : "";
+}
+
+function resolveCreateParentFromNode(node: NodeApi<FileNode> | null) {
+  if (!node) return "";
+  if (node.data.isDir) {
+    return node.isOpen ? node.id : parentOf(node.id);
+  }
+  return parentOf(node.id);
 }
 
 function getCreatePlaceholderId(parentDir: string, type: "file" | "dir") {
@@ -374,8 +382,15 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
       data-dragging={isBeingDragged ? "true" : undefined}
       onClick={handleRowClick}
       onPointerDown={handlePointerDown}
-      onContextMenu={() => {
+      onContextMenu={(e) => {
         if (isCreatePlaceholder) return;
+        if (!(e.target as HTMLElement).closest(".file-tree-row-main")) {
+          ctx.setContextTarget({
+            type: "blank",
+            parentDir: resolveCreateParentFromNode(node as NodeApi<FileNode>),
+          });
+          return;
+        }
         ctx.setContextTarget(
           node.data.isDir
             ? { type: "folder", path: node.id, name: node.data.name }
@@ -383,49 +398,51 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
         );
       }}
     >
-      {/* Manual indent — we pass indent={0} to Tree so we control it here */}
-      <span style={{ width: node.level * 12, flexShrink: 0 }} />
+      <div className="file-tree-row-main">
+        {/* Manual indent — we pass indent={0} to Tree so we control it here */}
+        <span style={{ width: node.level * 12, flexShrink: 0 }} />
 
-      {/* Expand/collapse arrow */}
-      {node.data.isDir ? (
-        <span
-          className="file-tree-chevron file-tree-icon-chevron"
-          onClick={(e) => { e.stopPropagation(); node.toggle(); }}
-        >
-          {node.isOpen
-            ? <ChevronDown className="size-3.5 file-tree-icon-svg" />
-            : <ChevronRight className="size-3.5 file-tree-icon-svg" />}
+        {/* Expand/collapse arrow */}
+        {node.data.isDir ? (
+          <span
+            className="file-tree-chevron file-tree-icon-chevron"
+            onClick={(e) => { e.stopPropagation(); node.toggle(); }}
+          >
+            {node.isOpen
+              ? <ChevronDown className="size-3.5 file-tree-icon-svg" />
+              : <ChevronRight className="size-3.5 file-tree-icon-svg" />}
+          </span>
+        ) : (
+          <span className="file-tree-spacer" />
+        )}
+
+        {/* Icon */}
+        <span className="file-tree-icon">
+          {isCreatePlaceholder && createType
+            ? createType === "dir"
+              ? <Folder className="size-3.5 file-tree-icon-svg" />
+              : <FilePlus className="size-3.5 file-tree-icon-svg" />
+            : node.data.isDir
+            ? <FolderIcon folderName={node.data.name} isOpen={node.isOpen} />
+            : <FileIcon fileName={node.data.name} />
+          }
         </span>
-      ) : (
-        <span className="file-tree-spacer" />
-      )}
 
-      {/* Icon */}
-      <span className="file-tree-icon">
-        {isCreatePlaceholder && createType
-          ? createType === "dir"
-            ? <Folder className="size-3.5 file-tree-icon-svg" />
-            : <FilePlus className="size-3.5 file-tree-icon-svg" />
-          : node.data.isDir
-          ? <FolderIcon folderName={node.data.name} isOpen={node.isOpen} />
-          : <FileIcon fileName={node.data.name} />
-        }
-      </span>
-
-      {/* Name or rename input */}
-      {isCreatePlaceholder && createType ? (
-        <CreateInlineInput
-          type={createType}
-          onSubmit={(name) => {
-            ctx.submitCreate?.(name);
-          }}
-          onCancel={() => {
-            ctx.cancelCreate?.();
-          }}
-        />
-      ) : node.isEditing ? <RenameInput node={node} /> : (
-        <span className="file-tree-name truncate">{node.data.name}</span>
-      )}
+        {/* Name or rename input */}
+        {isCreatePlaceholder && createType ? (
+          <CreateInlineInput
+            type={createType}
+            onSubmit={(name) => {
+              ctx.submitCreate?.(name);
+            }}
+            onCancel={() => {
+              ctx.cancelCreate?.();
+            }}
+          />
+        ) : node.isEditing ? <RenameInput node={node} /> : (
+          <span className="file-tree-name truncate">{node.data.name}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -489,7 +506,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   const [openStateSnapshot, setOpenStateSnapshot] = useState<OpenStateSnapshot>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [contextTarget, setContextTarget] = useState<ContextTarget>({ type: "blank" });
+  const [contextTarget, setContextTarget] = useState<ContextTarget>({ type: "blank", parentDir: "" });
   const [createState, setCreateState] = useState<CreateState>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<RecentlyCreatedState>(null);
   const [treeVersion, setTreeVersion] = useState(0);
@@ -828,6 +845,26 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     setOpenStateSnapshot({});
   }, []);
 
+  const resolveBlankParentDir = useCallback((clientY: number) => {
+    const rows = Array.from(
+      containerRef.current?.querySelectorAll<HTMLElement>(".file-tree-row[data-node-id]") ?? []
+    );
+
+    let candidateId = "";
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect();
+      if (rect.top <= clientY) {
+        candidateId = row.dataset.nodeId ?? candidateId;
+      } else {
+        break;
+      }
+    }
+
+    if (!candidateId) return "";
+    const candidateNode = treeRef.current?.get(candidateId) as NodeApi<FileNode> | null;
+    return resolveCreateParentFromNode(candidateNode);
+  }, []);
+
   const toolbarNewFile = useCallback(() => {
     startCreate("file", resolveParentDir(treeRef.current));
   }, [startCreate]);
@@ -920,7 +957,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
               className="file-tree-container"
               onContextMenu={(e) => {
                 if (!(e.target as HTMLElement)?.closest(".file-tree-row")) {
-                  setContextTarget({ type: "blank" });
+                  setContextTarget({ type: "blank", parentDir: resolveBlankParentDir(e.clientY) });
                 }
               }}
             >
@@ -989,8 +1026,8 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
             })()}
             {contextTarget.type === "blank" && <>
               <ContextMenuLabel>Empty Area</ContextMenuLabel>
-              <ContextMenuItem onSelect={() => startCreate("file", "")}>New File</ContextMenuItem>
-              <ContextMenuItem onSelect={() => startCreate("dir",  "")}>New Folder</ContextMenuItem>
+              <ContextMenuItem onSelect={() => startCreate("file", contextTarget.parentDir)}>New File</ContextMenuItem>
+              <ContextMenuItem onSelect={() => startCreate("dir",  contextTarget.parentDir)}>New Folder</ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={handleRefresh}>Refresh</ContextMenuItem>
               <ContextMenuItem onSelect={handleCollapseAll}>Collapse All Folders</ContextMenuItem>
