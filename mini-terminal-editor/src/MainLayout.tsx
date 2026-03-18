@@ -266,7 +266,7 @@ function AgentPresetLauncher({
     <div className="agent-launcher-shell">
       <div className="agent-launcher">
         <div className="agent-launcher-header">
-          <h2 className="workspace-empty-title">Choose an AI agent</h2>
+          <h2 className="workspace-empty-title">Choose an AI Coding CLI</h2>
           <p className="workspace-empty-description">
             Pick a preset to launch directly into the corresponding CLI.
           </p>
@@ -915,7 +915,7 @@ export function MainLayout() {
   const totalChangedFiles = (git.status?.staged.length ?? 0) + git.combinedChanges.length;
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
   const agentPresetMenu = agentPresetMenuOpen ? (
-    <div className="agent-preset-menu" role="menu" aria-label="AI Agent presets">
+    <div className="agent-preset-menu" role="menu" aria-label="AI Coding CLI presets">
       {AGENT_PRESETS.map((preset) => (
         <button
           key={preset.id}
@@ -1032,7 +1032,7 @@ export function MainLayout() {
                     aria-pressed={activeWorkspace === "agent"}
                   >
                     <Sparkles className="size-3.5" />
-                    <span className="workspace-manager-title">AI Agent</span>
+                    <span className="workspace-manager-title">AI Coding CLI</span>
                     <span className="workspace-manager-count">{agentTerminalTabs.length}</span>
                   </Button>
                   <Button
@@ -1153,7 +1153,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="启动 AI Agent"
+                            aria-label="启动 AI Coding CLI"
                             aria-expanded={agentPresetMenuOpen}
                           >
                             <Plus className="size-3.5" />
@@ -1184,7 +1184,7 @@ export function MainLayout() {
                   ) : (
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">
-                        <div className="terminal-tabs-empty-label">Choose an AI agent</div>
+                        <div className="terminal-tabs-empty-label">Choose an AI Coding CLI</div>
                         <div
                           className="terminal-tabs-actions agent-preset-menu-anchor"
                           ref={agentPresetMenuRef}
@@ -1195,7 +1195,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="启动 AI Agent"
+                            aria-label="启动 AI Coding CLI"
                             aria-expanded={agentPresetMenuOpen}
                           >
                             <Plus className="size-3.5" />
