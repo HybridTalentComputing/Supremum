@@ -318,6 +318,7 @@ export function MainLayout() {
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
+  const previousSidebarTabRef = useRef<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
   const activeDiffTabForPolling = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
   const git = useGitChanges({
@@ -327,6 +328,16 @@ export function MainLayout() {
       activeSidebarTab === "changes" &&
       !(activeWorkspace === "diff" && activeDiffTabForPolling?.kind === "all"),
   });
+
+  useEffect(() => {
+    const previousSidebarTab = previousSidebarTabRef.current;
+    previousSidebarTabRef.current = activeSidebarTab;
+
+    if (!workspacePath) return;
+    if (activeSidebarTab !== "changes" || previousSidebarTab === "changes") return;
+
+    void git.refresh({ silent: true });
+  }, [activeSidebarTab, git.refresh, workspacePath]);
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
