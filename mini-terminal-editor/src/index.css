@@ -3129,6 +3129,18 @@ body {
   --color-prettylights-syntax-markup-heading: rgba(248, 248, 248, 0.98);
   --color-prettylights-syntax-markup-bold: rgba(248, 248, 248, 0.98);
   --color-prettylights-syntax-markup-italic: rgba(236, 236, 236, 0.92);
+  color: rgba(244, 244, 244, 0.94) !important;
+}
+
+.markdown-preview,
+.markdown-preview p,
+.markdown-preview li,
+.markdown-preview ul,
+.markdown-preview ol,
+.markdown-preview blockquote,
+.markdown-preview td,
+.markdown-preview th {
+  color: rgba(244, 244, 244, 0.94) !important;
 }
 
 .markdown-preview h1,
