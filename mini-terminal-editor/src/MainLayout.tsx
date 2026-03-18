@@ -533,7 +533,7 @@ export function MainLayout() {
 
       const isDirty = targetTab.content !== targetTab.savedContent;
       if (isDirty) {
-        const confirmed = await confirm(`"${getTabName(targetTab.path)}" 尚未保存，确认关闭？`, {
+        const confirmed = await confirm(`"${getTabName(targetTab.path)}" has unsaved changes. Close it anyway?`, {
           title: "Subset",
           kind: "warning",
           okLabel: "OK",
@@ -970,7 +970,7 @@ export function MainLayout() {
             className="app-titlebar-toggle"
             onClick={handleToggleSidebar}
             data-tauri-drag-region="false"
-            aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <PanelLeft className="size-3.5" />
           </Button>
@@ -1021,7 +1021,7 @@ export function MainLayout() {
           <div className="main-layout-terminal">
             <TooltipProvider delay={250}>
               <div className="workspace-manager-bar">
-                <div className="workspace-manager-list" role="tablist" aria-label="工作区切换">
+                <div className="workspace-manager-list" role="tablist" aria-label="Workspace switcher">
                   <Button
                     type="button"
                     variant="ghost"
@@ -1130,7 +1130,7 @@ export function MainLayout() {
                                           event.stopPropagation();
                                           handleCloseTerminal(tab.id);
                                         }}
-                                        aria-label={`关闭 ${tab.title}`}
+                                        aria-label={`Close ${tab.title}`}
                                       >
                                         <X className="size-3.5" />
                                       </span>
@@ -1153,7 +1153,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="启动 AI Coding CLI"
+                            aria-label="Launch AI Coding CLI"
                             aria-expanded={agentPresetMenuOpen}
                           >
                             <Plus className="size-3.5" />
@@ -1195,7 +1195,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="启动 AI Coding CLI"
+                            aria-label="Launch AI Coding CLI"
                             aria-expanded={agentPresetMenuOpen}
                           >
                             <Plus className="size-3.5" />
@@ -1254,7 +1254,7 @@ export function MainLayout() {
                                           event.stopPropagation();
                                           handleCloseTerminal(tab.id);
                                         }}
-                                        aria-label={`关闭 ${tab.title}`}
+                                        aria-label={`Close ${tab.title}`}
                                       >
                                         <X className="size-3.5" />
                                       </span>
@@ -1274,7 +1274,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={handleCreateTerminal}
-                            aria-label="新建终端"
+                            aria-label="New terminal"
                           >
                             <Plus className="size-3.5" />
                           </Button>
@@ -1312,7 +1312,7 @@ export function MainLayout() {
                             size="icon-xs"
                             className="terminal-tab-create"
                             onClick={handleCreateTerminal}
-                            aria-label="新建终端"
+                            aria-label="New terminal"
                           >
                             <Plus className="size-3.5" />
                           </Button>
@@ -1392,7 +1392,7 @@ export function MainLayout() {
                                                   event.stopPropagation();
                                                   handleCloseTab(tab.id);
                                                 }}
-                                                aria-label={`关闭 ${tabLabel}`}
+                                                aria-label={`Close ${tabLabel}`}
                                               >
                                                 <X className="size-3.5" />
                                               </span>
@@ -1413,7 +1413,7 @@ export function MainLayout() {
                                   size="icon-xs"
                                   className="code-workspace-close"
                                   onClick={() => setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal")}
-                                  aria-label="关闭编辑区"
+                                  aria-label="Close editor workspace"
                                 >
                                   <X className="size-3.5" />
                                 </Button>
@@ -1518,7 +1518,7 @@ export function MainLayout() {
                                                   event.stopPropagation();
                                                   handleCloseDiffTab(tab.id);
                                                 }}
-                                                aria-label={`关闭 ${tabLabel}`}
+                                                aria-label={`Close ${tabLabel}`}
                                               >
                                                 <X className="size-3.5" />
                                               </span>
@@ -1549,7 +1549,7 @@ export function MainLayout() {
                                               setAllDiffsCollapseRequest((current) => current + 1);
                                             }
                                           }}
-                                          aria-label={allDiffsAreCollapsed ? "展开所有文件" : "折叠所有文件"}
+                                          aria-label={allDiffsAreCollapsed ? "Expand all files" : "Collapse all files"}
                                         >
                                           <FoldVertical className="size-3.5" />
                                         </Button>
@@ -1566,7 +1566,7 @@ export function MainLayout() {
                                   size="icon-xs"
                                   className="diff-workspace-close"
                                   onClick={() => setActiveWorkspace(openTabs.length > 0 ? "editor" : "terminal")}
-                                  aria-label="关闭 Diff 工作区"
+                                  aria-label="Close diff workspace"
                                 >
                                   <X className="size-3.5" />
                                 </Button>

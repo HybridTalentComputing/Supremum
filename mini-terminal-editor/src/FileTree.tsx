@@ -135,7 +135,7 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
     >
       <div className="w-56 rounded-xl border border-border/50 bg-background/95 p-4 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <p className="mb-3 text-sm font-semibold text-foreground">
-          {type === "dir" ? "新建文件夹" : "新建文件"}
+          {type === "dir" ? "New Folder" : "New File"}
         </p>
         <input
           ref={inputRef}
@@ -144,7 +144,7 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
             "text-sm text-foreground placeholder:text-muted-foreground",
             "outline-none focus:border-ring focus:ring-1 focus:ring-ring/40"
           )}
-          placeholder={type === "dir" ? "文件夹名称" : "文件名称"}
+          placeholder={type === "dir" ? "Folder name" : "File name"}
           onKeyDown={(e) => {
             if (e.key === "Enter") { e.preventDefault(); commit(); }
             if (e.key === "Escape") { e.preventDefault(); cancel(); }
@@ -152,10 +152,10 @@ function CreateInputDialog({ type, onSubmit, onCancel }: CreateInputProps) {
         />
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onMouseDown={(e) => { e.preventDefault(); cancel(); }}>
-            取消
+            Cancel
           </Button>
           <Button size="sm" onMouseDown={(e) => { e.preventDefault(); commit(); }}>
-            确认
+            Create
           </Button>
         </div>
       </div>
@@ -585,8 +585,8 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   }: { ids: string[]; nodes: NodeApi<FileNode>[] }) => {
     const hasDir = nodes.some((n) => n.data.isDir);
     const msg = hasDir
-      ? `删除 ${ids.length} 个项目（含文件夹，将递归删除）？`
-      : `删除 ${ids.length} 个文件？`;
+      ? `Delete ${ids.length} item(s)? Folders will be removed recursively.`
+      : `Delete ${ids.length} file(s)?`;
     if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       for (let i = 0; i < ids.length; i++) {
@@ -651,7 +651,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
   }, []);
 
   const doDelete = useCallback(async (path: string, isDir: boolean) => {
-    const msg = isDir ? "删除文件夹（将递归删除）？" : "删除文件？";
+    const msg = isDir ? "Delete this folder recursively?" : "Delete this file?";
     if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       await invokeDelete(workspacePath, path, isDir);
@@ -714,25 +714,25 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
         <div className="file-tree-toolbar">
           <div className="file-tree-actions">
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={toolbarNewFile} title="新建文件">
+              onClick={toolbarNewFile} title="New file">
               <FilePlus className="size-4" />
             </Button>
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={toolbarNewDir} title="新建文件夹">
+              onClick={toolbarNewDir} title="New folder">
               <FolderPlus className="size-4" />
             </Button>
           </div>
           <div className="file-tree-actions">
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={() => setShowSearch((v) => !v)} title="搜索">
+              onClick={() => setShowSearch((v) => !v)} title="Search">
               <Search className="size-4" />
             </Button>
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={handleCollapseAll} title="折叠所有">
+              onClick={handleCollapseAll} title="Collapse all">
               <ChevronsUp className="size-4" />
             </Button>
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={handleRefresh} title="刷新">
+              onClick={handleRefresh} title="Refresh">
               <RefreshCw className="size-4" />
             </Button>
           </div>
@@ -745,7 +745,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
             <input
               autoFocus
               className="file-tree-search-input"
-              placeholder="搜索文件..."
+              placeholder="Search files..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
@@ -808,40 +808,40 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
             {contextTarget.type === "file" && (() => {
               const { path } = contextTarget;
               return <>
-                <ContextMenuLabel>文件</ContextMenuLabel>
-                <ContextMenuItem onSelect={() => doOpenFile(path)}>打开</ContextMenuItem>
+                <ContextMenuLabel>File</ContextMenuLabel>
+                <ContextMenuItem onSelect={() => doOpenFile(path)}>Open</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doRename(path)}>重命名</ContextMenuItem>
-                <ContextMenuItem onSelect={() => doDelete(path, false)}>删除</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doDelete(path, false)}>Delete</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doCopyPath(path)}>复制相对路径</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doCopyPath(path)}>Copy Relative Path</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doReveal(path)}>Reveal in Finder</ContextMenuItem>
               </>;
             })()}
             {contextTarget.type === "folder" && (() => {
               const { path } = contextTarget;
               return <>
-                <ContextMenuLabel>文件夹</ContextMenuLabel>
-                <ContextMenuItem onSelect={() => startCreate("file", path)}>新建文件</ContextMenuItem>
-                <ContextMenuItem onSelect={() => startCreate("dir",  path)}>新建文件夹</ContextMenuItem>
+                <ContextMenuLabel>Folder</ContextMenuLabel>
+                <ContextMenuItem onSelect={() => startCreate("file", path)}>New File</ContextMenuItem>
+                <ContextMenuItem onSelect={() => startCreate("dir",  path)}>New Folder</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doRename(path)}>重命名</ContextMenuItem>
-                <ContextMenuItem onSelect={() => doDelete(path, true)}>删除</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doDelete(path, true)}>Delete</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doCopyPath(path)}>复制相对路径</ContextMenuItem>
+                <ContextMenuItem onSelect={() => doCopyPath(path)}>Copy Relative Path</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doReveal(path)}>Reveal in Finder</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => refreshDir(path)}>刷新</ContextMenuItem>
-                <ContextMenuItem onSelect={handleCollapseAll}>折叠所有文件夹</ContextMenuItem>
+                <ContextMenuItem onSelect={() => refreshDir(path)}>Refresh</ContextMenuItem>
+                <ContextMenuItem onSelect={handleCollapseAll}>Collapse All Folders</ContextMenuItem>
               </>;
             })()}
             {contextTarget.type === "blank" && <>
-              <ContextMenuLabel>空白区域</ContextMenuLabel>
-              <ContextMenuItem onSelect={() => startCreate("file", "")}>新建文件</ContextMenuItem>
-              <ContextMenuItem onSelect={() => startCreate("dir",  "")}>新建文件夹</ContextMenuItem>
+              <ContextMenuLabel>Empty Area</ContextMenuLabel>
+              <ContextMenuItem onSelect={() => startCreate("file", "")}>New File</ContextMenuItem>
+              <ContextMenuItem onSelect={() => startCreate("dir",  "")}>New Folder</ContextMenuItem>
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={handleRefresh}>刷新</ContextMenuItem>
-              <ContextMenuItem onSelect={handleCollapseAll}>折叠所有文件夹</ContextMenuItem>
+              <ContextMenuItem onSelect={handleRefresh}>Refresh</ContextMenuItem>
+              <ContextMenuItem onSelect={handleCollapseAll}>Collapse All Folders</ContextMenuItem>
             </>}
           </ContextMenuContent>
         </ContextMenu>
@@ -870,7 +870,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
             <div className="file-tree-drag-preview-content">
               {dragState.dragIds.length === 1
                 ? dragState.dragIds[0].split("/").pop()
-                : `${dragState.dragIds.length} 个项目`}
+                : `${dragState.dragIds.length} items`}
             </div>
           </div>
         )}
