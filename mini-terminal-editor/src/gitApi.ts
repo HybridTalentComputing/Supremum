@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  GitBranchKind,
+  GitBranchList,
   GitCapabilityResponse,
   GitChangedFile,
   GitChangesStatus,
@@ -18,6 +20,26 @@ export function gitInitRepository(workspacePath: string): Promise<GitCapabilityR
 
 export function gitGetStatus(workspacePath: string): Promise<GitChangesStatus> {
   return invoke("git_get_status", { payload: { workspacePath } });
+}
+
+export function gitListBranches(workspacePath: string): Promise<GitBranchList> {
+  return invoke("git_list_branches", { payload: { workspacePath } });
+}
+
+export function gitCheckoutBranch(
+  workspacePath: string,
+  branch: string,
+  kind: GitBranchKind,
+): Promise<void> {
+  return invoke("git_checkout_branch", { payload: { workspacePath, branch, kind } });
+}
+
+export function gitCreateBranch(
+  workspacePath: string,
+  name: string,
+  from?: string | null,
+): Promise<void> {
+  return invoke("git_create_branch", { payload: { workspacePath, name, from } });
 }
 
 export function gitGetDiffContents(

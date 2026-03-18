@@ -40,6 +40,22 @@ pub struct GitCommitPayload {
     pub message: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCheckoutBranchPayload {
+    pub workspace_path: String,
+    pub branch: String,
+    pub kind: GitBranchKind,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCreateBranchPayload {
+    pub workspace_path: String,
+    pub name: String,
+    pub from: Option<String>,
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitDiffCategory {
@@ -66,6 +82,13 @@ pub enum GitFileStatus {
     Renamed,
     Copied,
     Untracked,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitBranchKind {
+    Local,
+    Remote,
 }
 
 #[derive(Clone, Serialize)]
@@ -110,6 +133,14 @@ pub struct GitDiffContents {
 pub struct GitCommitResult {
     pub hash: String,
     pub summary: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchList {
+    pub current: String,
+    pub local: Vec<String>,
+    pub remote: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -282,6 +313,80 @@ pub fn git_get_diff_contents(payload: GitDiffPayload) -> Result<GitDiffContents,
         is_binary: false,
         is_too_large: false,
     })
+}
+
+#[tauri::command]
+pub fn git_list_branches(payload: GitWorkspacePayload) -> Result<GitBranchList, String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+
+    let current = git_get_status(GitWorkspacePayload {
+        workspace_path: payload.workspace_path.clone(),
+    })?
+    .branch;
+
+    let local = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )?);
+    let remote = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--format=%(refname:short)", "refs/remotes"],
+    )?)
+    .into_iter()
+    .filter(|branch| !branch.contains("HEAD ->"))
+    .collect();
+
+    Ok(GitBranchList {
+        current,
+        local,
+        remote,
+    })
+}
+
+#[tauri::command]
+pub fn git_checkout_branch(payload: GitCheckoutBranchPayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+    let branch = payload.branch.trim();
+    if branch.is_empty() {
+        return Err("Branch name is required.".to_string());
+    }
+
+    match payload.kind {
+        GitBranchKind::Local => run_git_checked(&workspace, ["checkout", branch]).map(|_| ()),
+        GitBranchKind::Remote => {
+            let local_name = local_branch_name_from_remote(branch);
+            if local_branch_exists(&workspace, &local_name)? {
+                run_git_checked(&workspace, ["checkout", local_name.as_str()]).map(|_| ())
+            } else {
+                run_git_checked(
+                    &workspace,
+                    ["checkout", "-b", local_name.as_str(), "--track", branch],
+                )
+                .map(|_| ())
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn git_create_branch(payload: GitCreateBranchPayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+
+    let name = payload.name.trim();
+    if name.is_empty() {
+        return Err("Branch name is required.".to_string());
+    }
+    ensure_valid_branch_name(&workspace, name)?;
+
+    let from = payload.from.as_deref().map(str::trim).filter(|value| !value.is_empty());
+    if let Some(source) = from {
+        run_git_checked(&workspace, ["checkout", "-b", name, source]).map(|_| ())
+    } else {
+        run_git_checked(&workspace, ["checkout", "-b", name]).map(|_| ())
+    }
 }
 
 #[tauri::command]
@@ -552,6 +657,15 @@ fn map_status(status: char) -> GitFileStatus {
     }
 }
 
+fn parse_branch_lines(output: Output) -> Vec<String> {
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 fn parse_numstat_output(output: Output) -> std::collections::HashMap<String, (u32, u32)> {
     let mut stats = std::collections::HashMap::new();
     let text = String::from_utf8_lossy(&output.stdout);
@@ -757,6 +871,27 @@ fn git_path_contents(
         return Ok(None);
     }
     Err(error)
+}
+
+fn local_branch_name_from_remote(branch: &str) -> String {
+    branch
+        .split_once('/')
+        .map(|(_, name)| name)
+        .unwrap_or(branch)
+        .to_string()
+}
+
+fn local_branch_exists(workspace: &Path, branch: &str) -> Result<bool, String> {
+    let output = run_git(
+        workspace,
+        ["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")],
+    )
+    .map_err(|error| format!("Failed to inspect local branches: {error}"))?;
+    Ok(output.status.success())
+}
+
+fn ensure_valid_branch_name(workspace: &Path, branch: &str) -> Result<(), String> {
+    run_git_checked(workspace, ["check-ref-format", "--branch", branch]).map(|_| ())
 }
 
 fn is_missing_git_object_error(message: &str) -> bool {

@@ -13,6 +13,7 @@ import { CodeEditor } from "./CodeEditor";
 import { AGENT_PRESETS, type AgentPreset, type AgentPresetId } from "./agentPresets";
 import { useFileIconUrl } from "./fileIcons";
 import { invokeReadFile } from "./fileTreeOps";
+import { gitCheckoutBranch, gitCreateBranch, gitListBranches } from "./gitApi";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,7 +26,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
-import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
@@ -34,6 +35,7 @@ import {
   Circle,
   Columns2,
   Eye,
+  GitBranch,
   GitCompareArrows,
   FileText,
   FileCode2,
@@ -49,7 +51,7 @@ import {
 } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useGitChanges } from "./useGitChanges";
-import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
+import type { GitBranchList, GitChangedFile, GitDiffCategory } from "./gitTypes";
 import { DiffEditor, type DiffEditorChrome } from "./DiffEditor";
 import { AllDiffsView } from "./AllDiffsView";
 import { getDiffFileName, getDiffSideLabels, getDiffTabLabel } from "./diffPresentation";
@@ -91,6 +93,8 @@ type TerminalTab = {
   presetId?: AgentPresetId;
   startupCommands?: string[];
 };
+
+type BranchCreateMode = "none" | "current" | "from";
 
 function getTabName(path: string) {
   const parts = path.split("/");
@@ -310,6 +314,7 @@ export function MainLayout() {
   const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const agentPresetMenuRef = useRef<HTMLDivElement | null>(null);
+  const branchMenuRef = useRef<HTMLDivElement | null>(null);
   const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const titlebarDraggingRef = useRef(false);
   const terminalCounterRef = useRef(1);
@@ -331,6 +336,15 @@ export function MainLayout() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [branchMenuLoading, setBranchMenuLoading] = useState(false);
+  const [branchMenuError, setBranchMenuError] = useState<string | null>(null);
+  const [branchList, setBranchList] = useState<GitBranchList | null>(null);
+  const [branchQuery, setBranchQuery] = useState("");
+  const [branchCreateMode, setBranchCreateMode] = useState<BranchCreateMode>("none");
+  const [branchCreateName, setBranchCreateName] = useState("");
+  const [branchCreateSource, setBranchCreateSource] = useState("");
+  const [branchActionPending, setBranchActionPending] = useState<"checkout" | "create" | null>(null);
   const activeDiffTabForPolling = diffTabs.find((tab) => tab.id === activeDiffTabId) ?? null;
   const git = useGitChanges({
     workspacePath,
@@ -349,6 +363,35 @@ export function MainLayout() {
 
     void git.refresh({ silent: true });
   }, [activeSidebarTab, git.refresh, workspacePath]);
+
+  useEffect(() => {
+    setBranchMenuOpen(false);
+    setBranchList(null);
+    setBranchMenuError(null);
+    setBranchMenuLoading(false);
+    setBranchQuery("");
+    setBranchCreateMode("none");
+    setBranchCreateName("");
+    setBranchCreateSource("");
+    setBranchActionPending(null);
+  }, [workspacePath]);
+
+  const loadBranchList = useCallback(async () => {
+    if (!workspacePath || git.capability?.status !== "available") return;
+    setBranchMenuLoading(true);
+    setBranchMenuError(null);
+    try {
+      const nextBranches = await gitListBranches(workspacePath);
+      setBranchList(nextBranches);
+      if (!branchCreateSource) {
+        setBranchCreateSource(nextBranches.current);
+      }
+    } catch (error) {
+      setBranchMenuError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBranchMenuLoading(false);
+    }
+  }, [branchCreateSource, git.capability?.status, workspacePath]);
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -430,6 +473,38 @@ export function MainLayout() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [agentPresetMenuOpen]);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+
+    void loadBranchList();
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && branchMenuRef.current?.contains(target)) return;
+      setBranchMenuOpen(false);
+      setBranchCreateMode("none");
+      setBranchCreateName("");
+    };
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (branchCreateMode !== "none") {
+        setBranchCreateMode("none");
+        setBranchCreateName("");
+        return;
+      }
+      setBranchMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [branchCreateMode, branchMenuOpen, loadBranchList]);
 
   const handleOpenFile = useCallback((path: string, content: string) => {
     const tabId = getFileTabId(path);
@@ -914,6 +989,36 @@ export function MainLayout() {
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
   const totalChangedFiles = (git.status?.staged.length ?? 0) + git.combinedChanges.length;
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
+  const currentBranchName = branchList?.current ?? git.status?.branch ?? "HEAD";
+  const branchFilter = branchQuery.trim().toLowerCase();
+  const filteredLocalBranches = useMemo(
+    () =>
+      (branchList?.local ?? []).filter((branch) =>
+        branchFilter ? branch.toLowerCase().includes(branchFilter) : true,
+      ),
+    [branchFilter, branchList?.local],
+  );
+  const filteredRemoteBranches = useMemo(
+    () =>
+      (branchList?.remote ?? []).filter((branch) =>
+        branchFilter ? branch.toLowerCase().includes(branchFilter) : true,
+      ),
+    [branchFilter, branchList?.remote],
+  );
+  const branchSourceOptions = useMemo(() => {
+    const unique = new Set<string>();
+    const options: string[] = [];
+    for (const branch of [
+      currentBranchName,
+      ...(branchList?.local ?? []),
+      ...(branchList?.remote ?? []),
+    ]) {
+      if (unique.has(branch)) continue;
+      unique.add(branch);
+      options.push(branch);
+    }
+    return options;
+  }, [branchList?.local, branchList?.remote, currentBranchName]);
   const agentPresetMenu = agentPresetMenuOpen ? (
     <div className="agent-preset-menu" role="menu" aria-label="AI Coding CLI presets">
       {AGENT_PRESETS.map((preset) => (
@@ -937,6 +1042,216 @@ export function MainLayout() {
           </span>
         </button>
       ))}
+    </div>
+  ) : null;
+  const branchMenu = branchMenuOpen ? (
+    <div className="git-branch-menu" role="menu" aria-label="Git branches">
+      <input
+        value={branchQuery}
+        onChange={(event) => setBranchQuery(event.target.value)}
+        className="git-branch-menu-search"
+        placeholder="Select a branch or tag to checkout"
+        autoFocus
+      />
+      <div className="git-branch-menu-actions">
+        <button
+          type="button"
+          className="git-branch-menu-row git-branch-menu-row--action"
+          onClick={() => {
+            setBranchCreateMode("current");
+            setBranchCreateName("");
+            setBranchCreateSource(currentBranchName);
+          }}
+        >
+          <span className="git-branch-menu-row-main">
+            <Plus className="size-3.5" />
+            <span className="git-branch-menu-row-title">Create new branch...</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="git-branch-menu-row git-branch-menu-row--action"
+          onClick={() => {
+            setBranchCreateMode("from");
+            setBranchCreateName("");
+            setBranchCreateSource(
+              filteredLocalBranches[0] ?? filteredRemoteBranches[0] ?? currentBranchName,
+            );
+          }}
+        >
+          <span className="git-branch-menu-row-main">
+            <Plus className="size-3.5" />
+            <span className="git-branch-menu-row-title">Create new branch from...</span>
+          </span>
+        </button>
+      </div>
+      {branchCreateMode !== "none" ? (
+        <form
+          className="git-branch-menu-create"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (!workspacePath) return;
+            const name = branchCreateName.trim();
+            if (!name) {
+              setBranchMenuError("Branch name is required.");
+              return;
+            }
+            setBranchActionPending("create");
+            setBranchMenuError(null);
+            try {
+              await gitCreateBranch(
+                workspacePath,
+                name,
+                branchCreateMode === "from" ? branchCreateSource : currentBranchName,
+              );
+              await git.refresh({ silent: true });
+              await loadBranchList();
+              setBranchMenuOpen(false);
+              setBranchCreateMode("none");
+              setBranchCreateName("");
+            } catch (error) {
+              setBranchMenuError(error instanceof Error ? error.message : String(error));
+            } finally {
+              setBranchActionPending(null);
+            }
+          }}
+        >
+          <div className="git-branch-menu-create-header">
+            <span className="git-branch-menu-section-title">
+              {branchCreateMode === "from" ? "Create branch from" : "Create branch"}
+            </span>
+            <button
+              type="button"
+              className="git-branch-menu-link"
+              onClick={() => {
+                setBranchCreateMode("none");
+                setBranchCreateName("");
+                setBranchMenuError(null);
+              }}
+            >
+              Back
+            </button>
+          </div>
+          <input
+            value={branchCreateName}
+            onChange={(event) => setBranchCreateName(event.target.value)}
+            className="git-branch-menu-search"
+            placeholder="Branch name"
+            autoFocus
+          />
+          {branchCreateMode === "from" ? (
+            <select
+              value={branchCreateSource}
+              onChange={(event) => setBranchCreateSource(event.target.value)}
+              className="git-branch-menu-select"
+            >
+              {branchSourceOptions.map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="git-branch-menu-meta">From {currentBranchName}</div>
+          )}
+          <div className="git-branch-menu-submit">
+            <Button
+              type="submit"
+              size="xs"
+              disabled={branchActionPending === "create"}
+            >
+              {branchActionPending === "create" ? "Creating..." : "Create branch"}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+      {branchMenuError ? <div className="git-branch-menu-error">{branchMenuError}</div> : null}
+      {branchMenuLoading ? (
+        <div className="git-branch-menu-empty">Loading branches...</div>
+      ) : (
+        <div className="git-branch-menu-groups">
+          <div className="git-branch-menu-group">
+            <div className="git-branch-menu-section-title">branches</div>
+            {filteredLocalBranches.length > 0 ? (
+              filteredLocalBranches.map((branch) => (
+                <button
+                  key={`local:${branch}`}
+                  type="button"
+                  className="git-branch-menu-row"
+                  data-current={branch === currentBranchName ? "true" : undefined}
+                  disabled={branchActionPending === "checkout" || branch === currentBranchName}
+                  onClick={async () => {
+                    if (!workspacePath) return;
+                    setBranchActionPending("checkout");
+                    setBranchMenuError(null);
+                    try {
+                      await gitCheckoutBranch(workspacePath, branch, "local");
+                      await git.refresh({ silent: true });
+                      await loadBranchList();
+                      setBranchMenuOpen(false);
+                    } catch (error) {
+                      setBranchMenuError(error instanceof Error ? error.message : String(error));
+                    } finally {
+                      setBranchActionPending(null);
+                    }
+                  }}
+                >
+                  <span className="git-branch-menu-row-main">
+                    <GitBranch className="size-3.5" />
+                    <span className="git-branch-menu-row-copy">
+                      <span className="git-branch-menu-row-title">{branch}</span>
+                      {branch === currentBranchName ? (
+                        <span className="git-branch-menu-row-meta">current branch</span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="git-branch-menu-row-tag">branches</span>
+                </button>
+              ))
+            ) : (
+              <div className="git-branch-menu-empty">No matching local branches</div>
+            )}
+          </div>
+          <div className="git-branch-menu-group">
+            <div className="git-branch-menu-section-title">remote branches</div>
+            {filteredRemoteBranches.length > 0 ? (
+              filteredRemoteBranches.map((branch) => (
+                <button
+                  key={`remote:${branch}`}
+                  type="button"
+                  className="git-branch-menu-row"
+                  disabled={branchActionPending === "checkout"}
+                  onClick={async () => {
+                    if (!workspacePath) return;
+                    setBranchActionPending("checkout");
+                    setBranchMenuError(null);
+                    try {
+                      await gitCheckoutBranch(workspacePath, branch, "remote");
+                      await git.refresh({ silent: true });
+                      await loadBranchList();
+                      setBranchMenuOpen(false);
+                    } catch (error) {
+                      setBranchMenuError(error instanceof Error ? error.message : String(error));
+                    } finally {
+                      setBranchActionPending(null);
+                    }
+                  }}
+                >
+                  <span className="git-branch-menu-row-main">
+                    <GitBranch className="size-3.5" />
+                    <span className="git-branch-menu-row-copy">
+                      <span className="git-branch-menu-row-title">{branch}</span>
+                    </span>
+                  </span>
+                  <span className="git-branch-menu-row-tag">remote</span>
+                </button>
+              ))
+            ) : (
+              <div className="git-branch-menu-empty">No matching remote branches</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   ) : null;
 
@@ -987,6 +1302,43 @@ export function MainLayout() {
             <span className="app-titlebar-path-text truncate">{workspaceDisplayPath}</span>
             <ChevronDown className="size-3.5 app-titlebar-path-chevron" />
           </Button>
+          {git.capability?.status === "available" ? (
+            <div className="git-branch-menu-anchor" ref={branchMenuRef}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="app-titlebar-branch-button"
+                onClick={() => {
+                  setAgentPresetMenuOpen(false);
+                  setBranchMenuOpen((current) => {
+                    const next = !current;
+                    if (next) {
+                      setBranchQuery("");
+                      setBranchCreateMode("none");
+                      setBranchCreateName("");
+                      setBranchMenuError(null);
+                      setBranchMenuLoading(true);
+                    } else {
+                      setBranchCreateMode("none");
+                      setBranchCreateName("");
+                      setBranchMenuError(null);
+                    }
+                    return next;
+                  });
+                }}
+                data-tauri-drag-region="false"
+                title={`Current branch: ${currentBranchName}`}
+                aria-expanded={branchMenuOpen}
+                aria-haspopup="menu"
+              >
+                <GitBranch className="size-3.5" />
+                <span className="app-titlebar-branch-text truncate">{currentBranchName}</span>
+                <ChevronDown className="size-3.5 app-titlebar-path-chevron" />
+              </Button>
+              {branchMenu}
+            </div>
+          ) : null}
         </div>
         <div className="app-titlebar-drag-region" />
       </div>
