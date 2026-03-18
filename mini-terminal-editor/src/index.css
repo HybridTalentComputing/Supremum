@@ -672,6 +672,7 @@ body {
   min-height: 32px;
   padding: 0 0.25rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
   background: #090909;
 }
 

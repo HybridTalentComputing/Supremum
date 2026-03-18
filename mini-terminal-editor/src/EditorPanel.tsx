@@ -49,6 +49,7 @@ export function EditorPanel({
     >
       {/* Tabs 横跨整个右栏顶部，平分宽度，随窗口伸缩 */}
       <TabsList
+        variant="line"
         className="sidebar-workspace-tabs"
       >
         <TabsTrigger
