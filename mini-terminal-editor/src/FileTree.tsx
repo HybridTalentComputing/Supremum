@@ -18,7 +18,6 @@ import {
 import { Tree, type NodeRendererProps, type TreeApi, type NodeApi } from "react-arborist";
 import {
   FilePlus,
-  FolderPlus,
   ChevronsUp,
   RefreshCw,
   Folder,
@@ -865,14 +864,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
     return resolveCreateParentFromNode(candidateNode);
   }, []);
 
-  const toolbarNewFile = useCallback(() => {
-    startCreate("file", resolveParentDir(treeRef.current));
-  }, [startCreate]);
-
-  const toolbarNewDir = useCallback(() => {
-    startCreate("dir", resolveParentDir(treeRef.current));
-  }, [startCreate]);
-
   const searchMatch = useCallback(
     (node: NodeApi<FileNode>, term: string) =>
       node.data.name.toLowerCase().includes(term.toLowerCase()),
@@ -901,16 +892,6 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
         {/* Toolbar */}
         <div className="file-tree-toolbar">
-          <div className="file-tree-actions">
-            <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={toolbarNewFile} title="New file">
-              <FilePlus className="size-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
-              onClick={toolbarNewDir} title="New folder">
-              <FolderPlus className="size-4" />
-            </Button>
-          </div>
           <div className="file-tree-actions">
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
               onClick={() => setShowSearch((v) => !v)} title="Search">

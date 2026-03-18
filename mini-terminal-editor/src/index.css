@@ -2973,7 +2973,7 @@ body {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: #252526;
+  background: #0d0d0d;
 }
 
 .code-editor-container {
@@ -2982,7 +2982,7 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: #252526;
+  background: #0d0d0d;
 }
 
 .markdown-preview-shell {
@@ -3239,7 +3239,7 @@ body {
 .code-workspace .cm-gutters,
 .code-workspace .cm-activeLine,
 .code-workspace .cm-activeLineGutter {
-  background-color: #252526 !important;
+  background-color: #0d0d0d !important;
 }
 
 .code-workspace .code-editor-instance .cm-editor {
@@ -3252,7 +3252,9 @@ body {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-family: "Geist Mono", "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-size: 0.96rem;
+  font-weight: 420;
 }
 
 .code-workspace .cm-theme,
@@ -3268,7 +3270,27 @@ body {
 .code-workspace .cm-content,
 .code-workspace .cm-gutters,
 .code-workspace .cm-line {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-family: "Geist Mono", "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  font-weight: 420;
+  line-height: 1.58;
+}
+
+.code-workspace .cm-content {
+  color: rgba(244, 244, 244, 0.96);
+  caret-color: rgba(244, 244, 244, 0.96);
+}
+
+.code-workspace .cm-line {
+  color: inherit;
+}
+
+.code-workspace .cm-gutters {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.code-workspace .cm-activeLine,
+.code-workspace .cm-activeLineGutter {
+  background-color: #141414 !important;
 }
 
 .code-editor-shell .cm-scroller {
@@ -3282,7 +3304,7 @@ body {
 }
 
 .code-editor-shell .cm-scroller::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .code-editor-shell .cm-scroller::-webkit-scrollbar-thumb {
@@ -3300,7 +3322,7 @@ body {
 
 .code-editor-shell .cm-scroller {
   scrollbar-width: auto !important;
-  scrollbar-color: rgba(120, 130, 142, 0.82) rgba(255, 255, 255, 0.03) !important;
+  scrollbar-color: rgba(120, 130, 142, 0.82) rgba(255, 255, 255, 0.02) !important;
 }
 
 .code-workspace .cm-content,
@@ -3322,7 +3344,7 @@ body {
 .file-tree-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-shrink: 0;
   padding: 0.25rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
