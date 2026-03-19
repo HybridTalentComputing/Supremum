@@ -820,7 +820,7 @@ fn parse_numstat_number(value: Option<&str>) -> u32 {
 
 fn expand_numstat_paths(raw_path: &str) -> Vec<String> {
     if !raw_path.contains(" => ") {
-        return vec![raw_path.to_string()];
+        return vec![decode_git_quoted_path(raw_path)];
     }
 
     if let (Some(start), Some(end)) = (raw_path.find('{'), raw_path.find('}')) {
@@ -829,16 +829,88 @@ fn expand_numstat_paths(raw_path: &str) -> Vec<String> {
         let middle = &raw_path[start + 1..end];
         let mut parts = middle.splitn(2, " => ");
         if let (Some(from), Some(to)) = (parts.next(), parts.next()) {
-            return vec![format!("{prefix}{from}{suffix}"), format!("{prefix}{to}{suffix}")];
+            return vec![
+                decode_git_quoted_path(&format!("{prefix}{from}{suffix}")),
+                decode_git_quoted_path(&format!("{prefix}{to}{suffix}")),
+            ];
         }
     }
 
     let mut parts = raw_path.splitn(2, " => ");
     if let (Some(from), Some(to)) = (parts.next(), parts.next()) {
-        return vec![from.to_string(), to.to_string()];
+        return vec![decode_git_quoted_path(from), decode_git_quoted_path(to)];
     }
 
-    vec![raw_path.to_string()]
+    vec![decode_git_quoted_path(raw_path)]
+}
+
+fn decode_git_quoted_path(raw_path: &str) -> String {
+    if raw_path.len() < 2 || !raw_path.starts_with('"') || !raw_path.ends_with('"') {
+        return raw_path.to_string();
+    }
+
+    let inner = &raw_path[1..raw_path.len() - 1];
+    let mut decoded = Vec::with_capacity(inner.len());
+    let bytes = inner.as_bytes();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte != b'\\' {
+            decoded.push(byte);
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        if index >= bytes.len() {
+            decoded.push(b'\\');
+            break;
+        }
+
+        match bytes[index] {
+            b'\\' => {
+                decoded.push(b'\\');
+                index += 1;
+            }
+            b'"' => {
+                decoded.push(b'"');
+                index += 1;
+            }
+            b't' => {
+                decoded.push(b'\t');
+                index += 1;
+            }
+            b'n' => {
+                decoded.push(b'\n');
+                index += 1;
+            }
+            b'r' => {
+                decoded.push(b'\r');
+                index += 1;
+            }
+            b'0'..=b'7' => {
+                let mut value = 0u8;
+                let mut consumed = 0;
+                while consumed < 3 && index < bytes.len() {
+                    let next = bytes[index];
+                    if !(b'0'..=b'7').contains(&next) {
+                        break;
+                    }
+                    value = (value << 3) + (next - b'0');
+                    index += 1;
+                    consumed += 1;
+                }
+                decoded.push(value);
+            }
+            other => {
+                decoded.push(other);
+                index += 1;
+            }
+        }
+    }
+
+    String::from_utf8_lossy(&decoded).to_string()
 }
 
 fn apply_stats(
