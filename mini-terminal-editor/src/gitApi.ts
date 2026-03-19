@@ -8,6 +8,7 @@ import type {
   GitCommitResult,
   GitDiffCategory,
   GitDiffContents,
+  GitGraphResponse,
 } from "./gitTypes";
 
 export function gitGetCapability(workspacePath: string): Promise<GitCapabilityResponse> {
@@ -24,6 +25,22 @@ export function gitGetStatus(workspacePath: string): Promise<GitChangesStatus> {
 
 export function gitListBranches(workspacePath: string): Promise<GitBranchList> {
   return invoke("git_list_branches", { payload: { workspacePath } });
+}
+
+export function gitGetGraph(workspacePath: string): Promise<GitGraphResponse> {
+  return invoke("git_get_graph", { payload: { workspacePath } });
+}
+
+export function gitFetchAllRemotes(workspacePath: string): Promise<void> {
+  return invoke("git_fetch_all_remotes", { payload: { workspacePath } });
+}
+
+export function gitPull(workspacePath: string): Promise<void> {
+  return invoke("git_pull", { payload: { workspacePath } });
+}
+
+export function gitPush(workspacePath: string): Promise<void> {
+  return invoke("git_push", { payload: { workspacePath } });
 }
 
 export function gitCheckoutBranch(

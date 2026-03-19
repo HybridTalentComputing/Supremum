@@ -1519,6 +1519,7 @@ body {
 .changes-panel {
   display: flex;
   flex: 1;
+  height: 100%;
   min-height: 0;
   flex-direction: column;
   background: #090909;
@@ -1624,6 +1625,21 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: rgba(202, 210, 218, 0.84);
+}
+
+.changes-list-toolbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.changes-list-toolbar-toggle:hover {
+  color: rgba(236, 240, 244, 0.96);
 }
 
 .changes-list-toolbar-meta {
@@ -1739,6 +1755,73 @@ body {
 
 .changes-sections [data-slot="scroll-area-viewport"] {
   height: 100%;
+}
+
+.changes-sections [data-slot="scroll-area-viewport"] > div {
+  min-height: 100%;
+}
+
+.changes-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.changes-list-region {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.changes-graph-resize-zone {
+  position: relative;
+  flex: none;
+  height: 10px;
+  min-height: 10px;
+  width: 100%;
+  cursor: row-resize;
+  background: transparent;
+}
+
+.changes-graph-resize-zone.is-collapsed {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.changes-graph-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.85rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transform: translate(-50%, -50%);
+  transition: background-color 120ms ease;
+}
+
+.changes-graph-resize-zone:hover .changes-graph-handle {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.changes-graph-dock {
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: #090909;
+}
+
+.changes-graph-dock.is-collapsed {
+  border-top-color: rgba(255, 255, 255, 0.04);
+}
+
+.changes-sections-collapsed {
+  flex: 1;
+  min-height: 0;
 }
 
 .changes-section {
@@ -2013,6 +2096,11 @@ body {
   color: rgba(174, 183, 191, 0.82);
 }
 
+.changes-empty-inline {
+  flex: 1 0 auto;
+  min-height: 8rem;
+}
+
 .changes-state-shell {
   gap: 0.9rem;
 }
@@ -2046,6 +2134,231 @@ body {
   gap: 0.45rem;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.git-commit-graph-section {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  background: #090909;
+}
+
+.git-commit-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.42rem 0.65rem 0.34rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.git-commit-graph-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(176, 185, 193, 0.88);
+}
+
+.git-commit-graph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.git-commit-graph-toggle:hover {
+  color: rgba(236, 240, 244, 0.96);
+}
+
+.git-commit-graph-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.git-commit-graph-mode {
+  margin-right: 0.14rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(165, 174, 183, 0.78);
+}
+
+.git-commit-graph-refresh {
+  color: rgba(182, 190, 198, 0.76);
+}
+
+.git-commit-graph-refresh:hover {
+  color: rgba(246, 248, 250, 0.96);
+}
+
+.git-commit-graph-feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 4rem;
+  padding: 0.7rem 0.65rem;
+  font-size: 0.77rem;
+  color: rgba(170, 179, 188, 0.8);
+}
+
+.git-commit-graph-feedback.is-error {
+  color: rgba(246, 146, 146, 0.92);
+}
+
+.git-commit-graph-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.git-commit-graph-section.is-collapsed {
+  min-height: 0;
+  height: 100%;
+}
+
+.git-commit-graph-scroll [data-slot="scroll-area-viewport"] {
+  height: 100%;
+}
+
+.git-commit-graph-scroll [data-slot="scroll-area-viewport"] > div {
+  min-height: 100%;
+}
+
+.git-commit-graph-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0.28rem 0.4rem 0.55rem;
+}
+
+.git-commit-graph-row {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 1.48rem;
+  padding: 0.06rem 0.18rem;
+  border-radius: 0.18rem;
+  transition: background-color 120ms ease;
+}
+
+.git-commit-graph-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.git-commit-graph-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 2.4rem;
+}
+
+.git-commit-graph-svg {
+  display: block;
+  overflow: visible;
+}
+
+.git-commit-graph-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.02rem;
+}
+
+.git-commit-graph-subject-row {
+  display: flex;
+  align-items: center;
+  gap: 0.26rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.git-commit-graph-subject {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: rgba(233, 237, 241, 0.95);
+}
+
+.git-commit-graph-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.16rem;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 6.5rem;
+  padding: 0.08rem 0.34rem;
+  border-radius: 999px;
+  font-size: 0.63rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: rgba(220, 227, 234, 0.92);
+  background: rgba(129, 138, 147, 0.22);
+}
+
+.git-commit-graph-ref svg {
+  flex-shrink: 0;
+}
+
+.git-commit-graph-ref span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-commit-graph-ref.is-head {
+  background: rgba(47, 129, 247, 0.28);
+  color: rgba(216, 233, 255, 0.97);
+}
+
+.git-commit-graph-ref.is-local {
+  background: rgba(110, 118, 129, 0.26);
+  color: rgba(220, 227, 234, 0.92);
+}
+
+.git-commit-graph-ref.is-remote {
+  background: rgba(167, 102, 255, 0.24);
+  color: rgba(234, 221, 255, 0.95);
+}
+
+.git-commit-graph-ref.is-tag {
+  background: rgba(210, 153, 34, 0.24);
+  color: rgba(255, 237, 194, 0.96);
+}
+
+.git-commit-graph-overflow {
+  flex-shrink: 0;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: rgba(155, 164, 173, 0.84);
+}
+
+.git-commit-graph-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  font-size: 0.68rem;
+  color: rgba(136, 145, 154, 0.8);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-commit-graph-hash {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace;
+  color: rgba(176, 184, 193, 0.86);
 }
 
 .diff-editor-shell {

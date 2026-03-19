@@ -143,6 +143,25 @@ pub struct GitBranchList {
     pub remote: Vec<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitGraphCommit {
+    pub hash: String,
+    pub short_hash: String,
+    pub subject: String,
+    pub author_name: String,
+    pub author_relative_time: String,
+    pub parents: Vec<String>,
+    pub refs: Vec<String>,
+    pub is_head: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitGraphResponse {
+    pub commits: Vec<GitGraphCommit>,
+}
+
 #[derive(Clone, Copy)]
 enum GitPathSource {
     Head,
@@ -500,6 +519,61 @@ pub fn git_commit(payload: GitCommitPayload) -> Result<GitCommitResult, String> 
     })
 }
 
+#[tauri::command]
+pub fn git_get_graph(payload: GitWorkspacePayload) -> Result<GitGraphResponse, String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+
+    let head_hash = match run_git_checked(&workspace, ["rev-parse", "--verify", "HEAD"]) {
+        Ok(output) => Some(String::from_utf8_lossy(&output.stdout).trim().to_string()),
+        Err(error) if is_missing_revision_error(&error) => None,
+        Err(error) => return Err(error),
+    };
+
+    let log_output = match run_git_checked(
+        &workspace,
+        [
+            "log",
+            "--max-count=40",
+            "--topo-order",
+            "--decorate=short",
+            "--date=relative",
+            "--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%P%x1f%D%x1f%s%x1e",
+            "HEAD",
+        ],
+    ) {
+        Ok(output) => output,
+        Err(error) if is_no_commits_error(&error) => {
+            return Ok(GitGraphResponse { commits: Vec::new() });
+        }
+        Err(error) => return Err(error),
+    };
+
+    let commits = parse_git_graph_output(&log_output.stdout, head_hash.as_deref());
+    Ok(GitGraphResponse { commits })
+}
+
+#[tauri::command]
+pub fn git_fetch_all_remotes(payload: GitWorkspacePayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+    run_git_checked(&workspace, ["fetch", "--all", "--prune"]).map(|_| ())
+}
+
+#[tauri::command]
+pub fn git_pull(payload: GitWorkspacePayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+    run_git_checked(&workspace, ["pull", "--ff-only"]).map(|_| ())
+}
+
+#[tauri::command]
+pub fn git_push(payload: GitWorkspacePayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+    run_git_checked(&workspace, ["push"]).map(|_| ())
+}
+
 fn canonical_workspace(workspace_path: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(workspace_path);
     let canonical = fs::canonicalize(&path)
@@ -662,6 +736,58 @@ fn parse_branch_lines(output: Output) -> Vec<String> {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn parse_git_graph_output(stdout: &[u8], head_hash: Option<&str>) -> Vec<GitGraphCommit> {
+    let mut commits = Vec::new();
+
+    for raw_record in stdout.split(|byte| *byte == 0x1e) {
+        if raw_record.is_empty() {
+            continue;
+        }
+
+        let record = String::from_utf8_lossy(raw_record);
+        let fields: Vec<&str> = record.split('\x1f').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+
+        let hash = fields[0].trim().to_string();
+        if hash.is_empty() {
+            continue;
+        }
+
+        commits.push(GitGraphCommit {
+            short_hash: fields[1].trim().to_string(),
+            author_name: fields[2].trim().to_string(),
+            author_relative_time: fields[3].trim().to_string(),
+            parents: split_git_graph_list(fields[4]),
+            refs: split_git_graph_refs(fields[5]),
+            subject: fields[6].trim().to_string(),
+            is_head: head_hash.is_some_and(|head| head == hash),
+            hash,
+        });
+    }
+
+    commits
+}
+
+fn split_git_graph_list(value: &str) -> Vec<String> {
+    value
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn split_git_graph_refs(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
         .map(ToOwned::to_owned)
         .collect()
 }
@@ -901,6 +1027,22 @@ fn is_missing_git_object_error(message: &str) -> bool {
         || lower.contains("path '")
         || lower.contains("invalid object name")
         || lower.contains("bad revision")
+}
+
+fn is_missing_revision_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("unknown revision or path not in the working tree")
+        || lower.contains("fatal: ambiguous argument 'head'")
+        || lower.contains("fatal: needed a single revision")
+        || lower.contains("fatal: your current branch '")
+        || lower.contains("fatal: no names found, cannot describe anything.")
+}
+
+fn is_no_commits_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("does not have any commits yet")
+        || lower.contains("unknown revision or path not in the working tree")
+        || lower.contains("fatal: ambiguous argument 'head'")
 }
 
 fn bytes_to_text(bytes: Option<&[u8]>) -> String {

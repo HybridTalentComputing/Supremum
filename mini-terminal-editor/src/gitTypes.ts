@@ -55,3 +55,18 @@ export type GitBranchList = {
   local: string[];
   remote: string[];
 };
+
+export type GitGraphCommit = {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  authorName: string;
+  authorRelativeTime: string;
+  parents: string[];
+  refs: string[];
+  isHead: boolean;
+};
+
+export type GitGraphResponse = {
+  commits: GitGraphCommit[];
+};

@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -10,12 +10,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
+import { GitCommitGraphPanel } from "./GitCommitGraphPanel";
 import { openExternalUrl } from "./gitApi";
 import { useFileIconUrl } from "./fileIcons";
 import type { GitChangedFile, GitDiffCategory } from "./gitTypes";
 import type { UseGitChangesResult } from "./useGitChanges";
 import {
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
   Check,
   FilePlus2,
   FolderGit2,
@@ -31,9 +34,15 @@ import {
 type ChangesPanelProps = {
   workspacePath: string;
   git: UseGitChangesResult;
+  active: boolean;
   onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
   onOpenAllDiffs: () => void;
 };
+
+const GRAPH_COLLAPSED_HEIGHT = 34;
+const GRAPH_DEFAULT_HEIGHT = 240;
+const GRAPH_MIN_EXPANDED_HEIGHT = 132;
+const CHANGES_MIN_VISIBLE_HEIGHT = 96;
 
 function ChangeFileIcon({ path }: { path: string }) {
   const iconUrl = useFileIconUrl(path.split("/").pop() || path, false, false);
@@ -315,10 +324,15 @@ function CapabilityState({
 export function ChangesPanel({
   workspacePath,
   git,
+  active,
   onOpenDiff,
   onOpenAllDiffs,
 }: ChangesPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
+  const [changesExpanded, setChangesExpanded] = useState(true);
+  const [graphExpanded, setGraphExpanded] = useState(true);
+  const [graphHeight, setGraphHeight] = useState(GRAPH_DEFAULT_HEIGHT);
+  const changesBodyRef = useRef<HTMLDivElement | null>(null);
   const combinedChanges = useMemo(() => git.combinedChanges, [git.combinedChanges]);
   const isBusy = git.pendingAction !== null;
   const hasStagedChanges = (git.status?.staged.length ?? 0) > 0;
@@ -328,6 +342,58 @@ export function ChangesPanel({
   const totalChangeCount =
     (git.status?.staged.length ?? 0) + combinedChanges.length;
   const mergeUnstagedSectionIntoToolbar = !hasStagedChanges && combinedChanges.length > 0;
+
+  const clampGraphHeight = (nextHeight: number) => {
+    const containerHeight = changesBodyRef.current?.clientHeight ?? 0;
+    if (containerHeight <= 0) {
+      return Math.max(GRAPH_MIN_EXPANDED_HEIGHT, nextHeight);
+    }
+
+    const maxHeight = Math.max(
+      GRAPH_MIN_EXPANDED_HEIGHT,
+      containerHeight - CHANGES_MIN_VISIBLE_HEIGHT,
+    );
+    return Math.max(GRAPH_MIN_EXPANDED_HEIGHT, Math.min(nextHeight, maxHeight));
+  };
+
+  const handleGraphResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!graphExpanded) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const startY = event.clientY;
+    const startHeight = graphHeight;
+    const resizeTarget = event.currentTarget;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = clampGraphHeight(startHeight - (moveEvent.clientY - startY));
+      setGraphHeight(nextHeight);
+    };
+
+    const handlePointerUp = () => {
+      if (resizeTarget.hasPointerCapture(event.pointerId)) {
+        resizeTarget.releasePointerCapture(event.pointerId);
+      }
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+  };
+
+  const toggleGraphExpanded = () => {
+    setGraphExpanded((value) => {
+      const nextValue = !value;
+      if (nextValue) {
+        setGraphHeight((currentHeight) => clampGraphHeight(currentHeight));
+      }
+      return nextValue;
+    });
+  };
+
+  const graphPanelHeight = graphExpanded ? clampGraphHeight(graphHeight) : GRAPH_COLLAPSED_HEIGHT;
 
   const handleDiscardFile = async (path: string) => {
     const confirmed = await confirm(`Discard changes for "${path}"?`, {
@@ -507,7 +573,21 @@ export function ChangesPanel({
       </div>
 
       <div className="changes-list-toolbar">
-        <div className="changes-list-toolbar-title">Changes</div>
+        <button
+          type="button"
+          className="changes-list-toolbar-title changes-list-toolbar-toggle"
+          aria-expanded={changesExpanded}
+          onClick={() => {
+            setChangesExpanded((value) => !value);
+          }}
+        >
+          {changesExpanded ? (
+            <ChevronDown className="size-3.5" />
+          ) : (
+            <ChevronRight className="size-3.5" />
+          )}
+          <span>Changes</span>
+        </button>
         <div className="changes-list-toolbar-meta">
           {mergeUnstagedSectionIntoToolbar ? (
             <div className="changes-list-toolbar-actions">
@@ -543,104 +623,137 @@ export function ChangesPanel({
         </div>
       ) : null}
 
-      {!git.status?.hasChanges ? (
-        <div className="changes-empty">
-          <FolderGit2 className="size-6" />
-          <p>No changes detected</p>
+      <div className="changes-body" ref={changesBodyRef}>
+        <div className="changes-list-region">
+          {changesExpanded ? (
+            <ScrollArea className="changes-sections">
+              {!git.status?.hasChanges ? (
+                <div className="changes-empty changes-empty-inline">
+                  <FolderGit2 className="size-6" />
+                  <p>No changes detected</p>
+                </div>
+              ) : (
+                <>
+                  {(git.status?.staged.length ?? 0) > 0 ? (
+                    <section className="changes-section">
+                      <div className="changes-section-header">
+                        <div className="changes-section-title">
+                          <span>Staged Changes</span>
+                        </div>
+                        <div className="changes-section-meta">
+                          <div className="changes-section-actions">
+                            {stagedSectionActions.map((action) => (
+                              <IconActionButton
+                                key={action.label}
+                                label={action.label}
+                                icon={action.icon}
+                                className="changes-section-action"
+                                disabled={isBusy}
+                                onClick={action.onClick}
+                              />
+                            ))}
+                          </div>
+                          <span className="changes-section-count">
+                            {git.status?.staged.length ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="changes-file-list">
+                        {(git.status?.staged ?? []).map((file) => (
+                          <FileRow
+                            key={`staged:${file.path}`}
+                            file={file}
+                            category="staged"
+                            disabled={isBusy}
+                            workspaceName={workspaceName}
+                            onOpenDiff={onOpenDiff}
+                            onStage={(path) => {
+                              void git.stageFile(path);
+                            }}
+                            onUnstage={(path) => {
+                              void git.unstageFile(path);
+                            }}
+                            onDiscard={handleDiscardFile}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                  {(combinedChanges.length ?? 0) > 0 ? (
+                    <section className="changes-section">
+                      {!mergeUnstagedSectionIntoToolbar ? (
+                        <div className="changes-section-header">
+                          <div className="changes-section-title">
+                            <span>Changes</span>
+                          </div>
+                          <div className="changes-section-meta">
+                            <div className="changes-section-actions">
+                              {unstagedSectionActions.map((action) => (
+                                <IconActionButton
+                                  key={action.label}
+                                  label={action.label}
+                                  icon={action.icon}
+                                  className="changes-section-action"
+                                  disabled={isBusy}
+                                  onClick={action.onClick}
+                                />
+                              ))}
+                            </div>
+                            <span className="changes-section-count">{combinedChanges.length}</span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="changes-file-list">
+                        {combinedChanges.map((file) => (
+                          <FileRow
+                            key={`unstaged:${file.path}`}
+                            file={file}
+                            category="unstaged"
+                            disabled={isBusy}
+                            workspaceName={workspaceName}
+                            onOpenDiff={onOpenDiff}
+                            onStage={(path) => {
+                              void git.stageFile(path);
+                            }}
+                            onUnstage={(path) => {
+                              void git.unstageFile(path);
+                            }}
+                            onDiscard={handleDiscardFile}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </>
+              )}
+            </ScrollArea>
+          ) : (
+            <div className="changes-sections changes-sections-collapsed" />
+          )}
         </div>
-      ) : (
-        <ScrollArea className="changes-sections">
-          {(git.status?.staged.length ?? 0) > 0 ? (
-            <section className="changes-section">
-              <div className="changes-section-header">
-                <div className="changes-section-title">
-                  <span>Staged Changes</span>
-                </div>
-                <div className="changes-section-meta">
-                  <div className="changes-section-actions">
-                    {stagedSectionActions.map((action) => (
-                      <IconActionButton
-                        key={action.label}
-                        label={action.label}
-                        icon={action.icon}
-                        className="changes-section-action"
-                        disabled={isBusy}
-                        onClick={action.onClick}
-                      />
-                    ))}
-                  </div>
-                  <span className="changes-section-count">{git.status?.staged.length ?? 0}</span>
-                </div>
-              </div>
-              <div className="changes-file-list">
-                {(git.status?.staged ?? []).map((file) => (
-                  <FileRow
-                    key={`staged:${file.path}`}
-                    file={file}
-                    category="staged"
-                    disabled={isBusy}
-                    workspaceName={workspaceName}
-                    onOpenDiff={onOpenDiff}
-                    onStage={(path) => {
-                      void git.stageFile(path);
-                    }}
-                    onUnstage={(path) => {
-                      void git.unstageFile(path);
-                    }}
-                    onDiscard={handleDiscardFile}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {(combinedChanges.length ?? 0) > 0 ? (
-            <section className="changes-section">
-              {!mergeUnstagedSectionIntoToolbar ? (
-                <div className="changes-section-header">
-                  <div className="changes-section-title">
-                    <span>Changes</span>
-                  </div>
-                  <div className="changes-section-meta">
-                    <div className="changes-section-actions">
-                      {unstagedSectionActions.map((action) => (
-                        <IconActionButton
-                          key={action.label}
-                          label={action.label}
-                          icon={action.icon}
-                          className="changes-section-action"
-                          disabled={isBusy}
-                          onClick={action.onClick}
-                        />
-                      ))}
-                    </div>
-                    <span className="changes-section-count">{combinedChanges.length}</span>
-                  </div>
-                </div>
-              ) : null}
-              <div className="changes-file-list">
-                {combinedChanges.map((file) => (
-                  <FileRow
-                    key={`unstaged:${file.path}`}
-                    file={file}
-                    category="unstaged"
-                    disabled={isBusy}
-                    workspaceName={workspaceName}
-                    onOpenDiff={onOpenDiff}
-                    onStage={(path) => {
-                      void git.stageFile(path);
-                    }}
-                    onUnstage={(path) => {
-                      void git.unstageFile(path);
-                    }}
-                    onDiscard={handleDiscardFile}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </ScrollArea>
-      )}
+        <div
+          className={cn("changes-graph-resize-zone", !graphExpanded && "is-collapsed")}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-hidden={!graphExpanded}
+          onPointerDown={handleGraphResizeStart}
+        >
+          <div className="changes-graph-handle" />
+        </div>
+        <div
+          className={cn("changes-graph-dock", !graphExpanded && "is-collapsed")}
+          style={{ height: `${graphPanelHeight}px` }}
+        >
+          <GitCommitGraphPanel
+            workspacePath={workspacePath}
+            active={active}
+            enabled={git.capability?.status === "available"}
+            refreshToken={git.refreshToken}
+            expanded={graphExpanded}
+            onToggleExpanded={toggleGraphExpanded}
+          />
+        </div>
+      </div>
 
       {git.capability?.message && git.capability.status !== "available" ? (
         <div className="changes-banner is-muted">

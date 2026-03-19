@@ -82,11 +82,12 @@ export function EditorPanel({
         </TabsContent>
         <TabsContent
           value="changes"
-          className="flex-1 min-h-0 mt-0 overflow-hidden data-[selected=false]:hidden"
+          className="flex flex-1 min-h-0 mt-0 overflow-hidden flex-col data-[selected=false]:hidden"
         >
           <ChangesPanel
             workspacePath={workspacePath}
             git={git}
+            active={activeTab === "changes"}
             onOpenDiff={onOpenDiff}
             onOpenAllDiffs={onOpenAllDiffs}
           />
