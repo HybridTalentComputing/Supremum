@@ -3356,12 +3356,21 @@ body {
 .file-tree-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   flex-shrink: 0;
   padding: 0.25rem 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
   color: rgba(255, 255, 255, 0.64);
+}
+.file-tree-toolbar-title {
+  font-size: 0.92rem;
+  line-height: 1;
+  font-weight: 420;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.74);
+  user-select: none;
 }
 .file-tree-actions {
   display: flex;

@@ -892,6 +892,7 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
 
         {/* Toolbar */}
         <div className="file-tree-toolbar">
+          <div className="file-tree-toolbar-title">Explorer</div>
           <div className="file-tree-actions">
             <Button type="button" variant="ghost" size="icon-xs" className="file-tree-action"
               onClick={() => setShowSearch((v) => !v)} title="Search">
