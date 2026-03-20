@@ -14,7 +14,8 @@ export type GitFileStatus =
   | "untracked";
 
 export type GitDiffCategory = "staged" | "unstaged";
-export type GitBranchKind = "local" | "remote";
+export type GitBranchKind = "local" | "remote" | "tag";
+export type GitRefKind = "local" | "remote" | "tag";
 
 export type GitChangedFile = {
   path: string;
@@ -54,6 +55,14 @@ export type GitBranchList = {
   current: string;
   local: string[];
   remote: string[];
+  tags: string[];
+};
+
+export type GitRefList = {
+  current: string;
+  local: string[];
+  remote: string[];
+  tags: string[];
 };
 
 export type GitGraphCommit = {

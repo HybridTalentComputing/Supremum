@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
+import { GitBranchRefsPanel } from "./GitBranchRefsPanel";
 import { GitCommitGraphPanel } from "./GitCommitGraphPanel";
 import { openExternalUrl } from "./gitApi";
 import { useFileIconUrl } from "./fileIcons";
@@ -40,9 +41,13 @@ type ChangesPanelProps = {
 };
 
 const GRAPH_COLLAPSED_HEIGHT = 34;
+const REFS_COLLAPSED_HEIGHT = 26;
 const GRAPH_DEFAULT_HEIGHT = 240;
 const GRAPH_MIN_EXPANDED_HEIGHT = 132;
+const REFS_DEFAULT_HEIGHT = 140;
+const REFS_MIN_HEIGHT = 96;
 const CHANGES_MIN_VISIBLE_HEIGHT = 96;
+const DOCK_RESIZE_ZONE_HEIGHT = 10;
 
 function ChangeFileIcon({ path }: { path: string }) {
   const iconUrl = useFileIconUrl(path.split("/").pop() || path, false, false);
@@ -330,7 +335,9 @@ export function ChangesPanel({
 }: ChangesPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [changesExpanded, setChangesExpanded] = useState(true);
+  const [refsExpanded, setRefsExpanded] = useState(true);
   const [graphExpanded, setGraphExpanded] = useState(true);
+  const [refsHeight, setRefsHeight] = useState(REFS_DEFAULT_HEIGHT);
   const [graphHeight, setGraphHeight] = useState(GRAPH_DEFAULT_HEIGHT);
   const changesBodyRef = useRef<HTMLDivElement | null>(null);
   const combinedChanges = useMemo(() => git.combinedChanges, [git.combinedChanges]);
@@ -343,17 +350,83 @@ export function ChangesPanel({
     (git.status?.staged.length ?? 0) + combinedChanges.length;
   const mergeUnstagedSectionIntoToolbar = !hasStagedChanges && combinedChanges.length > 0;
 
+  const clampRefsHeight = (nextHeight: number) => {
+    const containerHeight = changesBodyRef.current?.clientHeight ?? 0;
+    const graphDockHeight = graphExpanded ? graphHeight : GRAPH_COLLAPSED_HEIGHT;
+    const graphResizeZoneHeight = graphExpanded ? DOCK_RESIZE_ZONE_HEIGHT : 0;
+    const refsResizeZoneHeight = refsExpanded ? DOCK_RESIZE_ZONE_HEIGHT : 0;
+
+    if (containerHeight <= 0) {
+      return Math.max(REFS_MIN_HEIGHT, nextHeight);
+    }
+
+    const maxHeight = Math.max(
+      REFS_MIN_HEIGHT,
+      containerHeight
+        - CHANGES_MIN_VISIBLE_HEIGHT
+        - graphDockHeight
+        - graphResizeZoneHeight
+        - refsResizeZoneHeight,
+    );
+    return Math.max(REFS_MIN_HEIGHT, Math.min(nextHeight, maxHeight));
+  };
+
   const clampGraphHeight = (nextHeight: number) => {
     const containerHeight = changesBodyRef.current?.clientHeight ?? 0;
+    const nextRefsHeight = refsExpanded ? clampRefsHeight(refsHeight) : REFS_COLLAPSED_HEIGHT;
+    const refsResizeZoneHeight = refsExpanded ? DOCK_RESIZE_ZONE_HEIGHT : 0;
+    const graphResizeZoneHeight = graphExpanded ? DOCK_RESIZE_ZONE_HEIGHT : 0;
+
     if (containerHeight <= 0) {
       return Math.max(GRAPH_MIN_EXPANDED_HEIGHT, nextHeight);
     }
 
     const maxHeight = Math.max(
       GRAPH_MIN_EXPANDED_HEIGHT,
-      containerHeight - CHANGES_MIN_VISIBLE_HEIGHT,
+      containerHeight
+        - CHANGES_MIN_VISIBLE_HEIGHT
+        - nextRefsHeight
+        - refsResizeZoneHeight
+        - graphResizeZoneHeight,
     );
     return Math.max(GRAPH_MIN_EXPANDED_HEIGHT, Math.min(nextHeight, maxHeight));
+  };
+
+  const handleRefsResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!refsExpanded) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const startY = event.clientY;
+    const startHeight = refsHeight;
+    const resizeTarget = event.currentTarget;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = clampRefsHeight(startHeight - (moveEvent.clientY - startY));
+      setRefsHeight(nextHeight);
+    };
+
+    const handlePointerUp = () => {
+      if (resizeTarget.hasPointerCapture(event.pointerId)) {
+        resizeTarget.releasePointerCapture(event.pointerId);
+      }
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+  };
+
+  const toggleRefsExpanded = () => {
+    setRefsExpanded((value) => {
+      const nextValue = !value;
+      if (nextValue) {
+        setRefsHeight((currentHeight) => clampRefsHeight(currentHeight));
+      }
+      return nextValue;
+    });
   };
 
   const handleGraphResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -394,6 +467,7 @@ export function ChangesPanel({
   };
 
   const graphPanelHeight = graphExpanded ? clampGraphHeight(graphHeight) : GRAPH_COLLAPSED_HEIGHT;
+  const refsPanelHeight = refsExpanded ? clampRefsHeight(refsHeight) : REFS_COLLAPSED_HEIGHT;
 
   const handleDiscardFile = async (path: string) => {
     const confirmed = await confirm(`Discard changes for "${path}"?`, {
@@ -730,6 +804,29 @@ export function ChangesPanel({
           ) : (
             <div className="changes-sections changes-sections-collapsed" />
           )}
+        </div>
+        <div
+          className={cn("changes-refs-resize-zone", !refsExpanded && "is-collapsed")}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-hidden={!refsExpanded}
+          onPointerDown={handleRefsResizeStart}
+        >
+          <div className="changes-refs-handle" />
+        </div>
+        <div
+          className={cn("changes-refs-dock", !refsExpanded && "is-collapsed")}
+          style={{ height: `${refsPanelHeight}px` }}
+        >
+          <GitBranchRefsPanel
+            workspacePath={workspacePath}
+            active={active}
+            enabled={git.capability?.status === "available"}
+            refreshToken={git.refreshToken}
+            expanded={refsExpanded}
+            onToggleExpanded={toggleRefsExpanded}
+            onAfterCheckout={() => git.refresh({ silent: true })}
+          />
         </div>
         <div
           className={cn("changes-graph-resize-zone", !graphExpanded && "is-collapsed")}

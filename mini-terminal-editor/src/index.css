@@ -1775,6 +1775,7 @@ body {
   overflow: hidden;
 }
 
+.changes-refs-resize-zone,
 .changes-graph-resize-zone {
   position: relative;
   flex: none;
@@ -1785,12 +1786,14 @@ body {
   background: transparent;
 }
 
+.changes-refs-resize-zone.is-collapsed,
 .changes-graph-resize-zone.is-collapsed {
   height: 0;
   min-height: 0;
   overflow: hidden;
 }
 
+.changes-refs-handle,
 .changes-graph-handle {
   position: absolute;
   top: 50%;
@@ -1803,6 +1806,7 @@ body {
   transition: background-color 120ms ease;
 }
 
+.changes-refs-resize-zone:hover .changes-refs-handle,
 .changes-graph-resize-zone:hover .changes-graph-handle {
   background: rgba(255, 255, 255, 0.14);
 }
@@ -1817,6 +1821,19 @@ body {
 
 .changes-graph-dock.is-collapsed {
   border-top-color: rgba(255, 255, 255, 0.04);
+}
+
+.changes-refs-dock {
+  flex: none;
+  height: 8.75rem;
+  min-height: 8.75rem;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: #090909;
+}
+
+.changes-refs-dock.is-collapsed {
+  min-height: 1.625rem;
 }
 
 .changes-sections-collapsed {
@@ -2143,6 +2160,203 @@ body {
   height: 100%;
   flex-direction: column;
   background: #090909;
+}
+
+.git-branch-refs-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  background: #090909;
+}
+
+.git-branch-refs-panel.is-collapsed {
+  justify-content: center;
+}
+
+.git-branch-refs-collapsed-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  height: 100%;
+  padding: 0 0.65rem;
+  border: 0;
+  background: transparent;
+  color: rgba(136, 143, 151, 0.74);
+  text-align: left;
+  cursor: pointer;
+}
+
+.git-branch-refs-collapsed-bar:hover {
+  color: rgba(236, 240, 244, 0.96);
+}
+
+.git-branch-refs-collapsed-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.git-branch-refs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.42rem 0.65rem 0.34rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.git-branch-refs-header-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.git-branch-refs-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(176, 185, 193, 0.88);
+  cursor: pointer;
+}
+
+.git-branch-refs-toggle:hover {
+  color: rgba(236, 240, 244, 0.96);
+}
+
+.git-branch-refs-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.git-branch-refs-header-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.git-branch-refs-tab {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: rgba(136, 143, 151, 0.74);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.git-branch-refs-tab[data-active] {
+  color: rgba(236, 240, 244, 0.96);
+}
+
+.git-branch-refs-tab:hover {
+  color: rgba(236, 240, 244, 0.96);
+}
+
+.git-branch-refs-divider {
+  color: rgba(118, 126, 134, 0.56);
+  font-size: 0.72rem;
+}
+
+.git-branch-refs-refresh {
+  color: rgba(182, 190, 198, 0.76);
+}
+
+.git-branch-refs-refresh:hover {
+  color: rgba(246, 248, 250, 0.96);
+}
+
+.git-branch-refs-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.git-branch-refs-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0.28rem 0.4rem 0.55rem;
+}
+
+.git-branch-refs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 1.7rem;
+  padding: 0.12rem 0.22rem;
+  border-radius: 0.18rem;
+  background: transparent;
+  color: rgba(226, 230, 234, 0.92);
+  text-align: left;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.git-branch-refs-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.git-branch-refs-row[data-current] {
+  color: rgba(244, 246, 248, 0.98);
+}
+
+.git-branch-refs-row-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.git-branch-refs-row-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.git-branch-refs-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.79rem;
+  font-weight: 520;
+}
+
+.git-branch-refs-row-meta {
+  font-size: 0.7rem;
+  color: rgba(146, 154, 162, 0.72);
+}
+
+.git-branch-refs-row-kind {
+  flex-shrink: 0;
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: rgba(146, 154, 162, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.git-branch-refs-feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 4rem;
+  padding: 0.7rem 0.65rem;
+  font-size: 0.77rem;
+  color: rgba(170, 179, 188, 0.8);
+}
+
+.git-branch-refs-feedback.is-error {
+  color: rgba(246, 146, 146, 0.92);
 }
 
 .git-commit-graph-header {

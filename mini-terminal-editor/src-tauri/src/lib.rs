@@ -6,10 +6,10 @@ mod git_backend;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git_backend::{
-    git_checkout_branch, git_commit, git_create_branch, git_discard_all, git_discard_file,
-    git_fetch_all_remotes, git_get_capability, git_get_diff_contents, git_get_graph,
-    git_get_status, git_init_repository, git_list_branches, git_pull, git_push, git_stage_all,
-    git_stage_file, git_unstage_all, git_unstage_file,
+    git_checkout_branch, git_checkout_ref, git_commit, git_create_branch, git_discard_all,
+    git_discard_file, git_fetch_all_remotes, git_get_capability, git_get_diff_contents,
+    git_get_graph, git_get_status, git_init_repository, git_list_branches, git_list_refs,
+    git_pull, git_push, git_stage_all, git_stage_file, git_unstage_all, git_unstage_file,
 };
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Deserialize;
@@ -717,7 +717,9 @@ pub fn run() {
             git_pull,
             git_push,
             git_list_branches,
+            git_list_refs,
             git_checkout_branch,
+            git_checkout_ref,
             git_create_branch,
             git_get_diff_contents,
             git_stage_file,

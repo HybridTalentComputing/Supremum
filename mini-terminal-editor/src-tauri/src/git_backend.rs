@@ -50,6 +50,14 @@ pub struct GitCheckoutBranchPayload {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitCheckoutRefPayload {
+    pub workspace_path: String,
+    pub reference: String,
+    pub kind: GitRefKind,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitCreateBranchPayload {
     pub workspace_path: String,
     pub name: String,
@@ -89,6 +97,15 @@ pub enum GitFileStatus {
 pub enum GitBranchKind {
     Local,
     Remote,
+    Tag,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitRefKind {
+    Local,
+    Remote,
+    Tag,
 }
 
 #[derive(Clone, Serialize)]
@@ -141,6 +158,16 @@ pub struct GitBranchList {
     pub current: String,
     pub local: Vec<String>,
     pub remote: Vec<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRefList {
+    pub current: String,
+    pub local: Vec<String>,
+    pub remote: Vec<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -355,11 +382,16 @@ pub fn git_list_branches(payload: GitWorkspacePayload) -> Result<GitBranchList, 
     .into_iter()
     .filter(|branch| !branch.contains("HEAD ->"))
     .collect();
+    let tags = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags"],
+    )?);
 
     Ok(GitBranchList {
         current,
         local,
         remote,
+        tags,
     })
 }
 
@@ -386,6 +418,7 @@ pub fn git_checkout_branch(payload: GitCheckoutBranchPayload) -> Result<(), Stri
                 .map(|_| ())
             }
         }
+        GitBranchKind::Tag => run_git_checked(&workspace, ["checkout", branch]).map(|_| ()),
     }
 }
 
@@ -405,6 +438,70 @@ pub fn git_create_branch(payload: GitCreateBranchPayload) -> Result<(), String> 
         run_git_checked(&workspace, ["checkout", "-b", name, source]).map(|_| ())
     } else {
         run_git_checked(&workspace, ["checkout", "-b", name]).map(|_| ())
+    }
+}
+
+#[tauri::command]
+pub fn git_list_refs(payload: GitWorkspacePayload) -> Result<GitRefList, String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+
+    let current = git_get_status(GitWorkspacePayload {
+        workspace_path: payload.workspace_path.clone(),
+    })?
+    .branch;
+
+    let local = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )?);
+    let remote = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--format=%(refname:short)", "refs/remotes"],
+    )?)
+    .into_iter()
+    .filter(|branch| !branch.contains("HEAD ->"))
+    .collect();
+    let tags = parse_branch_lines(run_git_checked(
+        &workspace,
+        ["for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags"],
+    )?);
+
+    Ok(GitRefList {
+        current,
+        local,
+        remote,
+        tags,
+    })
+}
+
+#[tauri::command]
+pub fn git_checkout_ref(payload: GitCheckoutRefPayload) -> Result<(), String> {
+    let workspace = canonical_workspace(&payload.workspace_path)?;
+    ensure_git_repo_ready(&workspace)?;
+    let reference = payload.reference.trim();
+    if reference.is_empty() {
+        return Err("Reference name is required.".to_string());
+    }
+
+    match payload.kind {
+        GitRefKind::Local => run_git_checked(&workspace, ["checkout", reference]).map(|_| ()),
+        GitRefKind::Remote => {
+            let local_name = local_branch_name_from_remote(reference);
+            if local_branch_exists(&workspace, &local_name)? {
+                run_git_checked(&workspace, ["checkout", local_name.as_str()]).map(|_| ())
+            } else {
+                run_git_checked(
+                    &workspace,
+                    ["checkout", "-b", local_name.as_str(), "--track", reference],
+                )
+                .map(|_| ())
+            }
+        }
+        GitRefKind::Tag => {
+            let tag_ref = format!("refs/tags/{reference}");
+            run_git_checked(&workspace, ["checkout", tag_ref.as_str()]).map(|_| ())
+        }
     }
 }
 
