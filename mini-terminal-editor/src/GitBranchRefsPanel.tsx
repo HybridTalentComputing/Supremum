@@ -175,7 +175,7 @@ export function GitBranchRefsPanel({
         <ScrollArea className="git-branch-refs-scroll">
           {!enabled ? (
             <div className="git-branch-refs-feedback">Refs are unavailable for this workspace.</div>
-          ) : gitBranchRefs.isLoading && !gitBranchRefs.branchRefs ? (
+          ) : !gitBranchRefs.hasLoaded && !gitBranchRefs.branchRefs ? (
             <div className="git-branch-refs-feedback">Loading refs...</div>
           ) : items.length === 0 ? (
             <div className="git-branch-refs-feedback">{emptyLabel}</div>

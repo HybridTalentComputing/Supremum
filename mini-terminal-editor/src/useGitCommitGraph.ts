@@ -17,6 +17,7 @@ export function useGitCommitGraph({
 }: UseGitCommitGraphOptions) {
   const [graph, setGraph] = useState<GitGraphResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const refreshIdRef = useRef(0);
 
@@ -26,6 +27,7 @@ export function useGitCommitGraph({
         setGraph(null);
         setError(null);
         setIsLoading(false);
+        setHasLoaded(false);
         return;
       }
 
@@ -40,9 +42,11 @@ export function useGitCommitGraph({
         if (refreshId !== refreshIdRef.current) return;
         setGraph(nextGraph);
         setError(null);
+        setHasLoaded(true);
       } catch (nextError) {
         if (refreshId !== refreshIdRef.current) return;
         setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setHasLoaded(true);
       } finally {
         if (refreshId === refreshIdRef.current && !silent) {
           setIsLoading(false);
@@ -53,7 +57,7 @@ export function useGitCommitGraph({
   );
 
   useEffect(() => {
-    void refresh();
+    void refresh({ silent: true });
   }, [refresh, refreshToken]);
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function useGitCommitGraph({
   return {
     graph,
     isLoading,
+    hasLoaded,
     error,
     refresh,
   };

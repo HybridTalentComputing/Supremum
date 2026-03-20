@@ -21,6 +21,7 @@ export function useGitBranchRefs({
 }: UseGitBranchRefsOptions) {
   const [branchRefs, setBranchRefs] = useState<GitRefList | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<GitBranchRefsAction>(null);
 
@@ -30,6 +31,7 @@ export function useGitBranchRefs({
         setBranchRefs(null);
         setError(null);
         setIsLoading(false);
+        setHasLoaded(false);
         return;
       }
 
@@ -42,8 +44,10 @@ export function useGitBranchRefs({
         const nextRefs = await gitListRefs(workspacePath);
         setBranchRefs(nextRefs);
         setError(null);
+        setHasLoaded(true);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setHasLoaded(true);
       } finally {
         if (!silent) {
           setIsLoading(false);
@@ -75,7 +79,7 @@ export function useGitBranchRefs({
   );
 
   useEffect(() => {
-    void refresh();
+    void refresh({ silent: true });
   }, [refresh, refreshToken]);
 
   useEffect(() => {
@@ -93,6 +97,7 @@ export function useGitBranchRefs({
   return {
     branchRefs,
     isLoading,
+    hasLoaded,
     error,
     pendingAction,
     refresh,

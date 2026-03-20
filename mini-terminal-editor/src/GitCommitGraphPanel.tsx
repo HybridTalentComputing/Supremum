@@ -507,7 +507,7 @@ export function GitCommitGraphPanel({
         <ScrollArea className="git-commit-graph-scroll">
           {commits.length === 0 ? (
             <div className="git-commit-graph-feedback">
-              {gitCommitGraph.isLoading ? "Loading commit history..." : "No commits yet"}
+              {!gitCommitGraph.hasLoaded ? "Loading commit history..." : "No commits yet"}
             </div>
           ) : (
             <div className="git-commit-graph-list">
