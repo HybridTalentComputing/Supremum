@@ -1219,7 +1219,9 @@ body {
 }
 
 body.cli-tab-dragging,
-body.cli-tab-dragging * {
+body.cli-tab-dragging *,
+body.terminal-tab-dragging,
+body.terminal-tab-dragging * {
   user-select: none !important;
 }
 
