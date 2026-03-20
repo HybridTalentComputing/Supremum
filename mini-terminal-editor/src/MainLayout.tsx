@@ -476,6 +476,7 @@ export function MainLayout() {
   const [activeNativeTerminalGroupId, setActiveNativeTerminalGroupId] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor" | "diff">("agent");
   const [openTabs, setOpenTabs] = useState<FileEditorTab[]>([]);
+  const [editorLayoutMode, setEditorLayoutMode] = useState<"single" | "split">("single");
   const [editorWorkspaceGroups, setEditorWorkspaceGroups] = useState<WorkspaceTabGroup[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [activeEditorWorkspaceGroupId, setActiveEditorWorkspaceGroupId] = useState<string | null>(null);
@@ -728,9 +729,34 @@ export function MainLayout() {
             [tabId]: isPreviewablePath(path) ? "preview" : "code",
           }
     );
+    if (editorLayoutMode === "split" && editorWorkspaceGroups.length > 0) {
+      const existingGroup = findWorkspaceGroupByTabId(editorWorkspaceGroups, tabId);
+      const targetGroup =
+        existingGroup ??
+        editorWorkspaceGroups.find((group) => group.id === activeEditorWorkspaceGroupId) ??
+        editorWorkspaceGroups[0] ??
+        null;
+
+      if (targetGroup) {
+        setEditorWorkspaceGroups((currentGroups) => {
+          if (targetGroup.tabIds.includes(tabId)) {
+            return setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, tabId);
+          }
+
+          const fallbackGroup = createEditorWorkspaceGroup();
+          return appendTabToWorkspaceGroup(currentGroups, targetGroup.id, tabId, fallbackGroup).nextGroups;
+        });
+        setActiveEditorWorkspaceGroupId(targetGroup.id);
+      }
+    }
     setActiveTabId(tabId);
     setActiveWorkspace("editor");
-  }, []);
+  }, [
+    activeEditorWorkspaceGroupId,
+    createEditorWorkspaceGroup,
+    editorLayoutMode,
+    editorWorkspaceGroups,
+  ]);
 
   const handleOpenDiff = useCallback((file: GitChangedFile, category: GitDiffCategory) => {
     const tabId = getDiffTabId(file.path);
@@ -808,7 +834,7 @@ export function MainLayout() {
     );
   };
 
-  const handleCloseTab = useCallback((tabId: string) => {
+  const handleCloseTab = useCallback((tabId: string, groupId?: string) => {
     void (async () => {
       const targetTab = openTabs.find((tab) => tab.id === tabId);
       if (!targetTab) return;
@@ -822,6 +848,50 @@ export function MainLayout() {
           cancelLabel: "Cancel",
         });
         if (!confirmed) return;
+      }
+
+      if (editorLayoutMode === "split" && groupId) {
+        setEditorWorkspaceGroups((currentGroups) => {
+          const targetGroup = currentGroups.find((group) => group.id === groupId);
+          if (!targetGroup) return currentGroups;
+
+          const nextGroups = currentGroups.map((group) => {
+            if (group.id !== groupId) return group;
+
+            const nextTabIds = group.tabIds.filter((groupTabId) => groupTabId !== tabId);
+            const nextActiveTabId =
+              group.activeTabId === tabId ? nextTabIds[nextTabIds.length - 1] ?? null : group.activeTabId;
+
+            return {
+              ...group,
+              tabIds: nextTabIds,
+              activeTabId: nextActiveTabId,
+            };
+          });
+
+          const remainingReferences = nextGroups.some((group) => group.tabIds.includes(tabId));
+          if (!remainingReferences) {
+            setOpenTabs((currentTabs) => currentTabs.filter((tab) => tab.id !== tabId));
+            setEditorViewModes((currentModes) => {
+              if (!(tabId in currentModes)) return currentModes;
+              const nextModes = { ...currentModes };
+              delete nextModes[tabId];
+              return nextModes;
+            });
+          }
+
+          const resolvedActiveGroup =
+            nextGroups.find((group) => group.id === activeEditorWorkspaceGroupId) ??
+            nextGroups.find((group) => group.id === groupId) ??
+            nextGroups[0] ??
+            null;
+
+          setActiveEditorWorkspaceGroupId(resolvedActiveGroup?.id ?? null);
+          setActiveTabId(resolvedActiveGroup?.activeTabId ?? null);
+
+          return nextGroups;
+        });
+        return;
       }
 
       setOpenTabs((currentTabs) => {
@@ -846,7 +916,7 @@ export function MainLayout() {
         return nextTabs;
       });
     })();
-  }, [diffTabs.length, openTabs]);
+  }, [activeEditorWorkspaceGroupId, diffTabs.length, editorLayoutMode, openTabs]);
 
   const handleCloseDiffTab = useCallback((tabId: string) => {
     void (async () => {
@@ -1059,6 +1129,7 @@ export function MainLayout() {
       setEditorWorkspaceGroups([]);
       setActiveTabId(null);
       setActiveEditorWorkspaceGroupId(null);
+      setEditorLayoutMode("single");
       setDiffTabs([]);
       setActiveDiffTabId(null);
       setDiffDirtyState({});
@@ -1117,12 +1188,51 @@ export function MainLayout() {
     setActiveNativeTerminalId(null);
   }, [createNativeTerminalGroup]);
 
-  const handleSplitEditorWorkspaceGroup = useCallback((groupId: string) => {
+  const handleSplitEditorWorkspaceGroup = useCallback((groupId?: string) => {
+    if (editorLayoutMode === "single") {
+      const resolvedActiveTabId = activeTabId ?? openTabs[0]?.id ?? null;
+      if (!resolvedActiveTabId) return;
+
+      const leftGroup = createEditorWorkspaceGroup();
+      const rightGroup = createEditorWorkspaceGroup();
+      setEditorWorkspaceGroups([
+        {
+          ...leftGroup,
+          tabIds: openTabs.map((tab) => tab.id),
+          activeTabId: resolvedActiveTabId,
+        },
+        {
+          ...rightGroup,
+          tabIds: [resolvedActiveTabId],
+          activeTabId: resolvedActiveTabId,
+        },
+      ]);
+      setActiveEditorWorkspaceGroupId(rightGroup.id);
+      setActiveTabId(resolvedActiveTabId);
+      setEditorLayoutMode("split");
+      return;
+    }
+
+    if (!groupId) return;
+    const sourceGroup = editorWorkspaceGroups.find((group) => group.id === groupId) ?? null;
+    const sourceTabId = sourceGroup?.activeTabId ?? sourceGroup?.tabIds[0] ?? null;
     const nextGroup = createEditorWorkspaceGroup();
-    setEditorWorkspaceGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
+    setEditorWorkspaceGroups((currentGroups) =>
+      insertWorkspaceGroupAfter(
+        currentGroups,
+        groupId,
+        sourceTabId
+          ? {
+              ...nextGroup,
+              tabIds: [sourceTabId],
+              activeTabId: sourceTabId,
+            }
+          : nextGroup
+      )
+    );
     setActiveEditorWorkspaceGroupId(nextGroup.id);
-    setActiveTabId(null);
-  }, [createEditorWorkspaceGroup]);
+    setActiveTabId(sourceTabId);
+  }, [activeTabId, createEditorWorkspaceGroup, editorLayoutMode, editorWorkspaceGroups, openTabs]);
 
   const handleCloseAgentWorkspaceGroup = useCallback((groupId: string) => {
     setAgentWorkspaceGroups((currentGroups) => {
@@ -1164,22 +1274,44 @@ export function MainLayout() {
 
   const handleCloseEditorWorkspaceGroup = useCallback((groupId: string) => {
     setEditorWorkspaceGroups((currentGroups) => {
-      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
-      const resolvedActiveGroupId =
-        activeEditorWorkspaceGroupId === groupId
-          ? nextActiveGroupId
-          : nextGroups.find((group) => group.id === activeEditorWorkspaceGroupId)?.id ??
-            nextActiveGroupId;
-      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
-      setActiveEditorWorkspaceGroupId(resolvedActiveGroupId);
-      setActiveTabId((currentActiveId) =>
-        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
-          ? resolvedActiveGroup?.activeTabId ?? null
-          : currentActiveId
-      );
+      const targetGroupIndex = currentGroups.findIndex((group) => group.id === groupId);
+      if (targetGroupIndex === -1) return currentGroups;
+
+      const nextGroups = currentGroups.filter((group) => group.id !== groupId);
+      const remainingTabIds = new Set(nextGroups.flatMap((group) => group.tabIds));
+      setOpenTabs((currentTabs) => currentTabs.filter((tab) => remainingTabIds.has(tab.id)));
+      setEditorViewModes((currentModes) => {
+        const nextModes: Record<string, "code" | "preview"> = {};
+        let changed = false;
+
+        for (const [tabId, mode] of Object.entries(currentModes)) {
+          if (!remainingTabIds.has(tabId)) {
+            changed = true;
+            continue;
+          }
+          nextModes[tabId] = mode;
+        }
+
+        return changed ? nextModes : currentModes;
+      });
+
+      if (nextGroups.length <= 1) {
+        const remainingGroup = nextGroups[0] ?? null;
+        setEditorLayoutMode("single");
+        setActiveEditorWorkspaceGroupId(null);
+        setActiveTabId(remainingGroup?.activeTabId ?? null);
+        return [];
+      }
+
+      const resolvedActiveGroup =
+        nextGroups[Math.max(0, targetGroupIndex - 1)] ??
+        nextGroups[0] ??
+        null;
+      setActiveEditorWorkspaceGroupId(resolvedActiveGroup?.id ?? null);
+      setActiveTabId(resolvedActiveGroup?.activeTabId ?? null);
       return nextGroups;
     });
-  }, [activeEditorWorkspaceGroupId]);
+  }, []);
 
   const handleLeaveEditorWorkspace = useCallback(() => {
     setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal");
@@ -1212,6 +1344,16 @@ export function MainLayout() {
   }, [activeNativeTerminalGroupId, nativeTerminalGroups]);
 
   useEffect(() => {
+    if (editorLayoutMode !== "split") {
+      if (editorWorkspaceGroups.length > 0) {
+        setEditorWorkspaceGroups([]);
+      }
+      if (activeEditorWorkspaceGroupId !== null) {
+        setActiveEditorWorkspaceGroupId(null);
+      }
+      return;
+    }
+
     if (editorWorkspaceGroups.length === 0) {
       if (activeEditorWorkspaceGroupId !== null) {
         setActiveEditorWorkspaceGroupId(null);
@@ -1222,9 +1364,11 @@ export function MainLayout() {
     if (!activeEditorWorkspaceGroupId || !editorWorkspaceGroups.some((group) => group.id === activeEditorWorkspaceGroupId)) {
       setActiveEditorWorkspaceGroupId(editorWorkspaceGroups[0].id);
     }
-  }, [activeEditorWorkspaceGroupId, editorWorkspaceGroups]);
+  }, [activeEditorWorkspaceGroupId, editorLayoutMode, editorWorkspaceGroups]);
 
   useEffect(() => {
+    if (editorLayoutMode !== "single") return;
+
     if (openTabs.length === 0) {
       if (activeTabId !== null) {
         setActiveTabId(null);
@@ -1235,7 +1379,49 @@ export function MainLayout() {
     if (!activeTabId || !openTabs.some((tab) => tab.id === activeTabId)) {
       setActiveTabId(openTabs[0].id);
     }
-  }, [activeTabId, openTabs]);
+  }, [activeTabId, editorLayoutMode, openTabs]);
+
+  useEffect(() => {
+    if (editorLayoutMode !== "split") return;
+
+    if (openTabs.length === 0) {
+      setEditorLayoutMode("single");
+      setEditorWorkspaceGroups([]);
+      setActiveEditorWorkspaceGroupId(null);
+      if (activeTabId !== null) {
+        setActiveTabId(null);
+      }
+      return;
+    }
+
+    setEditorWorkspaceGroups((currentGroups) => {
+      const validTabIds = new Set(openTabs.map((tab) => tab.id));
+      let changed = false;
+      const nextGroups = currentGroups.map((group) => {
+        const nextTabIds = group.tabIds.filter((tabId) => validTabIds.has(tabId));
+        const nextActiveTabId =
+          group.activeTabId && nextTabIds.includes(group.activeTabId)
+            ? group.activeTabId
+            : nextTabIds[nextTabIds.length - 1] ?? null;
+
+        if (
+          nextTabIds.length === group.tabIds.length &&
+          nextActiveTabId === group.activeTabId
+        ) {
+          return group;
+        }
+
+        changed = true;
+        return {
+          ...group,
+          tabIds: nextTabIds,
+          activeTabId: nextActiveTabId,
+        };
+      });
+
+      return changed ? nextGroups : currentGroups;
+    });
+  }, [activeTabId, editorLayoutMode, openTabs]);
 
   useEffect(() => {
     if (!workspacePath) return;
@@ -2380,11 +2566,210 @@ export function MainLayout() {
                 >
                   <div className="code-workspace">
                     <div className="code-workspace-inner">
-                      {activeTab ? (
+                      {editorLayoutMode === "split" && editorWorkspaceGroupsForRender.length > 0 ? (
+                        <ResizablePanelGroup orientation="horizontal" className="workspace-split-layout">
+                          {editorWorkspaceGroupsForRender.map((group, groupIndex) => {
+                            const activeGroupTab =
+                              group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
+                            const activeGroupMode =
+                              activeGroupTab && isPreviewablePath(activeGroupTab.path)
+                                ? supportsCodeViewForPath(activeGroupTab.path)
+                                  ? (editorViewModes[activeGroupTab.id] ?? "preview")
+                                  : "preview"
+                                : "code";
+
+                            return (
+                              <Fragment key={group.id}>
+                                <ResizablePanel
+                                  defaultSize={100 / editorWorkspaceGroupsForRender.length}
+                                  minSize={22}
+                                  className="workspace-split-panel"
+                                >
+                                  <div
+                                    className="workspace-split-group"
+                                    data-active={group.id === activeEditorWorkspaceGroupId ? "true" : undefined}
+                                    onMouseDown={() => {
+                                      setActiveEditorWorkspaceGroupId(group.id);
+                                      setActiveTabId(activeGroupTab?.id ?? null);
+                                    }}
+                                  >
+                                    {activeGroupTab ? (
+                                      <Tabs
+                                        value={activeGroupTab.id}
+                                        onValueChange={(tabId) => {
+                                          handleActivateEditorWorkspaceTab(group.id, tabId);
+                                        }}
+                                        className="flex h-full min-h-0 w-full flex-1 flex-col gap-0"
+                                      >
+                                        <div className="editor-header">
+                                          <div className="code-tabs-bar">
+                                            <ScrollArea
+                                              className="code-tabs-scroll min-w-0 flex-1"
+                                              onWheel={handleTabsWheel}
+                                            >
+                                              <TabsList
+                                                variant="line"
+                                                className="code-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                              >
+                                                {group.tabs.map((tab) => {
+                                                  const isDirty = tab.content !== tab.savedContent;
+                                                  const tabLabel = getTabName(tab.path);
+                                                  return (
+                                                    <Tooltip key={`${group.id}:${tab.id}`}>
+                                                      <TooltipTrigger
+                                                        render={
+                                                          <TabsTrigger
+                                                            value={tab.id}
+                                                            className="code-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                                          >
+                                                            <EditorFileIcon path={tab.path} />
+                                                            {isDirty ? (
+                                                              <Circle className="size-2 fill-current stroke-none text-cyan-300" />
+                                                            ) : null}
+                                                            <span className="code-tab-label truncate">{tabLabel}</span>
+                                                            <span
+                                                              role="button"
+                                                              tabIndex={0}
+                                                              className="code-tab-close"
+                                                              onClick={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handleCloseTab(tab.id, group.id);
+                                                              }}
+                                                              onKeyDown={(event) => {
+                                                                if (event.key !== "Enter" && event.key !== " ") return;
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handleCloseTab(tab.id, group.id);
+                                                              }}
+                                                              aria-label={`Close ${tabLabel}`}
+                                                            >
+                                                              <X className="size-3.5" />
+                                                            </span>
+                                                          </TabsTrigger>
+                                                        }
+                                                      />
+                                                      <TooltipContent>{tab.path}</TooltipContent>
+                                                    </Tooltip>
+                                                  );
+                                                })}
+                                              </TabsList>
+                                              <ScrollBar orientation="horizontal" />
+                                            </ScrollArea>
+                                            <div className="code-workspace-tabs-actions">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="code-workspace-close"
+                                                onClick={() => handleSplitEditorWorkspaceGroup(group.id)}
+                                                aria-label="Split editor group"
+                                              >
+                                                <Columns2 className="size-3.5" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="code-workspace-close"
+                                                onClick={() => {
+                                                  if (editorWorkspaceGroupsForRender.length > 1) {
+                                                    handleCloseEditorWorkspaceGroup(group.id);
+                                                    return;
+                                                  }
+                                                  handleLeaveEditorWorkspace();
+                                                }}
+                                                aria-label={
+                                                  editorWorkspaceGroupsForRender.length > 1
+                                                    ? "Close editor group"
+                                                    : "Close editor workspace"
+                                                }
+                                              >
+                                                <X className="size-3.5" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                          <ActivePathBar
+                                            path={activeGroupTab.path}
+                                            previewKind={getPreviewKind(activeGroupTab.path)}
+                                            supportsCodeView={supportsCodeViewForPath(activeGroupTab.path)}
+                                            mode={activeGroupMode}
+                                            onModeChange={(mode) => {
+                                              handleSetEditorViewMode(activeGroupTab.id, mode);
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="editor-content">
+                                          <CodeEditor
+                                            path={activeGroupTab.path}
+                                            workspacePath={workspacePath}
+                                            content={activeGroupTab.content}
+                                            dirty={activeGroupTab.content !== activeGroupTab.savedContent}
+                                            mode={activeGroupMode}
+                                            onChange={handleChange}
+                                            onSave={handleSave}
+                                          />
+                                        </div>
+                                      </Tabs>
+                                    ) : (
+                                      <div className="terminal-shell terminal-group-shell">
+                                        <div className="code-tabs-bar">
+                                          <div className="terminal-tabs-empty-label">Empty split</div>
+                                          <div className="code-workspace-tabs-actions">
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              className="code-workspace-close"
+                                              onClick={() => handleSplitEditorWorkspaceGroup(group.id)}
+                                              aria-label="Split editor group"
+                                            >
+                                              <Columns2 className="size-3.5" />
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              className="code-workspace-close"
+                                              onClick={() => {
+                                                if (editorWorkspaceGroupsForRender.length > 1) {
+                                                  handleCloseEditorWorkspaceGroup(group.id);
+                                                  return;
+                                                }
+                                                handleLeaveEditorWorkspace();
+                                              }}
+                                              aria-label={
+                                                editorWorkspaceGroupsForRender.length > 1
+                                                  ? "Close editor group"
+                                                  : "Close editor workspace"
+                                              }
+                                            >
+                                              <X className="size-3.5" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                        <div className="workspace-group-empty-state">
+                                          <div className="workspace-group-empty-title">Empty editor pane</div>
+                                          <div className="workspace-group-empty-description">
+                                            Open a file from the Files panel into this split.
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </ResizablePanel>
+                                {groupIndex < editorWorkspaceGroupsForRender.length - 1 ? (
+                                  <ResizableHandle withHandle className="workspace-split-handle" />
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
+                        </ResizablePanelGroup>
+                      ) : activeTab ? (
                         <Tabs
                           value={activeTab.id}
                           onValueChange={setActiveTabId}
-                          className="flex h-full min-h-0 flex-col gap-0"
+                          className="flex h-full min-h-0 w-full flex-1 flex-col gap-0"
                         >
                           <div className="editor-header">
                             <div className="code-tabs-bar">
@@ -2439,6 +2824,16 @@ export function MainLayout() {
                                 <ScrollBar orientation="horizontal" />
                               </ScrollArea>
                               <div className="code-workspace-tabs-actions">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="code-workspace-close"
+                                  onClick={() => handleSplitEditorWorkspaceGroup()}
+                                  aria-label="Split editor group"
+                                >
+                                  <Columns2 className="size-3.5" />
+                                </Button>
                                 <Button
                                   type="button"
                                   variant="ghost"
