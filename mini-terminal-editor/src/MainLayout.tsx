@@ -26,8 +26,9 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
-import { type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -96,6 +97,12 @@ type TerminalTab = {
 
 type BranchCreateMode = "none" | "current" | "from";
 
+type WorkspaceTabGroup = {
+  id: string;
+  tabIds: string[];
+  activeTabId: string | null;
+};
+
 function getTabName(path: string) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
@@ -121,6 +128,144 @@ function getTabDir(path: string) {
 function formatWorkspacePath(path: string | null) {
   if (!path) return "";
   return path.replace(/^\/Users\/[^/]+/, "~");
+}
+
+function createWorkspaceTabGroup(id: string): WorkspaceTabGroup {
+  return {
+    id,
+    tabIds: [],
+    activeTabId: null,
+  };
+}
+
+function findWorkspaceGroupByTabId(groups: WorkspaceTabGroup[], tabId: string) {
+  return groups.find((group) => group.tabIds.includes(tabId)) ?? null;
+}
+
+function setWorkspaceGroupActiveTab(
+  groups: WorkspaceTabGroup[],
+  groupId: string,
+  tabId: string | null
+) {
+  return groups.map((group) => {
+    if (group.id !== groupId) return group;
+    if (tabId !== null && !group.tabIds.includes(tabId)) return group;
+    return group.activeTabId === tabId ? group : { ...group, activeTabId: tabId };
+  });
+}
+
+function appendTabToWorkspaceGroup(
+  groups: WorkspaceTabGroup[],
+  targetGroupId: string | null,
+  tabId: string,
+  fallbackGroup: WorkspaceTabGroup
+) {
+  let foundTargetGroup = false;
+
+  const nextGroups = groups.map((group) => {
+    if (group.id !== targetGroupId) return group;
+    foundTargetGroup = true;
+    if (group.tabIds.includes(tabId)) {
+      return group.activeTabId === tabId ? group : { ...group, activeTabId: tabId };
+    }
+    return {
+      ...group,
+      tabIds: [...group.tabIds, tabId],
+      activeTabId: tabId,
+    };
+  });
+
+  if (foundTargetGroup) {
+    return {
+      nextGroups,
+      effectiveGroupId: targetGroupId,
+    };
+  }
+
+  return {
+    nextGroups: [
+      ...nextGroups,
+      {
+        ...fallbackGroup,
+        tabIds: [tabId],
+        activeTabId: tabId,
+      },
+    ],
+    effectiveGroupId: fallbackGroup.id,
+  };
+}
+
+function removeTabFromWorkspaceGroups(groups: WorkspaceTabGroup[], tabId: string) {
+  return groups.map((group) => {
+    if (!group.tabIds.includes(tabId)) return group;
+
+    const nextTabIds = group.tabIds.filter((groupTabId) => groupTabId !== tabId);
+    const nextActiveTabId =
+      group.activeTabId === tabId ? nextTabIds[nextTabIds.length - 1] ?? null : group.activeTabId;
+
+    return {
+      ...group,
+      tabIds: nextTabIds,
+      activeTabId: nextActiveTabId,
+    };
+  });
+}
+
+function insertWorkspaceGroupAfter(
+  groups: WorkspaceTabGroup[],
+  sourceGroupId: string,
+  nextGroup: WorkspaceTabGroup
+) {
+  const sourceGroupIndex = groups.findIndex((group) => group.id === sourceGroupId);
+  if (sourceGroupIndex === -1) {
+    return [...groups, nextGroup];
+  }
+
+  const nextGroups = [...groups];
+  nextGroups.splice(sourceGroupIndex + 1, 0, nextGroup);
+  return nextGroups;
+}
+
+function closeWorkspaceTabGroup(groups: WorkspaceTabGroup[], groupId: string) {
+  if (groups.length <= 1) {
+    return {
+      nextGroups: groups,
+      nextActiveGroupId: groups[0]?.id ?? null,
+    };
+  }
+
+  const groupIndex = groups.findIndex((group) => group.id === groupId);
+  if (groupIndex === -1) {
+    return {
+      nextGroups: groups,
+      nextActiveGroupId: groups[0]?.id ?? null,
+    };
+  }
+
+  const targetGroupIndex = groupIndex > 0 ? groupIndex - 1 : 1;
+  const closingGroup = groups[groupIndex];
+  const nextGroups = groups
+    .filter((group) => group.id !== groupId)
+    .map((group, index) => {
+      if (index !== targetGroupIndex - (groupIndex > 0 ? 0 : 1)) return group;
+
+      const mergedTabIds = [...group.tabIds, ...closingGroup.tabIds];
+      const nextActiveTabId =
+        group.activeTabId ?? closingGroup.activeTabId ?? mergedTabIds[0] ?? null;
+
+      return {
+        ...group,
+        tabIds: mergedTabIds,
+        activeTabId: nextActiveTabId,
+      };
+    });
+
+  const nextActiveGroupId = nextGroups[targetGroupIndex - (groupIndex > 0 ? 0 : 1)]?.id ?? nextGroups[0]?.id ?? null;
+
+  return {
+    nextGroups,
+    nextActiveGroupId,
+  };
 }
 
 function EditorFileIcon({ path }: { path: string }) {
@@ -314,16 +459,26 @@ export function MainLayout() {
   const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const agentPresetMenuRef = useRef<HTMLDivElement | null>(null);
+  const agentPresetMenuPopupRef = useRef<HTMLDivElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
   const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const titlebarDraggingRef = useRef(false);
   const terminalCounterRef = useRef(1);
+  const agentWorkspaceGroupCounterRef = useRef(1);
+  const nativeTerminalGroupCounterRef = useRef(1);
+  const editorWorkspaceGroupCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
+  const [agentWorkspaceGroups, setAgentWorkspaceGroups] = useState<WorkspaceTabGroup[]>([]);
+  const [nativeTerminalGroups, setNativeTerminalGroups] = useState<WorkspaceTabGroup[]>([]);
   const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
   const [activeAgentTerminalId, setActiveAgentTerminalId] = useState<string | null>(null);
+  const [activeAgentWorkspaceGroupId, setActiveAgentWorkspaceGroupId] = useState<string | null>(null);
+  const [activeNativeTerminalGroupId, setActiveNativeTerminalGroupId] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor" | "diff">("agent");
   const [openTabs, setOpenTabs] = useState<FileEditorTab[]>([]);
+  const [editorWorkspaceGroups, setEditorWorkspaceGroups] = useState<WorkspaceTabGroup[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [activeEditorWorkspaceGroupId, setActiveEditorWorkspaceGroupId] = useState<string | null>(null);
   const [diffTabs, setDiffTabs] = useState<DiffTab[]>([]);
   const [activeDiffTabId, setActiveDiffTabId] = useState<string | null>(null);
   const [diffDirtyState, setDiffDirtyState] = useState<Record<string, boolean>>({});
@@ -336,6 +491,7 @@ export function MainLayout() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
+  const [agentPresetMenuPosition, setAgentPresetMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchMenuLoading, setBranchMenuLoading] = useState(false);
   const [branchMenuError, setBranchMenuError] = useState<string | null>(null);
@@ -392,6 +548,24 @@ export function MainLayout() {
       setBranchMenuLoading(false);
     }
   }, [branchCreateSource, git.capability?.status, workspacePath]);
+
+  const createAgentWorkspaceGroup = useCallback(() => {
+    const nextIndex = agentWorkspaceGroupCounterRef.current;
+    agentWorkspaceGroupCounterRef.current += 1;
+    return createWorkspaceTabGroup(`agent-group-${nextIndex}`);
+  }, []);
+
+  const createNativeTerminalGroup = useCallback(() => {
+    const nextIndex = nativeTerminalGroupCounterRef.current;
+    nativeTerminalGroupCounterRef.current += 1;
+    return createWorkspaceTabGroup(`native-terminal-group-${nextIndex}`);
+  }, []);
+
+  const createEditorWorkspaceGroup = useCallback(() => {
+    const nextIndex = editorWorkspaceGroupCounterRef.current;
+    editorWorkspaceGroupCounterRef.current += 1;
+    return createWorkspaceTabGroup(`editor-group-${nextIndex}`);
+  }, []);
 
   const handleTabsWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
@@ -455,7 +629,13 @@ export function MainLayout() {
 
     const handlePointerDown = (event: globalThis.MouseEvent) => {
       const target = event.target as Node | null;
-      if (target && agentPresetMenuRef.current?.contains(target)) return;
+      if (
+        target &&
+        (agentPresetMenuRef.current?.contains(target) ||
+          agentPresetMenuPopupRef.current?.contains(target))
+      ) {
+        return;
+      }
       setAgentPresetMenuOpen(false);
     };
 
@@ -473,6 +653,33 @@ export function MainLayout() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [agentPresetMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!agentPresetMenuOpen) {
+      setAgentPresetMenuPosition(null);
+      return;
+    }
+
+    const syncPosition = () => {
+      const anchor = agentPresetMenuRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      setAgentPresetMenuPosition({
+        top: rect.bottom + 6,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+
+    syncPosition();
+    window.addEventListener("resize", syncPosition);
+    window.addEventListener("scroll", syncPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", syncPosition);
+      window.removeEventListener("scroll", syncPosition, true);
+    };
+  }, [agentPresetMenuOpen, activeAgentWorkspaceGroupId]);
 
   useEffect(() => {
     if (!branchMenuOpen) return;
@@ -678,7 +885,7 @@ export function MainLayout() {
     })();
   }, [diffDirtyState, diffTabs, openTabs.length, setDiffTabDirty]);
 
-  const handleCreateTerminal = useCallback(() => {
+  const handleCreateTerminal = useCallback((targetGroupId?: string) => {
     const nextIndex = terminalCounterRef.current;
     terminalCounterRef.current += 1;
     const id = `term-${nextIndex}`;
@@ -692,9 +899,25 @@ export function MainLayout() {
     };
 
     setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
+    setNativeTerminalGroups((currentGroups) => {
+      const resolvedTargetGroupId =
+        targetGroupId ??
+        activeNativeTerminalGroupId ??
+        currentGroups.find((group) => group.tabIds.length === 0)?.id ??
+        null;
+      const fallbackGroup = createNativeTerminalGroup();
+      const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
+        currentGroups,
+        resolvedTargetGroupId,
+        id,
+        fallbackGroup
+      );
+      setActiveNativeTerminalGroupId(effectiveGroupId);
+      return nextGroups;
+    });
     setActiveNativeTerminalId(id);
     setActiveWorkspace("terminal");
-  }, [workspacePath]);
+  }, [activeNativeTerminalGroupId, createNativeTerminalGroup, workspacePath]);
 
   const handleCreateAgentTerminal = useCallback(
     (preset: AgentPreset) => {
@@ -712,44 +935,63 @@ export function MainLayout() {
       };
 
       setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
+      setAgentWorkspaceGroups((currentGroups) => {
+        const fallbackGroup = createAgentWorkspaceGroup();
+        const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
+          currentGroups,
+          activeAgentWorkspaceGroupId,
+          id,
+          fallbackGroup
+        );
+        setActiveAgentWorkspaceGroupId(effectiveGroupId);
+        return nextGroups;
+      });
       setActiveAgentTerminalId(id);
       setActiveWorkspace("agent");
       setAgentPresetMenuOpen(false);
     },
-    [workspacePath]
+    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, workspacePath]
   );
 
   const handleCloseTerminal = useCallback((terminalId: string) => {
-    setTerminalTabs((currentTabs) => {
-      const targetTab = currentTabs.find((tab) => tab.id === terminalId);
-      if (!targetTab) return currentTabs;
+    const targetTab = terminalTabs.find((tab) => tab.id === terminalId);
+    if (!targetTab) return;
 
-      const nextTabs = currentTabs.filter((tab) => tab.id !== terminalId);
-      const sameKindTabs = currentTabs.filter((tab) => tab.kind === targetTab.kind);
-      const sameKindIndex = sameKindTabs.findIndex((tab) => tab.id === terminalId);
-      const nextSameKindTabs = nextTabs.filter((tab) => tab.kind === targetTab.kind);
+    setTerminalTabs((currentTabs) => currentTabs.filter((tab) => tab.id !== terminalId));
 
-      if (targetTab.kind === "native") {
-        setActiveNativeTerminalId((currentActiveId) => {
-          if (currentActiveId !== terminalId) return currentActiveId;
-          if (nextSameKindTabs.length === 0) return null;
-          return (
-            nextSameKindTabs[Math.max(0, sameKindIndex - 1)]?.id ?? nextSameKindTabs[0].id
-          );
-        });
-      } else {
-        setActiveAgentTerminalId((currentActiveId) => {
-          if (currentActiveId !== terminalId) return currentActiveId;
-          if (nextSameKindTabs.length === 0) return null;
-          return (
-            nextSameKindTabs[Math.max(0, sameKindIndex - 1)]?.id ?? nextSameKindTabs[0].id
-          );
-        });
-      }
+    if (targetTab.kind === "native") {
+      setNativeTerminalGroups((currentGroups) => {
+        const nextGroups = removeTabFromWorkspaceGroups(currentGroups, terminalId);
+        const nextActiveGroup =
+          nextGroups.find((group) => group.id === activeNativeTerminalGroupId) ??
+          nextGroups[0] ??
+          null;
 
-      return nextTabs;
+        setActiveNativeTerminalGroupId(nextActiveGroup?.id ?? null);
+        setActiveNativeTerminalId((currentActiveId) =>
+          currentActiveId === terminalId ? nextActiveGroup?.activeTabId ?? null : currentActiveId
+        );
+
+        return nextGroups;
+      });
+      return;
+    }
+
+    setAgentWorkspaceGroups((currentGroups) => {
+      const nextGroups = removeTabFromWorkspaceGroups(currentGroups, terminalId);
+      const nextActiveGroup =
+        nextGroups.find((group) => group.id === activeAgentWorkspaceGroupId) ??
+        nextGroups[0] ??
+        null;
+
+      setActiveAgentWorkspaceGroupId(nextActiveGroup?.id ?? null);
+      setActiveAgentTerminalId((currentActiveId) =>
+        currentActiveId === terminalId ? nextActiveGroup?.activeTabId ?? null : currentActiveId
+      );
+
+      return nextGroups;
     });
-  }, []);
+  }, [activeAgentWorkspaceGroupId, activeNativeTerminalGroupId, terminalTabs]);
 
   const handleTerminalTitleChange = useCallback((terminalId: string, title: string) => {
     setTerminalTabs((currentTabs) =>
@@ -807,10 +1049,16 @@ export function MainLayout() {
       );
 
       setTerminalTabs([]);
+      setAgentWorkspaceGroups([]);
+      setNativeTerminalGroups([]);
       setActiveNativeTerminalId(null);
       setActiveAgentTerminalId(null);
+      setActiveAgentWorkspaceGroupId(null);
+      setActiveNativeTerminalGroupId(null);
       setOpenTabs([]);
+      setEditorWorkspaceGroups([]);
       setActiveTabId(null);
+      setActiveEditorWorkspaceGroupId(null);
       setDiffTabs([]);
       setActiveDiffTabId(null);
       setDiffDirtyState({});
@@ -830,6 +1078,151 @@ export function MainLayout() {
       [tabId]: mode,
     }));
   }, []);
+
+  const handleActivateAgentWorkspaceTab = useCallback((groupId: string, tabId: string) => {
+    setAgentWorkspaceGroups((currentGroups) =>
+      setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
+    );
+    setActiveAgentWorkspaceGroupId(groupId);
+    setActiveAgentTerminalId(tabId);
+  }, []);
+
+  const handleActivateNativeTerminalTab = useCallback((groupId: string, tabId: string) => {
+    setNativeTerminalGroups((currentGroups) =>
+      setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
+    );
+    setActiveNativeTerminalGroupId(groupId);
+    setActiveNativeTerminalId(tabId);
+  }, []);
+
+  const handleActivateEditorWorkspaceTab = useCallback((groupId: string, tabId: string) => {
+    setEditorWorkspaceGroups((currentGroups) =>
+      setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
+    );
+    setActiveEditorWorkspaceGroupId(groupId);
+    setActiveTabId(tabId);
+  }, []);
+
+  const handleSplitAgentWorkspaceGroup = useCallback((groupId: string) => {
+    const nextGroup = createAgentWorkspaceGroup();
+    setAgentWorkspaceGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
+    setActiveAgentWorkspaceGroupId(nextGroup.id);
+    setActiveAgentTerminalId(null);
+  }, [createAgentWorkspaceGroup]);
+
+  const handleSplitNativeTerminalGroup = useCallback((groupId: string) => {
+    const nextGroup = createNativeTerminalGroup();
+    setNativeTerminalGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
+    setActiveNativeTerminalGroupId(nextGroup.id);
+    setActiveNativeTerminalId(null);
+  }, [createNativeTerminalGroup]);
+
+  const handleSplitEditorWorkspaceGroup = useCallback((groupId: string) => {
+    const nextGroup = createEditorWorkspaceGroup();
+    setEditorWorkspaceGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
+    setActiveEditorWorkspaceGroupId(nextGroup.id);
+    setActiveTabId(null);
+  }, [createEditorWorkspaceGroup]);
+
+  const handleCloseAgentWorkspaceGroup = useCallback((groupId: string) => {
+    setAgentWorkspaceGroups((currentGroups) => {
+      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
+      const resolvedActiveGroupId =
+        activeAgentWorkspaceGroupId === groupId
+          ? nextActiveGroupId
+          : nextGroups.find((group) => group.id === activeAgentWorkspaceGroupId)?.id ??
+            nextActiveGroupId;
+      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
+      setActiveAgentWorkspaceGroupId(resolvedActiveGroupId);
+      setActiveAgentTerminalId((currentActiveId) =>
+        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
+          ? resolvedActiveGroup?.activeTabId ?? null
+          : currentActiveId
+      );
+      return nextGroups;
+    });
+  }, [activeAgentWorkspaceGroupId]);
+
+  const handleCloseNativeTerminalGroup = useCallback((groupId: string) => {
+    setNativeTerminalGroups((currentGroups) => {
+      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
+      const resolvedActiveGroupId =
+        activeNativeTerminalGroupId === groupId
+          ? nextActiveGroupId
+          : nextGroups.find((group) => group.id === activeNativeTerminalGroupId)?.id ??
+            nextActiveGroupId;
+      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
+      setActiveNativeTerminalGroupId(resolvedActiveGroupId);
+      setActiveNativeTerminalId((currentActiveId) =>
+        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
+          ? resolvedActiveGroup?.activeTabId ?? null
+          : currentActiveId
+      );
+      return nextGroups;
+    });
+  }, [activeNativeTerminalGroupId]);
+
+  const handleCloseEditorWorkspaceGroup = useCallback((groupId: string) => {
+    setEditorWorkspaceGroups((currentGroups) => {
+      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
+      const resolvedActiveGroupId =
+        activeEditorWorkspaceGroupId === groupId
+          ? nextActiveGroupId
+          : nextGroups.find((group) => group.id === activeEditorWorkspaceGroupId)?.id ??
+            nextActiveGroupId;
+      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
+      setActiveEditorWorkspaceGroupId(resolvedActiveGroupId);
+      setActiveTabId((currentActiveId) =>
+        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
+          ? resolvedActiveGroup?.activeTabId ?? null
+          : currentActiveId
+      );
+      return nextGroups;
+    });
+  }, [activeEditorWorkspaceGroupId]);
+
+  const handleLeaveEditorWorkspace = useCallback(() => {
+    setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal");
+  }, [diffTabs.length]);
+
+  useEffect(() => {
+    if (agentWorkspaceGroups.length === 0) {
+      if (activeAgentWorkspaceGroupId !== null) {
+        setActiveAgentWorkspaceGroupId(null);
+      }
+      return;
+    }
+
+    if (!activeAgentWorkspaceGroupId || !agentWorkspaceGroups.some((group) => group.id === activeAgentWorkspaceGroupId)) {
+      setActiveAgentWorkspaceGroupId(agentWorkspaceGroups[0].id);
+    }
+  }, [activeAgentWorkspaceGroupId, agentWorkspaceGroups]);
+
+  useEffect(() => {
+    if (nativeTerminalGroups.length === 0) {
+      if (activeNativeTerminalGroupId !== null) {
+        setActiveNativeTerminalGroupId(null);
+      }
+      return;
+    }
+
+    if (!activeNativeTerminalGroupId || !nativeTerminalGroups.some((group) => group.id === activeNativeTerminalGroupId)) {
+      setActiveNativeTerminalGroupId(nativeTerminalGroups[0].id);
+    }
+  }, [activeNativeTerminalGroupId, nativeTerminalGroups]);
+
+  useEffect(() => {
+    if (editorWorkspaceGroups.length === 0) {
+      if (activeEditorWorkspaceGroupId !== null) {
+        setActiveEditorWorkspaceGroupId(null);
+      }
+      return;
+    }
+
+    if (!activeEditorWorkspaceGroupId || !editorWorkspaceGroups.some((group) => group.id === activeEditorWorkspaceGroupId)) {
+      setActiveEditorWorkspaceGroupId(editorWorkspaceGroups[0].id);
+    }
+  }, [activeEditorWorkspaceGroupId, editorWorkspaceGroups]);
 
   useEffect(() => {
     if (openTabs.length === 0) {
@@ -943,6 +1336,12 @@ export function MainLayout() {
       if (activeNativeTerminalId !== null) {
         setActiveNativeTerminalId(null);
       }
+      if (nativeTerminalGroups.length > 0) {
+        setNativeTerminalGroups([]);
+      }
+      if (activeNativeTerminalGroupId !== null) {
+        setActiveNativeTerminalGroupId(null);
+      }
       return;
     }
 
@@ -952,7 +1351,12 @@ export function MainLayout() {
     ) {
       setActiveNativeTerminalId(nativeTabs[0].id);
     }
-  }, [activeNativeTerminalId, terminalTabs]);
+  }, [
+    activeNativeTerminalGroupId,
+    activeNativeTerminalId,
+    nativeTerminalGroups.length,
+    terminalTabs,
+  ]);
 
   useEffect(() => {
     const agentTabs = terminalTabs.filter((tab) => tab.kind === "agent");
@@ -972,6 +1376,12 @@ export function MainLayout() {
   }, [activeAgentTerminalId, terminalTabs]);
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? null;
+  const activeEditorMode =
+    activeTab && isPreviewablePath(activeTab.path)
+      ? supportsCodeViewForPath(activeTab.path)
+        ? (editorViewModes[activeTab.id] ?? "preview")
+        : "preview"
+      : "code";
   const activeDiffTab = activeDiffTabForPolling;
   const activeDiffSelection =
     activeDiffTab?.kind === "file"
@@ -979,14 +1389,50 @@ export function MainLayout() {
       : null;
   const activeDiffChrome =
     activeDiffTab?.kind === "file" ? (diffChromeState[activeDiffTab.id] ?? null) : null;
-  const activeEditorMode =
-    activeTab && isPreviewablePath(activeTab.path)
-      ? supportsCodeViewForPath(activeTab.path)
-        ? (editorViewModes[activeTab.id] ?? "preview")
-        : "preview"
-      : "code";
   const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
+  const agentTerminalTabsById = useMemo(
+    () => new Map(agentTerminalTabs.map((tab) => [tab.id, tab])),
+    [agentTerminalTabs]
+  );
+  const nativeTerminalTabsById = useMemo(
+    () => new Map(nativeTerminalTabs.map((tab) => [tab.id, tab])),
+    [nativeTerminalTabs]
+  );
+  const editorTabsById = useMemo(
+    () => new Map(openTabs.map((tab) => [tab.id, tab])),
+    [openTabs]
+  );
+  const agentWorkspaceGroupsForRender = useMemo(
+    () =>
+      agentWorkspaceGroups.map((group) => ({
+        ...group,
+        tabs: group.tabIds
+          .map((tabId) => agentTerminalTabsById.get(tabId))
+          .filter((tab): tab is TerminalTab => Boolean(tab)),
+      })),
+    [agentTerminalTabsById, agentWorkspaceGroups]
+  );
+  const nativeTerminalGroupsForRender = useMemo(
+    () =>
+      nativeTerminalGroups.map((group) => ({
+        ...group,
+        tabs: group.tabIds
+          .map((tabId) => nativeTerminalTabsById.get(tabId))
+          .filter((tab): tab is TerminalTab => Boolean(tab)),
+      })),
+    [nativeTerminalGroups, nativeTerminalTabsById]
+  );
+  const editorWorkspaceGroupsForRender = useMemo(
+    () =>
+      editorWorkspaceGroups.map((group) => ({
+        ...group,
+        tabs: group.tabIds
+          .map((tabId) => editorTabsById.get(tabId))
+          .filter((tab): tab is FileEditorTab => Boolean(tab)),
+      })),
+    [editorTabsById, editorWorkspaceGroups]
+  );
   const totalChangedFiles = (git.status?.staged.length ?? 0) + git.combinedChanges.length;
   const workspaceDisplayPath = formatWorkspacePath(workspacePath);
   const currentBranchName = branchList?.current ?? git.status?.branch ?? "HEAD";
@@ -1019,31 +1465,45 @@ export function MainLayout() {
     }
     return options;
   }, [branchList?.local, branchList?.remote, currentBranchName]);
-  const agentPresetMenu = agentPresetMenuOpen ? (
-    <div className="agent-preset-menu" role="menu" aria-label="AI Coding CLI presets">
-      {AGENT_PRESETS.map((preset) => (
-        <button
-          key={preset.id}
-          type="button"
-          className="agent-preset-menu-item"
-          onClick={() => handleCreateAgentTerminal(preset)}
-        >
-          <span className="agent-preset-menu-main">
-            <img
-              src={preset.iconPath}
-              alt=""
-              className="agent-preset-menu-icon"
-              draggable={false}
-            />
-            <span className="agent-preset-menu-copy">
-              <span className="agent-preset-menu-title">{preset.label}</span>
-              <span className="agent-preset-menu-description">{preset.description}</span>
-            </span>
-          </span>
-        </button>
-      ))}
-    </div>
-  ) : null;
+  const agentPresetMenu =
+    agentPresetMenuOpen && agentPresetMenuPosition && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={agentPresetMenuPopupRef}
+            className="agent-preset-menu"
+            role="menu"
+            aria-label="AI Coding CLI presets"
+            style={{
+              position: "fixed",
+              top: agentPresetMenuPosition.top,
+              right: agentPresetMenuPosition.right,
+            }}
+          >
+            {AGENT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="agent-preset-menu-item"
+                onClick={() => handleCreateAgentTerminal(preset)}
+              >
+                <span className="agent-preset-menu-main">
+                  <img
+                    src={preset.iconPath}
+                    alt=""
+                    className="agent-preset-menu-icon"
+                    draggable={false}
+                  />
+                  <span className="agent-preset-menu-copy">
+                    <span className="agent-preset-menu-title">{preset.label}</span>
+                    <span className="agent-preset-menu-description">{preset.description}</span>
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>,
+          document.body
+        )
+      : null;
   const branchMenu = branchMenuOpen ? (
     <div className="git-branch-menu" role="menu" aria-label="Git branches">
       <input
@@ -1443,96 +1903,213 @@ export function MainLayout() {
                   className="workspace-panel workspace-panel-agent"
                   data-active={activeWorkspace === "agent" ? "true" : undefined}
                 >
-                  {agentTerminalTabs.length > 0 && activeAgentTerminalId ? (
-                    <Tabs
-                      value={activeAgentTerminalId}
-                      onValueChange={setActiveAgentTerminalId}
-                      className="terminal-shell"
-                    >
-                      <div className="terminal-tabs-bar">
-                        <ScrollArea
-                          className="terminal-tabs-scroll min-w-0 flex-1"
-                          onWheel={handleTabsWheel}
-                        >
-                          <TabsList
-                            variant="line"
-                            className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                          >
-                            {agentTerminalTabs.map((tab) => (
-                              <Tooltip key={tab.id}>
-                                <TooltipTrigger
-                                  render={
-                                    <TabsTrigger
-                                      value={tab.id}
-                                      className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                    >
-                                      <span className="terminal-tab-label truncate">{tab.title}</span>
-                                      <span
-                                        role="button"
-                                        tabIndex={0}
-                                        className="terminal-tab-close"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleCloseTerminal(tab.id);
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if (event.key !== "Enter" && event.key !== " ") return;
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleCloseTerminal(tab.id);
-                                        }}
-                                        aria-label={`Close ${tab.title}`}
-                                      >
-                                        <X className="size-3.5" />
-                                      </span>
-                                    </TabsTrigger>
-                                  }
-                                />
-                                <TooltipContent>{tab.title}</TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </TabsList>
-                          <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
-                        <div
-                          className="terminal-tabs-actions agent-preset-menu-anchor"
-                          ref={agentPresetMenuRef}
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="terminal-tab-create"
-                            onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="Launch AI Coding CLI"
-                            aria-expanded={agentPresetMenuOpen}
-                          >
-                            <Plus className="size-3.5" />
-                          </Button>
-                          {agentPresetMenu}
-                        </div>
-                      </div>
+                  {agentTerminalTabs.length > 0 ? (
+                    <ResizablePanelGroup orientation="horizontal" className="workspace-split-layout">
+                      {agentWorkspaceGroupsForRender.map((group, groupIndex) => {
+                        const activeGroupTab =
+                          group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
 
-                      <div className="terminal-stage">
-                        {agentTerminalTabs.map((tab) => (
-                          <div
-                            key={tab.id}
-                            className="terminal-tab-panel"
-                            data-active={tab.id === activeAgentTerminalId ? "true" : undefined}
-                          >
-                            <TerminalComponent
-                              terminalId={tab.id}
-                              cwd={tab.cwd}
-                              active={activeWorkspace === "agent" && tab.id === activeAgentTerminalId}
-                              defaultTitle={tab.defaultTitle}
-                              startupCommands={tab.startupCommands}
-                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </Tabs>
+                        return (
+                          <Fragment key={group.id}>
+                            <ResizablePanel
+                              defaultSize={100 / agentWorkspaceGroupsForRender.length}
+                              minSize={20}
+                              className="workspace-split-panel"
+                            >
+                              <div
+                                className="workspace-split-group"
+                                data-active={group.id === activeAgentWorkspaceGroupId ? "true" : undefined}
+                                onMouseDown={() => setActiveAgentWorkspaceGroupId(group.id)}
+                              >
+                                {activeGroupTab ? (
+                                  <Tabs
+                                    value={activeGroupTab.id}
+                                    onValueChange={(tabId) => {
+                                      handleActivateAgentWorkspaceTab(group.id, tabId);
+                                    }}
+                                    className="terminal-shell terminal-group-shell"
+                                  >
+                                    <div className="terminal-tabs-bar">
+                                      <ScrollArea
+                                        className="terminal-tabs-scroll min-w-0 flex-1"
+                                        onWheel={handleTabsWheel}
+                                      >
+                                        <TabsList
+                                          variant="line"
+                                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                        >
+                                          {group.tabs.map((tab) => (
+                                            <Tooltip key={tab.id}>
+                                              <TooltipTrigger
+                                                render={
+                                                  <TabsTrigger
+                                                    value={tab.id}
+                                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                                  >
+                                                    <span className="terminal-tab-label truncate">{tab.title}</span>
+                                                    <span
+                                                      role="button"
+                                                      tabIndex={0}
+                                                      className="terminal-tab-close"
+                                                      onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTerminal(tab.id);
+                                                      }}
+                                                      onKeyDown={(event) => {
+                                                        if (event.key !== "Enter" && event.key !== " ") return;
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTerminal(tab.id);
+                                                      }}
+                                                      aria-label={`Close ${tab.title}`}
+                                                    >
+                                                      <X className="size-3.5" />
+                                                    </span>
+                                                  </TabsTrigger>
+                                                }
+                                              />
+                                              <TooltipContent>{tab.title}</TooltipContent>
+                                            </Tooltip>
+                                          ))}
+                                        </TabsList>
+                                        <ScrollBar orientation="horizontal" />
+                                      </ScrollArea>
+                                      <div
+                                        className="terminal-tabs-actions agent-preset-menu-anchor"
+                                        ref={group.id === activeAgentWorkspaceGroupId ? agentPresetMenuRef : undefined}
+                                      >
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => handleSplitAgentWorkspaceGroup(group.id)}
+                                          aria-label="Split AI Coding CLI group"
+                                        >
+                                          <Columns2 className="size-3.5" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => {
+                                            setActiveAgentWorkspaceGroupId(group.id);
+                                            setAgentPresetMenuOpen((openState) => !openState);
+                                          }}
+                                          aria-label="Launch AI Coding CLI"
+                                          aria-expanded={
+                                            group.id === activeAgentWorkspaceGroupId && agentPresetMenuOpen
+                                          }
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </Button>
+                                        {group.id === activeAgentWorkspaceGroupId ? agentPresetMenu : null}
+                                        {agentWorkspaceGroupsForRender.length > 1 ? (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            className="terminal-tab-create"
+                                            onClick={() => handleCloseAgentWorkspaceGroup(group.id)}
+                                            aria-label="Close AI Coding CLI group"
+                                          >
+                                            <X className="size-3.5" />
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    <div className="terminal-stage">
+                                      {group.tabs.map((tab) => (
+                                        <div
+                                          key={tab.id}
+                                          className="terminal-tab-panel"
+                                          data-active={tab.id === activeGroupTab.id ? "true" : undefined}
+                                        >
+                                          <TerminalComponent
+                                            terminalId={tab.id}
+                                            cwd={tab.cwd}
+                                            active={
+                                              activeWorkspace === "agent" &&
+                                              group.id === activeAgentWorkspaceGroupId &&
+                                              tab.id === activeGroupTab.id
+                                            }
+                                            defaultTitle={tab.defaultTitle}
+                                            startupCommands={tab.startupCommands}
+                                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </Tabs>
+                                ) : (
+                                  <div className="terminal-shell terminal-group-shell">
+                                    <div className="terminal-tabs-bar">
+                                      <div className="terminal-tabs-empty-label">Empty split</div>
+                                      <div
+                                        className="terminal-tabs-actions agent-preset-menu-anchor"
+                                        ref={group.id === activeAgentWorkspaceGroupId ? agentPresetMenuRef : undefined}
+                                      >
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => handleSplitAgentWorkspaceGroup(group.id)}
+                                          aria-label="Split AI Coding CLI group"
+                                        >
+                                          <Columns2 className="size-3.5" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => {
+                                            setActiveAgentWorkspaceGroupId(group.id);
+                                            setAgentPresetMenuOpen((openState) => !openState);
+                                          }}
+                                          aria-label="Launch AI Coding CLI"
+                                          aria-expanded={
+                                            group.id === activeAgentWorkspaceGroupId && agentPresetMenuOpen
+                                          }
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </Button>
+                                        {group.id === activeAgentWorkspaceGroupId ? agentPresetMenu : null}
+                                        {agentWorkspaceGroupsForRender.length > 1 ? (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            className="terminal-tab-create"
+                                            onClick={() => handleCloseAgentWorkspaceGroup(group.id)}
+                                            aria-label="Close AI Coding CLI group"
+                                          >
+                                            <X className="size-3.5" />
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <div className="workspace-group-empty-state">
+                                      <div className="workspace-group-empty-title">Empty AI Coding CLI pane</div>
+                                      <div className="workspace-group-empty-description">
+                                        Launch a preset into this split.
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </ResizablePanel>
+                            {groupIndex < agentWorkspaceGroupsForRender.length - 1 ? (
+                              <ResizableHandle withHandle className="workspace-split-handle" />
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </ResizablePanelGroup>
                   ) : (
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">
@@ -1566,93 +2143,199 @@ export function MainLayout() {
                   className="workspace-panel workspace-panel-terminal"
                   data-active={activeWorkspace === "terminal" ? "true" : undefined}
                 >
-                  {nativeTerminalTabs.length > 0 && activeNativeTerminalId ? (
-                    <Tabs
-                      value={activeNativeTerminalId}
-                      onValueChange={setActiveNativeTerminalId}
-                      className="terminal-shell"
-                    >
-                      <div className="terminal-tabs-bar">
-                        <ScrollArea
-                          className="terminal-tabs-scroll min-w-0 flex-1"
-                          onWheel={handleTabsWheel}
-                        >
-                          <TabsList
-                            variant="line"
-                            className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                          >
-                            {nativeTerminalTabs.map((tab) => (
-                              <Tooltip key={tab.id}>
-                                <TooltipTrigger
-                                  render={
-                                    <TabsTrigger
-                                      value={tab.id}
-                                      className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                    >
-                                      <SquareTerminal className="size-3.5" />
-                                      <span className="terminal-tab-label truncate">{tab.title}</span>
-                                      <span
-                                        role="button"
-                                        tabIndex={0}
-                                        className="terminal-tab-close"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleCloseTerminal(tab.id);
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if (event.key !== "Enter" && event.key !== " ") return;
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleCloseTerminal(tab.id);
-                                        }}
-                                        aria-label={`Close ${tab.title}`}
-                                      >
-                                        <X className="size-3.5" />
-                                      </span>
-                                    </TabsTrigger>
-                                  }
-                                />
-                                <TooltipContent>{tab.title}</TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </TabsList>
-                          <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
-                        <div className="terminal-tabs-actions">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="terminal-tab-create"
-                            onClick={handleCreateTerminal}
-                            aria-label="New terminal"
-                          >
-                            <Plus className="size-3.5" />
-                          </Button>
-                        </div>
-                      </div>
+                  {nativeTerminalTabs.length > 0 ? (
+                    <ResizablePanelGroup orientation="horizontal" className="workspace-split-layout">
+                      {nativeTerminalGroupsForRender.map((group, groupIndex) => {
+                        const activeGroupTab =
+                          group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
 
-                      <div className="terminal-stage">
-                        {nativeTerminalTabs.map((tab) => (
-                          <div
-                            key={tab.id}
-                            className="terminal-tab-panel"
-                            data-active={tab.id === activeNativeTerminalId ? "true" : undefined}
-                          >
-                            <TerminalComponent
-                              terminalId={tab.id}
-                              cwd={tab.cwd}
-                              active={
-                                activeWorkspace === "terminal" && tab.id === activeNativeTerminalId
-                              }
-                              defaultTitle={tab.defaultTitle}
-                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </Tabs>
+                        return (
+                          <Fragment key={group.id}>
+                            <ResizablePanel
+                              defaultSize={100 / nativeTerminalGroupsForRender.length}
+                              minSize={20}
+                              className="workspace-split-panel"
+                            >
+                              <div
+                                className="workspace-split-group"
+                                data-active={group.id === activeNativeTerminalGroupId ? "true" : undefined}
+                                onMouseDown={() => setActiveNativeTerminalGroupId(group.id)}
+                              >
+                                {activeGroupTab ? (
+                                  <Tabs
+                                    value={activeGroupTab.id}
+                                    onValueChange={(tabId) => {
+                                      handleActivateNativeTerminalTab(group.id, tabId);
+                                    }}
+                                    className="terminal-shell terminal-group-shell"
+                                  >
+                                    <div className="terminal-tabs-bar">
+                                      <ScrollArea
+                                        className="terminal-tabs-scroll min-w-0 flex-1"
+                                        onWheel={handleTabsWheel}
+                                      >
+                                        <TabsList
+                                          variant="line"
+                                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                                        >
+                                          {group.tabs.map((tab) => (
+                                            <Tooltip key={tab.id}>
+                                              <TooltipTrigger
+                                                render={
+                                                  <TabsTrigger
+                                                    value={tab.id}
+                                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                                  >
+                                                    <SquareTerminal className="size-3.5" />
+                                                    <span className="terminal-tab-label truncate">{tab.title}</span>
+                                                    <span
+                                                      role="button"
+                                                      tabIndex={0}
+                                                      className="terminal-tab-close"
+                                                      onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTerminal(tab.id);
+                                                      }}
+                                                      onKeyDown={(event) => {
+                                                        if (event.key !== "Enter" && event.key !== " ") return;
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleCloseTerminal(tab.id);
+                                                      }}
+                                                      aria-label={`Close ${tab.title}`}
+                                                    >
+                                                      <X className="size-3.5" />
+                                                    </span>
+                                                  </TabsTrigger>
+                                                }
+                                              />
+                                              <TooltipContent>{tab.title}</TooltipContent>
+                                            </Tooltip>
+                                          ))}
+                                        </TabsList>
+                                        <ScrollBar orientation="horizontal" />
+                                      </ScrollArea>
+                                      <div className="terminal-tabs-actions">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => handleSplitNativeTerminalGroup(group.id)}
+                                          aria-label="Split terminal group"
+                                        >
+                                          <Columns2 className="size-3.5" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => {
+                                            setActiveNativeTerminalGroupId(group.id);
+                                            handleCreateTerminal(group.id);
+                                          }}
+                                          aria-label="New terminal"
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </Button>
+                                        {nativeTerminalGroupsForRender.length > 1 ? (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            className="terminal-tab-create"
+                                            onClick={() => handleCloseNativeTerminalGroup(group.id)}
+                                            aria-label="Close terminal group"
+                                          >
+                                            <X className="size-3.5" />
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    <div className="terminal-stage">
+                                      {group.tabs.map((tab) => (
+                                        <div
+                                          key={tab.id}
+                                          className="terminal-tab-panel"
+                                          data-active={tab.id === activeGroupTab.id ? "true" : undefined}
+                                        >
+                                          <TerminalComponent
+                                            terminalId={tab.id}
+                                            cwd={tab.cwd}
+                                            active={
+                                              activeWorkspace === "terminal" &&
+                                              group.id === activeNativeTerminalGroupId &&
+                                              tab.id === activeGroupTab.id
+                                            }
+                                            defaultTitle={tab.defaultTitle}
+                                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </Tabs>
+                                ) : (
+                                  <div className="terminal-shell terminal-group-shell">
+                                    <div className="terminal-tabs-bar">
+                                      <div className="terminal-tabs-empty-label">Empty split</div>
+                                      <div className="terminal-tabs-actions">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => handleSplitNativeTerminalGroup(group.id)}
+                                          aria-label="Split terminal group"
+                                        >
+                                          <Columns2 className="size-3.5" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          className="terminal-tab-create"
+                                          onClick={() => {
+                                            setActiveNativeTerminalGroupId(group.id);
+                                            handleCreateTerminal(group.id);
+                                          }}
+                                          aria-label="New terminal"
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </Button>
+                                        {nativeTerminalGroupsForRender.length > 1 ? (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-xs"
+                                            className="terminal-tab-create"
+                                            onClick={() => handleCloseNativeTerminalGroup(group.id)}
+                                            aria-label="Close terminal group"
+                                          >
+                                            <X className="size-3.5" />
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <div className="workspace-group-empty-state">
+                                      <div className="workspace-group-empty-title">Empty terminal pane</div>
+                                      <div className="workspace-group-empty-description">
+                                        Create a terminal in this split.
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </ResizablePanel>
+                            {groupIndex < nativeTerminalGroupsForRender.length - 1 ? (
+                              <ResizableHandle withHandle className="workspace-split-handle" />
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </ResizablePanelGroup>
                   ) : (
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">
@@ -1663,7 +2346,7 @@ export function MainLayout() {
                             variant="ghost"
                             size="icon-xs"
                             className="terminal-tab-create"
-                            onClick={handleCreateTerminal}
+                            onClick={() => handleCreateTerminal()}
                             aria-label="New terminal"
                           >
                             <Plus className="size-3.5" />
@@ -1705,10 +2388,7 @@ export function MainLayout() {
                         >
                           <div className="editor-header">
                             <div className="code-tabs-bar">
-                              <ScrollArea
-                                className="code-tabs-scroll min-w-0 flex-1"
-                                onWheel={handleTabsWheel}
-                              >
+                              <ScrollArea className="code-tabs-scroll min-w-0 flex-1" onWheel={handleTabsWheel}>
                                 <TabsList
                                   variant="line"
                                   className="code-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
@@ -1725,9 +2405,9 @@ export function MainLayout() {
                                               className="code-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
                                             >
                                               <EditorFileIcon path={tab.path} />
-                                              {isDirty && (
+                                              {isDirty ? (
                                                 <Circle className="size-2 fill-current stroke-none text-cyan-300" />
-                                              )}
+                                              ) : null}
                                               <span className="code-tab-label truncate">{tabLabel}</span>
                                               <span
                                                 role="button"

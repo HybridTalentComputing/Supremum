@@ -767,6 +767,66 @@ body {
   display: flex;
 }
 
+.workspace-split-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #090909;
+}
+
+.workspace-split-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.workspace-split-group {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+  background: #090909;
+}
+
+.workspace-split-group[data-active] {
+  z-index: 8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.workspace-split-handle {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.workspace-group-empty-state {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 1.25rem;
+  background: #090909;
+  text-align: center;
+}
+
+.workspace-group-empty-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.workspace-group-empty-description {
+  max-width: 18rem;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.46);
+}
+
 .workspace-empty-state {
   display: flex;
   flex: 1;
@@ -1034,10 +1094,15 @@ body {
 .terminal-shell {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
   gap: 0;
   background: #02070c;
+}
+
+.terminal-group-shell {
+  min-width: 0;
 }
 
 .terminal-tabs-bar {
