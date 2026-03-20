@@ -295,6 +295,29 @@ function reorderTabIds(
   return nextTabIds;
 }
 
+function reorderItemsById<T extends { id: string }>(
+  items: T[],
+  sourceId: string,
+  targetId: string,
+  placement: "before" | "after" = "before"
+) {
+  const nextIds = reorderTabIds(
+    items.map((item) => item.id),
+    sourceId,
+    targetId,
+    placement
+  );
+
+  if (nextIds.length !== items.length) {
+    return items;
+  }
+
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+  return nextIds
+    .map((id) => itemsById.get(id))
+    .filter((item): item is T => Boolean(item));
+}
+
 function EditorFileIcon({ path }: { path: string }) {
   const iconUrl = useFileIconUrl(getTabName(path), false, false);
 
@@ -518,6 +541,16 @@ export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
+  const editorTabDragStartRef = useRef<{ groupId: string | null; tabId: string; x: number; y: number } | null>(null);
+  const editorTabSuppressClickRef = useRef(false);
+  const editorTabDropTargetRef = useRef<{ groupId: string | null; tabId: string; edge: "before" | "after" } | null>(null);
+  const [draggedEditorTab, setDraggedEditorTab] = useState<{ groupId: string | null; tabId: string } | null>(null);
+  const [editorTabDropTarget, setEditorTabDropTarget] = useState<{
+    groupId: string | null;
+    tabId: string;
+    edge: "before" | "after";
+  } | null>(null);
+  const [editorTabDragPreviewPosition, setEditorTabDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
   const agentTabDragStartRef = useRef<{ groupId: string; tabId: string; x: number; y: number } | null>(null);
   const agentTabSuppressClickRef = useRef(false);
   const agentTabDropTargetRef = useRef<{ groupId: string; tabId: string; edge: "before" | "after" } | null>(null);
@@ -1422,6 +1455,103 @@ export function MainLayout() {
     setActiveNativeTerminalId(tabId);
   }, []);
 
+  const handleEditorTabPointerDown = useCallback((
+    groupId: string | null,
+    tabId: string,
+    event: PointerEvent<HTMLElement>
+  ) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".code-tab-close")) return;
+
+    editorTabDragStartRef.current = { groupId, tabId, x: event.clientX, y: event.clientY };
+
+    const cleanup = () => {
+      editorTabDragStartRef.current = null;
+      setDraggedEditorTab(null);
+      setEditorTabDropTarget(null);
+      setEditorTabDragPreviewPosition(null);
+      editorTabDropTargetRef.current = null;
+      document.body.classList.remove("editor-tab-dragging");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+      const start = editorTabDragStartRef.current;
+      if (!start) return;
+
+      const dx = moveEvent.clientX - start.x;
+      const dy = moveEvent.clientY - start.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= 5) return;
+
+      if (!editorTabSuppressClickRef.current) {
+        setDraggedEditorTab({ groupId: start.groupId, tabId: start.tabId });
+        setEditorTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+        document.body.classList.add("editor-tab-dragging");
+        editorTabSuppressClickRef.current = true;
+      }
+
+      setEditorTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+
+      const targetElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY) as HTMLElement | null;
+      const targetTabElement = targetElement?.closest<HTMLElement>("[data-editor-tab-id]");
+      const targetGroupId = targetTabElement?.dataset.editorGroupId ?? null;
+      const targetTabId = targetTabElement?.dataset.editorTabId;
+
+      if (
+        !targetTabId ||
+        targetGroupId !== start.groupId ||
+        targetTabId === start.tabId
+      ) {
+        setEditorTabDropTarget(null);
+        editorTabDropTargetRef.current = null;
+        return;
+      }
+
+      const targetRect = targetTabElement.getBoundingClientRect();
+      const edge: "before" | "after" =
+        moveEvent.clientX < targetRect.left + targetRect.width / 2 ? "before" : "after";
+      const nextDropTarget = { groupId: targetGroupId, tabId: targetTabId, edge };
+      editorTabDropTargetRef.current = nextDropTarget;
+      setEditorTabDropTarget(nextDropTarget);
+    };
+
+    const handlePointerUp = () => {
+      const start = editorTabDragStartRef.current;
+      const dropTarget = editorTabDropTargetRef.current;
+      if (start && dropTarget && dropTarget.groupId === start.groupId && dropTarget.tabId !== start.tabId) {
+        if (start.groupId) {
+          setEditorWorkspaceGroups((currentGroups) =>
+            currentGroups.map((group) => {
+              if (group.id !== start.groupId) return group;
+              const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
+              return nextTabIds === group.tabIds ? group : { ...group, tabIds: nextTabIds };
+            })
+          );
+        } else {
+          setOpenTabs((currentTabs) =>
+            reorderItemsById(currentTabs, start.tabId, dropTarget.tabId, dropTarget.edge)
+          );
+        }
+      }
+
+      cleanup();
+      requestAnimationFrame(() => {
+        editorTabSuppressClickRef.current = false;
+      });
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, []);
+
+  const handleEditorTabClickCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (!editorTabSuppressClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
   const handleActivateEditorWorkspaceTab = useCallback((groupId: string, tabId: string) => {
     setEditorWorkspaceGroups((currentGroups) =>
       setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
@@ -1924,6 +2054,8 @@ export function MainLayout() {
     draggedAgentTab ? agentTerminalTabsById.get(draggedAgentTab.tabId)?.title ?? null : null;
   const draggedNativeTerminalTabLabel =
     draggedNativeTerminalTab ? nativeTerminalTabsById.get(draggedNativeTerminalTab.tabId)?.title ?? null : null;
+  const draggedEditorTabLabel =
+    draggedEditorTab ? openTabs.find((tab) => tab.id === draggedEditorTab.tabId)?.path ?? null : null;
   const branchSourceOptions = useMemo(() => {
     const unique = new Set<string>();
     const options: string[] = [];
@@ -2233,11 +2365,28 @@ export function MainLayout() {
           document.body
         )
       : null;
+  const editorTabDragPreview =
+    draggedEditorTab && editorTabDragPreviewPosition && draggedEditorTabLabel
+      ? createPortal(
+          <div
+            className="cli-tab-drag-preview"
+            style={{
+              left: editorTabDragPreviewPosition.x + 14,
+              top: editorTabDragPreviewPosition.y + 16,
+            }}
+          >
+            <FileText className="size-3.5" />
+            <span className="cli-tab-drag-preview-label">{getTabName(draggedEditorTabLabel)}</span>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className="main-layout-shell">
       {agentTabDragPreview}
       {nativeTerminalTabDragPreview}
+      {editorTabDragPreview}
       <div
         className="app-titlebar"
         onMouseDown={handleTitlebarMouseDown}
@@ -2999,6 +3148,31 @@ export function MainLayout() {
                                                           <TabsTrigger
                                                             value={tab.id}
                                                             className="code-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                                            data-draggable="true"
+                                                            data-editor-group-id={group.id}
+                                                            data-editor-tab-id={tab.id}
+                                                            data-dragging={
+                                                              draggedEditorTab?.groupId === group.id &&
+                                                              draggedEditorTab?.tabId === tab.id
+                                                                ? "true"
+                                                                : undefined
+                                                            }
+                                                            data-drop-target={
+                                                              editorTabDropTarget?.groupId === group.id &&
+                                                              editorTabDropTarget?.tabId === tab.id
+                                                                ? "true"
+                                                                : undefined
+                                                            }
+                                                            data-drop-edge={
+                                                              editorTabDropTarget?.groupId === group.id &&
+                                                              editorTabDropTarget?.tabId === tab.id
+                                                                ? editorTabDropTarget.edge
+                                                                : undefined
+                                                            }
+                                                            onPointerDown={(event) => {
+                                                              handleEditorTabPointerDown(group.id, tab.id, event);
+                                                            }}
+                                                            onClickCapture={handleEditorTabClickCapture}
                                                           >
                                                             <EditorFileIcon path={tab.path} />
                                                             {isDirty ? (
@@ -3146,6 +3320,30 @@ export function MainLayout() {
                                             <TabsTrigger
                                               value={tab.id}
                                               className="code-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                              data-draggable="true"
+                                              data-editor-tab-id={tab.id}
+                                              data-dragging={
+                                                draggedEditorTab?.groupId === null &&
+                                                draggedEditorTab?.tabId === tab.id
+                                                  ? "true"
+                                                  : undefined
+                                              }
+                                              data-drop-target={
+                                                editorTabDropTarget?.groupId === null &&
+                                                editorTabDropTarget?.tabId === tab.id
+                                                  ? "true"
+                                                  : undefined
+                                              }
+                                              data-drop-edge={
+                                                editorTabDropTarget?.groupId === null &&
+                                                editorTabDropTarget?.tabId === tab.id
+                                                  ? editorTabDropTarget.edge
+                                                  : undefined
+                                              }
+                                              onPointerDown={(event) => {
+                                                handleEditorTabPointerDown(null, tab.id, event);
+                                              }}
+                                              onClickCapture={handleEditorTabClickCapture}
                                             >
                                               <EditorFileIcon path={tab.path} />
                                               {isDirty ? (
