@@ -955,6 +955,31 @@ export function MainLayout() {
     })();
   }, [diffDirtyState, diffTabs, openTabs.length, setDiffTabDirty]);
 
+  const handleCloseAllDiffTabs = useCallback(() => {
+    void (async () => {
+      const dirtyDiffTabs = diffTabs.filter((tab) => diffDirtyState[tab.id]);
+      if (dirtyDiffTabs.length > 0) {
+        const confirmed = await confirm(
+          dirtyDiffTabs.length === 1
+            ? `"${dirtyDiffTabs[0]?.kind === "all" ? "All Changes" : getDiffFileName(dirtyDiffTabs[0].file.path)}" has unsaved changes. Close all diff tabs anyway?`
+            : `${dirtyDiffTabs.length} diff tabs have unsaved changes. Close all diff tabs anyway?`,
+          {
+            title: "Subset",
+            kind: "warning",
+            okLabel: "Close All",
+            cancelLabel: "Cancel",
+          }
+        );
+        if (!confirmed) return;
+      }
+
+      setDiffTabs([]);
+      setActiveDiffTabId(null);
+      setDiffDirtyState({});
+      setDiffChromeState({});
+    })();
+  }, [diffDirtyState, diffTabs]);
+
   const handleCreateTerminal = useCallback((targetGroupId?: string) => {
     const nextIndex = terminalCounterRef.current;
     terminalCounterRef.current += 1;
@@ -3004,8 +3029,8 @@ export function MainLayout() {
                                   variant="ghost"
                                   size="icon-xs"
                                   className="diff-workspace-close"
-                                  onClick={() => setActiveWorkspace(openTabs.length > 0 ? "editor" : "terminal")}
-                                  aria-label="Close diff workspace"
+                                  onClick={handleCloseAllDiffTabs}
+                                  aria-label="Close all diff tabs"
                                 >
                                   <X className="size-3.5" />
                                 </Button>
