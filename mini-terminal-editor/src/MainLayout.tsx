@@ -268,16 +268,30 @@ function closeWorkspaceTabGroup(groups: WorkspaceTabGroup[], groupId: string) {
   };
 }
 
-function reorderTabIds(tabIds: string[], sourceTabId: string, targetTabId: string) {
-  const sourceIndex = tabIds.indexOf(sourceTabId);
-  const targetIndex = tabIds.indexOf(targetTabId);
-  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+function reorderTabIds(
+  tabIds: string[],
+  sourceTabId: string,
+  targetTabId: string,
+  placement: "before" | "after" = "before"
+) {
+  if (sourceTabId === targetTabId) {
     return tabIds;
   }
 
-  const nextTabIds = [...tabIds];
-  const [movedTabId] = nextTabIds.splice(sourceIndex, 1);
-  nextTabIds.splice(targetIndex, 0, movedTabId);
+  const sourceIndex = tabIds.indexOf(sourceTabId);
+  const targetIndex = tabIds.indexOf(targetTabId);
+  if (sourceIndex === -1 || targetIndex === -1) {
+    return tabIds;
+  }
+
+  const nextTabIds = tabIds.filter((tabId) => tabId !== sourceTabId);
+  const nextTargetIndex = nextTabIds.indexOf(targetTabId);
+  if (nextTargetIndex === -1) {
+    return tabIds;
+  }
+
+  const insertIndex = placement === "before" ? nextTargetIndex : nextTargetIndex + 1;
+  nextTabIds.splice(insertIndex, 0, sourceTabId);
   return nextTabIds;
 }
 
@@ -506,9 +520,14 @@ export function MainLayout() {
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
   const agentTabDragStartRef = useRef<{ groupId: string; tabId: string; x: number; y: number } | null>(null);
   const agentTabSuppressClickRef = useRef(false);
-  const agentTabDropTargetRef = useRef<{ groupId: string; tabId: string } | null>(null);
+  const agentTabDropTargetRef = useRef<{ groupId: string; tabId: string; edge: "before" | "after" } | null>(null);
   const [draggedAgentTab, setDraggedAgentTab] = useState<{ groupId: string; tabId: string } | null>(null);
-  const [agentTabDropTarget, setAgentTabDropTarget] = useState<{ groupId: string; tabId: string } | null>(null);
+  const [agentTabDropTarget, setAgentTabDropTarget] = useState<{
+    groupId: string;
+    tabId: string;
+    edge: "before" | "after";
+  } | null>(null);
+  const [agentTabDragPreviewPosition, setAgentTabDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
   const [agentPresetMenuPosition, setAgentPresetMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -1215,6 +1234,7 @@ export function MainLayout() {
       agentTabDragStartRef.current = null;
       setDraggedAgentTab(null);
       setAgentTabDropTarget(null);
+      setAgentTabDragPreviewPosition(null);
       agentTabDropTargetRef.current = null;
       document.body.classList.remove("cli-tab-dragging");
       window.removeEventListener("pointermove", handlePointerMove);
@@ -1232,9 +1252,12 @@ export function MainLayout() {
 
       if (!agentTabSuppressClickRef.current) {
         setDraggedAgentTab({ groupId: start.groupId, tabId: start.tabId });
+        setAgentTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
         document.body.classList.add("cli-tab-dragging");
         agentTabSuppressClickRef.current = true;
       }
+
+      setAgentTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
 
       const targetElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY) as HTMLElement | null;
       const targetTabElement = targetElement?.closest<HTMLElement>("[data-agent-tab-id]");
@@ -1252,7 +1275,10 @@ export function MainLayout() {
         return;
       }
 
-      const nextDropTarget = { groupId: targetGroupId, tabId: targetTabId };
+      const targetRect = targetTabElement.getBoundingClientRect();
+      const edge: "before" | "after" =
+        moveEvent.clientX < targetRect.left + targetRect.width / 2 ? "before" : "after";
+      const nextDropTarget = { groupId: targetGroupId, tabId: targetTabId, edge };
       agentTabDropTargetRef.current = nextDropTarget;
       setAgentTabDropTarget(nextDropTarget);
     };
@@ -1264,7 +1290,7 @@ export function MainLayout() {
         setAgentWorkspaceGroups((currentGroups) =>
           currentGroups.map((group) => {
             if (group.id !== start.groupId) return group;
-            const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId);
+            const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
             return nextTabIds === group.tabIds ? group : { ...group, tabIds: nextTabIds };
           })
         );
@@ -1792,6 +1818,8 @@ export function MainLayout() {
       ),
     [branchFilter, branchList?.remote],
   );
+  const draggedAgentTabLabel =
+    draggedAgentTab ? agentTerminalTabsById.get(draggedAgentTab.tabId)?.title ?? null : null;
   const branchSourceOptions = useMemo(() => {
     const unique = new Set<string>();
     const options: string[] = [];
@@ -2069,8 +2097,26 @@ export function MainLayout() {
     });
   }, []);
 
+  const agentTabDragPreview =
+    draggedAgentTab && agentTabDragPreviewPosition && draggedAgentTabLabel
+      ? createPortal(
+          <div
+            className="cli-tab-drag-preview"
+            style={{
+              left: agentTabDragPreviewPosition.x + 14,
+              top: agentTabDragPreviewPosition.y + 16,
+            }}
+          >
+            <Sparkles className="size-3.5" />
+            <span className="cli-tab-drag-preview-label">{draggedAgentTabLabel}</span>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <div className="main-layout-shell">
+      {agentTabDragPreview}
       <div
         className="app-titlebar"
         onMouseDown={handleTitlebarMouseDown}
@@ -2302,6 +2348,12 @@ export function MainLayout() {
                                                       agentTabDropTarget?.groupId === group.id &&
                                                       agentTabDropTarget?.tabId === tab.id
                                                         ? "true"
+                                                        : undefined
+                                                    }
+                                                    data-drop-edge={
+                                                      agentTabDropTarget?.groupId === group.id &&
+                                                      agentTabDropTarget?.tabId === tab.id
+                                                        ? agentTabDropTarget.edge
                                                         : undefined
                                                     }
                                                     onPointerDown={(event) => {
