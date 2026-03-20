@@ -1313,6 +1313,33 @@ export function MainLayout() {
     });
   }, []);
 
+  const handleCloseAllEditorTabs = useCallback(() => {
+    void (async () => {
+      const dirtyTabs = openTabs.filter((tab) => tab.content !== tab.savedContent);
+      if (dirtyTabs.length > 0) {
+        const confirmed = await confirm(
+          dirtyTabs.length === 1
+            ? `"${getTabName(dirtyTabs[0].path)}" has unsaved changes. Close all editor tabs anyway?`
+            : `${dirtyTabs.length} editor tabs have unsaved changes. Close all editor tabs anyway?`,
+          {
+            title: "Subset",
+            kind: "warning",
+            okLabel: "Close All",
+            cancelLabel: "Cancel",
+          }
+        );
+        if (!confirmed) return;
+      }
+
+      setOpenTabs([]);
+      setEditorWorkspaceGroups([]);
+      setActiveTabId(null);
+      setActiveEditorWorkspaceGroupId(null);
+      setEditorViewModes({});
+      setEditorLayoutMode("single");
+    })();
+  }, [openTabs]);
+
   const handleLeaveEditorWorkspace = useCallback(() => {
     setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal");
   }, [diffTabs.length]);
@@ -2672,18 +2699,8 @@ export function MainLayout() {
                                                 variant="ghost"
                                                 size="icon-xs"
                                                 className="code-workspace-close"
-                                                onClick={() => {
-                                                  if (editorWorkspaceGroupsForRender.length > 1) {
-                                                    handleCloseEditorWorkspaceGroup(group.id);
-                                                    return;
-                                                  }
-                                                  handleLeaveEditorWorkspace();
-                                                }}
-                                                aria-label={
-                                                  editorWorkspaceGroupsForRender.length > 1
-                                                    ? "Close editor group"
-                                                    : "Close editor workspace"
-                                                }
+                                                onClick={handleCloseAllEditorTabs}
+                                                aria-label="Close all editor tabs"
                                               >
                                                 <X className="size-3.5" />
                                               </Button>
@@ -2731,18 +2748,8 @@ export function MainLayout() {
                                               variant="ghost"
                                               size="icon-xs"
                                               className="code-workspace-close"
-                                              onClick={() => {
-                                                if (editorWorkspaceGroupsForRender.length > 1) {
-                                                  handleCloseEditorWorkspaceGroup(group.id);
-                                                  return;
-                                                }
-                                                handleLeaveEditorWorkspace();
-                                              }}
-                                              aria-label={
-                                                editorWorkspaceGroupsForRender.length > 1
-                                                  ? "Close editor group"
-                                                  : "Close editor workspace"
-                                              }
+                                              onClick={handleCloseAllEditorTabs}
+                                              aria-label="Close all editor tabs"
                                             >
                                               <X className="size-3.5" />
                                             </Button>
@@ -2839,8 +2846,8 @@ export function MainLayout() {
                                   variant="ghost"
                                   size="icon-xs"
                                   className="code-workspace-close"
-                                  onClick={() => setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal")}
-                                  aria-label="Close editor workspace"
+                                  onClick={handleCloseAllEditorTabs}
+                                  aria-label="Close all editor tabs"
                                 >
                                   <X className="size-3.5" />
                                 </Button>
