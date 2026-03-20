@@ -2203,7 +2203,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.55rem;
   padding: 0.42rem 0.65rem 0.34rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
@@ -2211,8 +2211,16 @@ body {
 .git-branch-refs-header-main {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.28rem;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.git-branch-refs-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(176, 185, 193, 0.88);
 }
 
 .git-branch-refs-toggle {
@@ -2233,13 +2241,16 @@ body {
 .git-branch-refs-tabs {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.22rem;
   min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .git-branch-refs-header-actions {
   display: inline-flex;
   align-items: center;
+  flex: none;
+  margin-left: 0.2rem;
 }
 
 .git-branch-refs-tab {
@@ -2247,7 +2258,7 @@ body {
   background: transparent;
   padding: 0;
   color: rgba(136, 143, 151, 0.74);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -2263,7 +2274,7 @@ body {
 
 .git-branch-refs-divider {
   color: rgba(118, 126, 134, 0.56);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 
 .git-branch-refs-refresh {

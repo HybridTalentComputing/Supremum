@@ -90,11 +90,7 @@ export function GitBranchRefsPanel({
           onClick={onToggleExpanded}
         >
           <ChevronRight className="size-3.5" />
-          <span className="git-branch-refs-collapsed-label">Local branches</span>
-          <span className="git-branch-refs-divider">·</span>
-          <span className="git-branch-refs-collapsed-label">Remotes</span>
-          <span className="git-branch-refs-divider">·</span>
-          <span className="git-branch-refs-collapsed-label">Tags</span>
+          <span className="git-branch-refs-collapsed-label">Branches</span>
         </button>
       </section>
     );
@@ -112,6 +108,8 @@ export function GitBranchRefsPanel({
           >
             {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           </button>
+          <span className="git-branch-refs-title">Branches</span>
+          <span className="git-branch-refs-divider">·</span>
           <div role="tablist" aria-label="Git refs" className="git-branch-refs-tabs">
             <button
               type="button"
@@ -121,7 +119,7 @@ export function GitBranchRefsPanel({
               aria-selected={activeTab === "local"}
               onClick={() => setActiveTab("local")}
             >
-              Local branches
+              Local
             </button>
             <span className="git-branch-refs-divider">·</span>
             <button
