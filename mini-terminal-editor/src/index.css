@@ -1182,6 +1182,29 @@ body {
   color: rgba(255, 255, 255, 0.84);
 }
 
+.terminal-tab[data-draggable] {
+  cursor: grab;
+}
+
+.terminal-tab[data-draggable]:active {
+  cursor: grabbing;
+}
+
+.terminal-tab[data-dragging] {
+  opacity: 0.55;
+}
+
+.terminal-tab[data-drop-target] {
+  box-shadow:
+    inset 2px 0 0 rgba(255, 255, 255, 0.3),
+    inset -1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+body.cli-tab-dragging,
+body.cli-tab-dragging * {
+  user-select: none !important;
+}
+
 .terminal-tab[data-active] {
   background: transparent;
   color: rgba(255, 255, 255, 0.97);

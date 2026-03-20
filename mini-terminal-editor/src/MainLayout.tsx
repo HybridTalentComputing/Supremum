@@ -26,7 +26,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
-import { Fragment, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 import {
@@ -268,6 +268,19 @@ function closeWorkspaceTabGroup(groups: WorkspaceTabGroup[], groupId: string) {
   };
 }
 
+function reorderTabIds(tabIds: string[], sourceTabId: string, targetTabId: string) {
+  const sourceIndex = tabIds.indexOf(sourceTabId);
+  const targetIndex = tabIds.indexOf(targetTabId);
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+    return tabIds;
+  }
+
+  const nextTabIds = [...tabIds];
+  const [movedTabId] = nextTabIds.splice(sourceIndex, 1);
+  nextTabIds.splice(targetIndex, 0, movedTabId);
+  return nextTabIds;
+}
+
 function EditorFileIcon({ path }: { path: string }) {
   const iconUrl = useFileIconUrl(getTabName(path), false, false);
 
@@ -491,6 +504,11 @@ export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
+  const agentTabDragStartRef = useRef<{ groupId: string; tabId: string; x: number; y: number } | null>(null);
+  const agentTabSuppressClickRef = useRef(false);
+  const agentTabDropTargetRef = useRef<{ groupId: string; tabId: string } | null>(null);
+  const [draggedAgentTab, setDraggedAgentTab] = useState<{ groupId: string; tabId: string } | null>(null);
+  const [agentTabDropTarget, setAgentTabDropTarget] = useState<{ groupId: string; tabId: string } | null>(null);
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
   const [agentPresetMenuPosition, setAgentPresetMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -1181,6 +1199,91 @@ export function MainLayout() {
     );
     setActiveAgentWorkspaceGroupId(groupId);
     setActiveAgentTerminalId(tabId);
+  }, []);
+
+  const handleAgentTabPointerDown = useCallback((
+    groupId: string,
+    tabId: string,
+    event: PointerEvent<HTMLElement>
+  ) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".terminal-tab-close")) return;
+
+    agentTabDragStartRef.current = { groupId, tabId, x: event.clientX, y: event.clientY };
+
+    const cleanup = () => {
+      agentTabDragStartRef.current = null;
+      setDraggedAgentTab(null);
+      setAgentTabDropTarget(null);
+      agentTabDropTargetRef.current = null;
+      document.body.classList.remove("cli-tab-dragging");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+      const start = agentTabDragStartRef.current;
+      if (!start) return;
+
+      const dx = moveEvent.clientX - start.x;
+      const dy = moveEvent.clientY - start.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= 5) return;
+
+      if (!agentTabSuppressClickRef.current) {
+        setDraggedAgentTab({ groupId: start.groupId, tabId: start.tabId });
+        document.body.classList.add("cli-tab-dragging");
+        agentTabSuppressClickRef.current = true;
+      }
+
+      const targetElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY) as HTMLElement | null;
+      const targetTabElement = targetElement?.closest<HTMLElement>("[data-agent-tab-id]");
+      const targetGroupId = targetTabElement?.dataset.agentGroupId;
+      const targetTabId = targetTabElement?.dataset.agentTabId;
+
+      if (
+        !targetGroupId ||
+        !targetTabId ||
+        targetGroupId !== start.groupId ||
+        targetTabId === start.tabId
+      ) {
+        setAgentTabDropTarget(null);
+        agentTabDropTargetRef.current = null;
+        return;
+      }
+
+      const nextDropTarget = { groupId: targetGroupId, tabId: targetTabId };
+      agentTabDropTargetRef.current = nextDropTarget;
+      setAgentTabDropTarget(nextDropTarget);
+    };
+
+    const handlePointerUp = () => {
+      const start = agentTabDragStartRef.current;
+      const dropTarget = agentTabDropTargetRef.current;
+      if (start && dropTarget?.groupId === start.groupId && dropTarget.tabId !== start.tabId) {
+        setAgentWorkspaceGroups((currentGroups) =>
+          currentGroups.map((group) => {
+            if (group.id !== start.groupId) return group;
+            const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId);
+            return nextTabIds === group.tabIds ? group : { ...group, tabIds: nextTabIds };
+          })
+        );
+      }
+
+      cleanup();
+      requestAnimationFrame(() => {
+        agentTabSuppressClickRef.current = false;
+      });
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, []);
+
+  const handleAgentTabClickCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (!agentTabSuppressClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
   }, []);
 
   const handleActivateNativeTerminalTab = useCallback((groupId: string, tabId: string) => {
@@ -2146,6 +2249,9 @@ export function MainLayout() {
                       {agentWorkspaceGroupsForRender.map((group, groupIndex) => {
                         const activeGroupTab =
                           group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
+                        const groupPanelTabs = agentTerminalTabs.filter((tab) =>
+                          group.tabIds.includes(tab.id)
+                        );
 
                         return (
                           <Fragment key={group.id}>
@@ -2183,6 +2289,25 @@ export function MainLayout() {
                                                   <TabsTrigger
                                                     value={tab.id}
                                                     className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                                    data-draggable="true"
+                                                    data-agent-group-id={group.id}
+                                                    data-agent-tab-id={tab.id}
+                                                    data-dragging={
+                                                      draggedAgentTab?.groupId === group.id &&
+                                                      draggedAgentTab?.tabId === tab.id
+                                                        ? "true"
+                                                        : undefined
+                                                    }
+                                                    data-drop-target={
+                                                      agentTabDropTarget?.groupId === group.id &&
+                                                      agentTabDropTarget?.tabId === tab.id
+                                                        ? "true"
+                                                        : undefined
+                                                    }
+                                                    onPointerDown={(event) => {
+                                                      handleAgentTabPointerDown(group.id, tab.id, event);
+                                                    }}
+                                                    onClickCapture={handleAgentTabClickCapture}
                                                   >
                                                     <span className="terminal-tab-label truncate">{tab.title}</span>
                                                     <span
@@ -2260,7 +2385,7 @@ export function MainLayout() {
                                     </div>
 
                                     <div className="terminal-stage">
-                                      {group.tabs.map((tab) => (
+                                      {groupPanelTabs.map((tab) => (
                                         <div
                                           key={tab.id}
                                           className="terminal-tab-panel"
