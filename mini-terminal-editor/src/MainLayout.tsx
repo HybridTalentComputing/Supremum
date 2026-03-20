@@ -571,6 +571,15 @@ export function MainLayout() {
     edge: "before" | "after";
   } | null>(null);
   const [nativeTerminalTabDragPreviewPosition, setNativeTerminalTabDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
+  const diffTabDragStartRef = useRef<{ tabId: string; x: number; y: number } | null>(null);
+  const diffTabSuppressClickRef = useRef(false);
+  const diffTabDropTargetRef = useRef<{ tabId: string; edge: "before" | "after" } | null>(null);
+  const [draggedDiffTab, setDraggedDiffTab] = useState<{ tabId: string } | null>(null);
+  const [diffTabDropTarget, setDiffTabDropTarget] = useState<{
+    tabId: string;
+    edge: "before" | "after";
+  } | null>(null);
+  const [diffTabDragPreviewPosition, setDiffTabDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
   const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
   const [agentPresetMenuPosition, setAgentPresetMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -1552,6 +1561,87 @@ export function MainLayout() {
     event.stopPropagation();
   }, []);
 
+  const handleDiffTabPointerDown = useCallback((
+    tabId: string,
+    event: PointerEvent<HTMLElement>
+  ) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".diff-tab-close")) return;
+
+    diffTabDragStartRef.current = { tabId, x: event.clientX, y: event.clientY };
+
+    const cleanup = () => {
+      diffTabDragStartRef.current = null;
+      setDraggedDiffTab(null);
+      setDiffTabDropTarget(null);
+      setDiffTabDragPreviewPosition(null);
+      diffTabDropTargetRef.current = null;
+      document.body.classList.remove("diff-tab-dragging");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) => {
+      const start = diffTabDragStartRef.current;
+      if (!start) return;
+
+      const dx = moveEvent.clientX - start.x;
+      const dy = moveEvent.clientY - start.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= 5) return;
+
+      if (!diffTabSuppressClickRef.current) {
+        setDraggedDiffTab({ tabId: start.tabId });
+        setDiffTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+        document.body.classList.add("diff-tab-dragging");
+        diffTabSuppressClickRef.current = true;
+      }
+
+      setDiffTabDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+
+      const targetElement = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY) as HTMLElement | null;
+      const targetTabElement = targetElement?.closest<HTMLElement>("[data-diff-tab-id]");
+      const targetTabId = targetTabElement?.dataset.diffTabId;
+
+      if (!targetTabId || targetTabId === start.tabId) {
+        setDiffTabDropTarget(null);
+        diffTabDropTargetRef.current = null;
+        return;
+      }
+
+      const targetRect = targetTabElement.getBoundingClientRect();
+      const edge: "before" | "after" =
+        moveEvent.clientX < targetRect.left + targetRect.width / 2 ? "before" : "after";
+      const nextDropTarget = { tabId: targetTabId, edge };
+      diffTabDropTargetRef.current = nextDropTarget;
+      setDiffTabDropTarget(nextDropTarget);
+    };
+
+    const handlePointerUp = () => {
+      const start = diffTabDragStartRef.current;
+      const dropTarget = diffTabDropTargetRef.current;
+      if (start && dropTarget && dropTarget.tabId !== start.tabId) {
+        setDiffTabs((currentTabs) =>
+          reorderItemsById(currentTabs, start.tabId, dropTarget.tabId, dropTarget.edge)
+        );
+      }
+
+      cleanup();
+      requestAnimationFrame(() => {
+        diffTabSuppressClickRef.current = false;
+      });
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }, []);
+
+  const handleDiffTabClickCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (!diffTabSuppressClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
   const handleActivateEditorWorkspaceTab = useCallback((groupId: string, tabId: string) => {
     setEditorWorkspaceGroups((currentGroups) =>
       setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
@@ -2056,6 +2146,15 @@ export function MainLayout() {
     draggedNativeTerminalTab ? nativeTerminalTabsById.get(draggedNativeTerminalTab.tabId)?.title ?? null : null;
   const draggedEditorTabLabel =
     draggedEditorTab ? openTabs.find((tab) => tab.id === draggedEditorTab.tabId)?.path ?? null : null;
+  const draggedDiffTabLabel = draggedDiffTab
+    ? (() => {
+        const tab = diffTabs.find((item) => item.id === draggedDiffTab.tabId);
+        if (!tab) return null;
+        return tab.kind === "all"
+          ? `All Changes (${totalChangedFiles} files)`
+          : getDiffTabLabel(tab.file, tab.category);
+      })()
+    : null;
   const branchSourceOptions = useMemo(() => {
     const unique = new Set<string>();
     const options: string[] = [];
@@ -2381,12 +2480,29 @@ export function MainLayout() {
           document.body
         )
       : null;
+  const diffTabDragPreview =
+    draggedDiffTab && diffTabDragPreviewPosition && draggedDiffTabLabel
+      ? createPortal(
+          <div
+            className="cli-tab-drag-preview"
+            style={{
+              left: diffTabDragPreviewPosition.x + 14,
+              top: diffTabDragPreviewPosition.y + 16,
+            }}
+          >
+            <GitCompareArrows className="size-3.5" />
+            <span className="cli-tab-drag-preview-label">{draggedDiffTabLabel}</span>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className="main-layout-shell">
       {agentTabDragPreview}
       {nativeTerminalTabDragPreview}
       {editorTabDragPreview}
+      {diffTabDragPreview}
       <div
         className="app-titlebar"
         onMouseDown={handleTitlebarMouseDown}
@@ -3481,6 +3597,21 @@ export function MainLayout() {
                                             <TabsTrigger
                                               value={tab.id}
                                               className="diff-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                                              data-draggable="true"
+                                              data-diff-tab-id={tab.id}
+                                              data-dragging={
+                                                draggedDiffTab?.tabId === tab.id ? "true" : undefined
+                                              }
+                                              data-drop-target={
+                                                diffTabDropTarget?.tabId === tab.id ? "true" : undefined
+                                              }
+                                              data-drop-edge={
+                                                diffTabDropTarget?.tabId === tab.id
+                                                  ? diffTabDropTarget.edge
+                                                  : undefined
+                                              }
+                                              onPointerDown={(event) => handleDiffTabPointerDown(tab.id, event)}
+                                              onClickCapture={handleDiffTabClickCapture}
                                             >
                                               {tab.kind === "all" ? (
                                                 <GitCompareArrows className="editor-tab-icon-svg" />
