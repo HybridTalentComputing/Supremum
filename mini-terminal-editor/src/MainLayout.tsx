@@ -103,6 +103,12 @@ type WorkspaceTabGroup = {
   activeTabId: string | null;
 };
 
+type EditorSelectionContext = {
+  text: string;
+  fromLine: number;
+  toLine: number;
+};
+
 function getTabName(path: string) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
@@ -125,6 +131,10 @@ function getTabDir(path: string) {
   return parts.slice(0, -1);
 }
 
+function getEditorSelectionContextKey(groupId: string | null, tabId: string) {
+  return `${groupId ?? "single"}::${tabId}`;
+}
+
 function buildClaudeContextMention(path: string) {
   return `@${path}`;
 }
@@ -142,6 +152,15 @@ function buildClaudeContextMentions(
   }
 
   return mentions.join(" ");
+}
+
+function buildClaudeSelectionPrompt(path: string, selection: EditorSelectionContext) {
+  const rangeLabel =
+    selection.fromLine === selection.toLine
+      ? `${selection.fromLine}`
+      : `${selection.fromLine}-${selection.toLine}`;
+
+  return `Selection from ${buildClaudeContextMention(path)} (lines ${rangeLabel}):\n\`\`\`\n${selection.text}\n\`\`\`\n`;
 }
 
 function formatWorkspacePath(path: string | null) {
@@ -380,18 +399,20 @@ function ActivePathBar({
       </div>
       {previewKind ? (
         <div className="editor-view-switch" data-tauri-drag-region="false">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="editor-view-switch-button"
-            data-active={mode === "preview" ? "true" : undefined}
-            onClick={() => onModeChange?.("preview")}
-          >
-            <Eye className="size-3.5" />
-            <span>Preview</span>
-          </Button>
-          {supportsCodeView ? (
+          {previewKind ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="editor-view-switch-button"
+              data-active={mode === "preview" ? "true" : undefined}
+              onClick={() => onModeChange?.("preview")}
+            >
+              <Eye className="size-3.5" />
+              <span>Preview</span>
+            </Button>
+          ) : null}
+          {previewKind && supportsCodeView ? (
             <Button
               type="button"
               variant="ghost"
@@ -557,6 +578,9 @@ export function MainLayout() {
   const [allDiffsExpandRequest, setAllDiffsExpandRequest] = useState(0);
   const [allDiffsAreCollapsed, setAllDiffsAreCollapsed] = useState(true);
   const [editorViewModes, setEditorViewModes] = useState<Record<string, "code" | "preview">>({});
+  const [editorSelectionContexts, setEditorSelectionContexts] = useState<
+    Record<string, EditorSelectionContext | null>
+  >({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"changes" | "files">("files");
   const previousSidebarTabRef = useRef<"changes" | "files">("files");
@@ -949,6 +973,37 @@ export function MainLayout() {
     await handleAddClaudeContextBatch([{ path, kind }]);
   }, [handleAddClaudeContextBatch]);
 
+  const handleAddClaudeSelection = useCallback(async (
+    path: string,
+    selection: EditorSelectionContext
+  ) => {
+    const activeAgentTab =
+      terminalTabs.find((tab) => tab.id === activeAgentTerminalId && tab.kind === "agent") ?? null;
+    if (!activeAgentTab || activeAgentTab.presetId !== "claude") {
+      return;
+    }
+
+    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, activeAgentTab.id);
+    if (targetGroup) {
+      setAgentWorkspaceGroups((currentGroups) =>
+        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, activeAgentTab.id)
+      );
+      setActiveAgentWorkspaceGroupId(targetGroup.id);
+    }
+
+    setActiveAgentTerminalId(activeAgentTab.id);
+    setActiveWorkspace("agent");
+
+    try {
+      await invoke("write_terminal", {
+        terminalId: activeAgentTab.id,
+        data: buildClaudeSelectionPrompt(path, selection),
+      });
+    } catch (error) {
+      console.error("Failed to add Claude selection context:", error);
+    }
+  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+
   const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
     setDiffDirtyState((currentState) => {
       if (dirty) {
@@ -979,6 +1034,37 @@ export function MainLayout() {
       currentTabs.map((tab) => (tab.path === path ? { ...tab, content } : tab))
     );
   };
+
+  const handleEditorSelectionChange = useCallback((
+    groupId: string | null,
+    tabId: string,
+    selection: EditorSelectionContext | null
+  ) => {
+    const key = getEditorSelectionContextKey(groupId, tabId);
+    setEditorSelectionContexts((currentSelections) => {
+      const currentSelection = currentSelections[key] ?? null;
+      const isSameSelection =
+        currentSelection?.text === selection?.text &&
+        currentSelection?.fromLine === selection?.fromLine &&
+        currentSelection?.toLine === selection?.toLine;
+
+      if (isSameSelection) {
+        return currentSelections;
+      }
+
+      if (!selection) {
+        if (!(key in currentSelections)) return currentSelections;
+        const nextSelections = { ...currentSelections };
+        delete nextSelections[key];
+        return nextSelections;
+      }
+
+      return {
+        ...currentSelections,
+        [key]: selection,
+      };
+    });
+  }, []);
 
   const handleCloseTab = useCallback((tabId: string, groupId?: string) => {
     void (async () => {
@@ -1025,6 +1111,13 @@ export function MainLayout() {
               return nextModes;
             });
           }
+          setEditorSelectionContexts((currentSelections) => {
+            const selectionKey = getEditorSelectionContextKey(groupId, tabId);
+            if (!(selectionKey in currentSelections)) return currentSelections;
+            const nextSelections = { ...currentSelections };
+            delete nextSelections[selectionKey];
+            return nextSelections;
+          });
 
           const resolvedActiveGroup =
             nextGroups.find((group) => group.id === activeEditorWorkspaceGroupId) ??
@@ -1055,6 +1148,13 @@ export function MainLayout() {
           const nextModes = { ...currentModes };
           delete nextModes[tabId];
           return nextModes;
+        });
+        setEditorSelectionContexts((currentSelections) => {
+          const selectionKey = getEditorSelectionContextKey(null, tabId);
+          if (!(selectionKey in currentSelections)) return currentSelections;
+          const nextSelections = { ...currentSelections };
+          delete nextSelections[selectionKey];
+          return nextSelections;
         });
         if (nextTabs.length === 0) {
           setActiveWorkspace(diffTabs.length > 0 ? "diff" : "agent");
@@ -1305,6 +1405,7 @@ export function MainLayout() {
       setActiveDiffTabId(null);
       setDiffDirtyState({});
       setEditorViewModes({});
+      setEditorSelectionContexts({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
       setAgentPresetMenuOpen(false);
@@ -1827,6 +1928,20 @@ export function MainLayout() {
 
         return changed ? nextModes : currentModes;
       });
+      setEditorSelectionContexts((currentSelections) => {
+        const nextSelections: Record<string, EditorSelectionContext | null> = {};
+        let changed = false;
+
+        for (const [selectionKey, selection] of Object.entries(currentSelections)) {
+          if (selectionKey.startsWith(`${groupId}::`)) {
+            changed = true;
+            continue;
+          }
+          nextSelections[selectionKey] = selection;
+        }
+
+        return changed ? nextSelections : currentSelections;
+      });
 
       if (nextGroups.length <= 1) {
         const remainingGroup = nextGroups[0] ?? null;
@@ -1869,6 +1984,7 @@ export function MainLayout() {
       setActiveTabId(null);
       setActiveEditorWorkspaceGroupId(null);
       setEditorViewModes({});
+      setEditorSelectionContexts({});
       setEditorLayoutMode("single");
     })();
   }, [openTabs]);
@@ -3427,6 +3543,11 @@ export function MainLayout() {
                                             content={activeGroupTab.content}
                                             dirty={activeGroupTab.content !== activeGroupTab.savedContent}
                                             mode={activeGroupMode}
+                                            canAddSelectionToClaude={canAddClaudeContext}
+                                            onAddSelectionToClaude={handleAddClaudeSelection}
+                                            onSelectionChange={(_path, selection) => {
+                                              handleEditorSelectionChange(group.id, activeGroupTab.id, selection);
+                                            }}
                                             onChange={handleChange}
                                             onSave={handleSave}
                                           />
@@ -3598,6 +3719,11 @@ export function MainLayout() {
                               content={activeTab.content}
                               dirty={activeTab.content !== activeTab.savedContent}
                               mode={activeEditorMode}
+                              canAddSelectionToClaude={canAddClaudeContext}
+                              onAddSelectionToClaude={handleAddClaudeSelection}
+                              onSelectionChange={(_path, selection) => {
+                                handleEditorSelectionChange(null, activeTab.id, selection);
+                              }}
                               onChange={handleChange}
                               onSave={handleSave}
                             />

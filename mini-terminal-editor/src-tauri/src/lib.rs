@@ -193,6 +193,29 @@ fn read_image_data_url(payload: ReadFilePayload) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn read_clipboard_text() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("pbpaste")
+            .output()
+            .map_err(|e| format!("failed to read clipboard: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "clipboard read failed with status {}",
+                output.status
+            ));
+        }
+        return String::from_utf8(output.stdout)
+            .map_err(|e| format!("clipboard is not valid UTF-8: {e}"));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("clipboard read is not supported on this platform".to_string())
+    }
+}
+
+#[tauri::command]
 fn write_file(payload: WriteFilePayload) -> Result<(), String> {
     let workspace = PathBuf::from(&payload.workspace_path);
     let file_path = safe_workspace_child(&workspace, &payload.path)?;
@@ -698,6 +721,7 @@ pub fn run() {
             close_terminal,
             read_file,
             read_image_data_url,
+            read_clipboard_text,
             write_file,
             list_dir,
             create_file,
