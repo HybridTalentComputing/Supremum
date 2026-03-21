@@ -1,9 +1,10 @@
 [package]
 name = "supremum"
 version = "0.1.0"
-description = "Minimal Tauri xterm terminal app"
+description = "Simple, lightweight, but powerful AI code editor for the AI era"
 authors = ["htcmax"]
 edition = "2021"
+license = "GPL-3.0-only"
 
 [lib]
 name = "mini_terminal_lib"
