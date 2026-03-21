@@ -26,7 +26,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
-import { Fragment, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 import {
@@ -93,6 +93,7 @@ type TerminalTab = {
   cwd?: string;
   presetId?: AgentPresetId;
   startupCommands?: string[];
+  isLauncher?: boolean;
 };
 
 type BranchCreateMode = "none" | "current" | "from";
@@ -211,14 +212,6 @@ function formatSessionTimestamp(timestamp: string) {
   }).format(date);
 }
 
-function formatSessionCwd(cwd: string, workspacePath?: string | null) {
-  if (!cwd) return "";
-  if (workspacePath && cwd === workspacePath) {
-    return "Current workspace";
-  }
-  return cwd.replace(/^\/Users\/[^/]+/, "~");
-}
-
 function createWorkspaceTabGroup(id: string): WorkspaceTabGroup {
   return {
     id,
@@ -296,6 +289,23 @@ function removeTabFromWorkspaceGroups(groups: WorkspaceTabGroup[], tabId: string
       ...group,
       tabIds: nextTabIds,
       activeTabId: nextActiveTabId,
+    };
+  });
+}
+
+function replaceWorkspaceGroupTab(
+  groups: WorkspaceTabGroup[],
+  groupId: string,
+  sourceTabId: string,
+  nextTabId: string
+) {
+  return groups.map((group) => {
+    if (group.id !== groupId || !group.tabIds.includes(sourceTabId)) return group;
+
+    return {
+      ...group,
+      tabIds: group.tabIds.map((tabId) => (tabId === sourceTabId ? nextTabId : tabId)),
+      activeTabId: group.activeTabId === sourceTabId ? nextTabId : group.activeTabId,
     };
   });
 }
@@ -545,13 +555,20 @@ function AgentPresetLauncher({
   recentClaudeSessionsLoading,
   recentClaudeSessionsError,
   onResumeClaudeSession,
+  launcherGroupId,
+  launcherTabId,
 }: {
-  onSelectPreset: (preset: AgentPreset) => void;
+  onSelectPreset: (preset: AgentPreset, source?: { groupId: string | null; tabId: string | null }) => void;
   workspacePath?: string | null;
   recentClaudeSessions: ClaudeSessionSummary[];
   recentClaudeSessionsLoading: boolean;
   recentClaudeSessionsError: string | null;
-  onResumeClaudeSession: (session: ClaudeSessionSummary) => void;
+  onResumeClaudeSession: (
+    session: ClaudeSessionSummary,
+    source?: { groupId: string | null; tabId: string | null }
+  ) => void;
+  launcherGroupId?: string | null;
+  launcherTabId?: string | null;
 }) {
   const [sessionQuery, setSessionQuery] = useState("");
   const presetRows = AGENT_PRESETS.reduce<AgentPreset[][]>((rows, preset, index) => {
@@ -591,7 +608,12 @@ function AgentPresetLauncher({
                   type="button"
                   variant="outline"
                   className="agent-preset-card"
-                  onClick={() => onSelectPreset(preset)}
+                  onClick={() =>
+                    onSelectPreset(preset, {
+                      groupId: launcherGroupId ?? null,
+                      tabId: launcherTabId ?? null,
+                    })
+                  }
                 >
                   <span className="agent-preset-main">
                     <span className="agent-preset-icon-wrap">
@@ -650,7 +672,12 @@ function AgentPresetLauncher({
                       key={session.sessionId}
                       type="button"
                       className="agent-session-item"
-                      onClick={() => onResumeClaudeSession(session)}
+                      onClick={() =>
+                        onResumeClaudeSession(session, {
+                          groupId: launcherGroupId ?? null,
+                          tabId: launcherTabId ?? null,
+                        })
+                      }
                       title={`${session.cliLabel}\n${session.sessionId}\n${session.cwd}`}
                     >
                       <div className="agent-session-item-top">
@@ -687,8 +714,6 @@ function AgentPresetLauncher({
 export function MainLayout() {
   const { workspacePath, setWorkspacePath } = useWorkspace();
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const agentPresetMenuRef = useRef<HTMLDivElement | null>(null);
-  const agentPresetMenuPopupRef = useRef<HTMLDivElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
   const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const titlebarDraggingRef = useRef(false);
@@ -762,8 +787,6 @@ export function MainLayout() {
     edge: "before" | "after";
   } | null>(null);
   const [diffTabDragPreviewPosition, setDiffTabDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
-  const [agentPresetMenuOpen, setAgentPresetMenuOpen] = useState(false);
-  const [agentPresetMenuPosition, setAgentPresetMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [branchMenuLoading, setBranchMenuLoading] = useState(false);
   const [branchMenuError, setBranchMenuError] = useState<string | null>(null);
@@ -935,63 +958,6 @@ export function MainLayout() {
     titlebarDragStartRef.current = null;
     titlebarDraggingRef.current = false;
   }, []);
-
-  useEffect(() => {
-    if (!agentPresetMenuOpen) return;
-
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node | null;
-      if (
-        target &&
-        (agentPresetMenuRef.current?.contains(target) ||
-          agentPresetMenuPopupRef.current?.contains(target))
-      ) {
-        return;
-      }
-      setAgentPresetMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setAgentPresetMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [agentPresetMenuOpen]);
-
-  useLayoutEffect(() => {
-    if (!agentPresetMenuOpen) {
-      setAgentPresetMenuPosition(null);
-      return;
-    }
-
-    const syncPosition = () => {
-      const anchor = agentPresetMenuRef.current;
-      if (!anchor) return;
-
-      const rect = anchor.getBoundingClientRect();
-      setAgentPresetMenuPosition({
-        top: rect.bottom + 6,
-        right: Math.max(8, window.innerWidth - rect.right),
-      });
-    };
-
-    syncPosition();
-    window.addEventListener("resize", syncPosition);
-    window.addEventListener("scroll", syncPosition, true);
-
-    return () => {
-      window.removeEventListener("resize", syncPosition);
-      window.removeEventListener("scroll", syncPosition, true);
-    };
-  }, [agentPresetMenuOpen, activeAgentWorkspaceGroupId]);
 
   useEffect(() => {
     if (!branchMenuOpen) return;
@@ -1476,8 +1442,49 @@ export function MainLayout() {
     setActiveWorkspace("terminal");
   }, [activeNativeTerminalGroupId, createNativeTerminalGroup, workspacePath]);
 
+  const handleCreateAgentLauncherTab = useCallback(
+    (targetGroupId?: string | null) => {
+      const nextIndex = terminalCounterRef.current;
+      terminalCounterRef.current += 1;
+      const id = `term-${nextIndex}`;
+      const nextTab: TerminalTab = {
+        id,
+        kind: "agent",
+        title: "New Session",
+        defaultTitle: "New Session",
+        cwd: workspacePath ?? undefined,
+        isLauncher: true,
+      };
+
+      setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
+      setAgentWorkspaceGroups((currentGroups) => {
+        const resolvedTargetGroupId =
+          targetGroupId ??
+          activeAgentWorkspaceGroupId ??
+          currentGroups.find((group) => group.tabIds.length === 0)?.id ??
+          null;
+        const fallbackGroup = createAgentWorkspaceGroup();
+        const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
+          currentGroups,
+          resolvedTargetGroupId,
+          id,
+          fallbackGroup
+        );
+        setActiveAgentWorkspaceGroupId(effectiveGroupId);
+        return nextGroups;
+      });
+      setActiveAgentTerminalId(id);
+      setActiveWorkspace("agent");
+    },
+    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, workspacePath]
+  );
+
   const handleCreateAgentTerminalWithCommands = useCallback(
-    (preset: AgentPreset, startupCommands: string[]) => {
+    (
+      preset: AgentPreset,
+      startupCommands: string[],
+      source?: { groupId: string | null; tabId: string | null }
+    ) => {
       const nextIndex = terminalCounterRef.current;
       terminalCounterRef.current += 1;
       const id = `term-${nextIndex}`;
@@ -1490,13 +1497,28 @@ export function MainLayout() {
         presetId: preset.id,
         startupCommands,
       };
+      const shouldReplaceLauncher = Boolean(
+        source?.groupId &&
+          source?.tabId &&
+          terminalTabs.some((tab) => tab.id === source.tabId && tab.isLauncher)
+      );
 
-      setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
+      setTerminalTabs((currentTabs) =>
+        shouldReplaceLauncher && source?.tabId
+          ? currentTabs.map((tab) => (tab.id === source.tabId ? nextTab : tab))
+          : [...currentTabs, nextTab]
+      );
       setAgentWorkspaceGroups((currentGroups) => {
+        if (shouldReplaceLauncher && source?.groupId && source?.tabId) {
+          const nextGroups = replaceWorkspaceGroupTab(currentGroups, source.groupId, source.tabId, id);
+          setActiveAgentWorkspaceGroupId(source.groupId);
+          return nextGroups;
+        }
+
         const fallbackGroup = createAgentWorkspaceGroup();
         const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
           currentGroups,
-          activeAgentWorkspaceGroupId,
+          source?.groupId ?? activeAgentWorkspaceGroupId,
           id,
           fallbackGroup
         );
@@ -1505,26 +1527,28 @@ export function MainLayout() {
       });
       setActiveAgentTerminalId(id);
       setActiveWorkspace("agent");
-      setAgentPresetMenuOpen(false);
     },
-    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, workspacePath]
+    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, terminalTabs, workspacePath]
   );
 
   const handleCreateAgentTerminal = useCallback(
-    (preset: AgentPreset) => {
-      handleCreateAgentTerminalWithCommands(preset, [preset.command]);
+    (preset: AgentPreset, source?: { groupId: string | null; tabId: string | null }) => {
+      handleCreateAgentTerminalWithCommands(preset, [preset.command], source);
     },
     [handleCreateAgentTerminalWithCommands]
   );
 
   const handleResumeClaudeSession = useCallback(
-    (session: ClaudeSessionSummary) => {
+    (
+      session: ClaudeSessionSummary,
+      source?: { groupId: string | null; tabId: string | null }
+    ) => {
       const claudePreset = AGENT_PRESETS.find((preset) => preset.id === "claude");
       if (!claudePreset) return;
 
       handleCreateAgentTerminalWithCommands(claudePreset, [
         `${claudePreset.command} --resume ${session.sessionId}`,
-      ]);
+      ], source);
     },
     [handleCreateAgentTerminalWithCommands]
   );
@@ -1643,7 +1667,6 @@ export function MainLayout() {
       setEditorSelectionContexts({});
       setActiveWorkspace("agent");
       setActiveSidebarTab("files");
-      setAgentPresetMenuOpen(false);
       setWorkspacePath(nextPath);
     } catch (error) {
       console.error("Failed to switch workspace:", error);
@@ -2580,45 +2603,6 @@ export function MainLayout() {
     }
     return options;
   }, [branchList?.local, branchList?.remote, currentBranchName]);
-  const agentPresetMenu =
-    agentPresetMenuOpen && agentPresetMenuPosition && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            ref={agentPresetMenuPopupRef}
-            className="agent-preset-menu"
-            role="menu"
-            aria-label="AI Coding CLI presets"
-            style={{
-              position: "fixed",
-              top: agentPresetMenuPosition.top,
-              right: agentPresetMenuPosition.right,
-            }}
-          >
-            {AGENT_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="agent-preset-menu-item"
-                onClick={() => handleCreateAgentTerminal(preset)}
-              >
-                <span className="agent-preset-menu-main">
-                  <img
-                    src={preset.iconPath}
-                    alt=""
-                    className="agent-preset-menu-icon"
-                    draggable={false}
-                  />
-                  <span className="agent-preset-menu-copy">
-                    <span className="agent-preset-menu-title">{preset.label}</span>
-                    <span className="agent-preset-menu-description">{preset.description}</span>
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>,
-          document.body
-        )
-      : null;
   const branchMenu = branchMenuOpen ? (
     <div className="git-branch-menu" role="menu" aria-label="Git branches">
       <input
@@ -2954,7 +2938,6 @@ export function MainLayout() {
                 size="xs"
                 className="app-titlebar-branch-button"
                 onClick={() => {
-                  setAgentPresetMenuOpen(false);
                   setBranchMenuOpen((current) => {
                     const next = !current;
                     if (next) {
@@ -3040,10 +3023,7 @@ export function MainLayout() {
                     size="sm"
                     className="workspace-manager-switch"
                     data-active={activeWorkspace === "terminal" ? "true" : undefined}
-                    onClick={() => {
-                      setAgentPresetMenuOpen(false);
-                      setActiveWorkspace("terminal");
-                    }}
+                    onClick={() => setActiveWorkspace("terminal")}
                     aria-pressed={activeWorkspace === "terminal"}
                   >
                     <SquareTerminal className="size-3.5" />
@@ -3056,10 +3036,7 @@ export function MainLayout() {
                     size="sm"
                     className="workspace-manager-switch"
                     data-active={activeWorkspace === "editor" ? "true" : undefined}
-                    onClick={() => {
-                      setAgentPresetMenuOpen(false);
-                      setActiveWorkspace("editor");
-                    }}
+                    onClick={() => setActiveWorkspace("editor")}
                     aria-pressed={activeWorkspace === "editor"}
                   >
                     <FileText className="size-3.5" />
@@ -3072,10 +3049,7 @@ export function MainLayout() {
                     size="sm"
                     className="workspace-manager-switch"
                     data-active={activeWorkspace === "diff" ? "true" : undefined}
-                    onClick={() => {
-                      setAgentPresetMenuOpen(false);
-                      setActiveWorkspace("diff");
-                    }}
+                    onClick={() => setActiveWorkspace("diff")}
                     aria-pressed={activeWorkspace === "diff"}
                   >
                     <GitCompareArrows className="size-3.5" />
@@ -3190,10 +3164,7 @@ export function MainLayout() {
                                         </TabsList>
                                         <ScrollBar orientation="horizontal" />
                                       </ScrollArea>
-                                      <div
-                                        className="terminal-tabs-actions agent-preset-menu-anchor"
-                                        ref={group.id === activeAgentWorkspaceGroupId ? agentPresetMenuRef : undefined}
-                                      >
+                                      <div className="terminal-tabs-actions agent-preset-menu-anchor">
                                         <Button
                                           type="button"
                                           variant="ghost"
@@ -3209,18 +3180,11 @@ export function MainLayout() {
                                           variant="ghost"
                                           size="icon-xs"
                                           className="terminal-tab-create"
-                                          onClick={() => {
-                                            setActiveAgentWorkspaceGroupId(group.id);
-                                            setAgentPresetMenuOpen((openState) => !openState);
-                                          }}
-                                          aria-label="Launch AI Coding CLI"
-                                          aria-expanded={
-                                            group.id === activeAgentWorkspaceGroupId && agentPresetMenuOpen
-                                          }
+                                          onClick={() => handleCreateAgentLauncherTab(group.id)}
+                                          aria-label="New AI Coding CLI page"
                                         >
                                           <Plus className="size-3.5" />
                                         </Button>
-                                        {group.id === activeAgentWorkspaceGroupId ? agentPresetMenu : null}
                                         {agentWorkspaceGroupsForRender.length > 1 ? (
                                           <Button
                                             type="button"
@@ -3243,22 +3207,35 @@ export function MainLayout() {
                                           className="terminal-tab-panel"
                                           data-active={tab.id === activeGroupTab.id ? "true" : undefined}
                                         >
-                                          <TerminalComponent
-                                            terminalId={tab.id}
-                                            cwd={tab.cwd}
-                                            active={
-                                              activeWorkspace === "agent" &&
-                                              group.id === activeAgentWorkspaceGroupId &&
-                                              tab.id === activeGroupTab.id
-                                            }
-                                            defaultTitle={tab.defaultTitle}
-                                            startupCommands={tab.startupCommands}
-                                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                                            canSendSelectionToClaude={canAddClaudeContext}
-                                            onSendSelectionToClaude={(selection) =>
-                                              handleSendTerminalSelectionToClaude(selection, tab.id)
-                                            }
-                                          />
+                                          {tab.isLauncher ? (
+                                            <AgentPresetLauncher
+                                              onSelectPreset={handleCreateAgentTerminal}
+                                              workspacePath={workspacePath}
+                                              recentClaudeSessions={recentClaudeSessions}
+                                              recentClaudeSessionsLoading={recentClaudeSessionsLoading}
+                                              recentClaudeSessionsError={recentClaudeSessionsError}
+                                              onResumeClaudeSession={handleResumeClaudeSession}
+                                              launcherGroupId={group.id}
+                                              launcherTabId={tab.id}
+                                            />
+                                          ) : (
+                                            <TerminalComponent
+                                              terminalId={tab.id}
+                                              cwd={tab.cwd}
+                                              active={
+                                                activeWorkspace === "agent" &&
+                                                group.id === activeAgentWorkspaceGroupId &&
+                                                tab.id === activeGroupTab.id
+                                              }
+                                              defaultTitle={tab.defaultTitle}
+                                              startupCommands={tab.startupCommands}
+                                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                                              canSendSelectionToClaude={canAddClaudeContext}
+                                              onSendSelectionToClaude={(selection) =>
+                                                handleSendTerminalSelectionToClaude(selection, tab.id)
+                                              }
+                                            />
+                                          )}
                                         </div>
                                       ))}
                                     </div>
@@ -3267,10 +3244,7 @@ export function MainLayout() {
                                   <div className="terminal-shell terminal-group-shell">
                                     <div className="terminal-tabs-bar">
                                       <div className="terminal-tabs-empty-label">Empty split</div>
-                                      <div
-                                        className="terminal-tabs-actions agent-preset-menu-anchor"
-                                        ref={group.id === activeAgentWorkspaceGroupId ? agentPresetMenuRef : undefined}
-                                      >
+                                      <div className="terminal-tabs-actions agent-preset-menu-anchor">
                                         <Button
                                           type="button"
                                           variant="ghost"
@@ -3286,18 +3260,11 @@ export function MainLayout() {
                                           variant="ghost"
                                           size="icon-xs"
                                           className="terminal-tab-create"
-                                          onClick={() => {
-                                            setActiveAgentWorkspaceGroupId(group.id);
-                                            setAgentPresetMenuOpen((openState) => !openState);
-                                          }}
-                                          aria-label="Launch AI Coding CLI"
-                                          aria-expanded={
-                                            group.id === activeAgentWorkspaceGroupId && agentPresetMenuOpen
-                                          }
+                                          onClick={() => handleCreateAgentLauncherTab(group.id)}
+                                          aria-label="New AI Coding CLI page"
                                         >
                                           <Plus className="size-3.5" />
                                         </Button>
-                                        {group.id === activeAgentWorkspaceGroupId ? agentPresetMenu : null}
                                         {agentWorkspaceGroupsForRender.length > 1 ? (
                                           <Button
                                             type="button"
@@ -3315,7 +3282,7 @@ export function MainLayout() {
                                     <div className="workspace-group-empty-state">
                                       <div className="workspace-group-empty-title">Empty AI Coding CLI pane</div>
                                       <div className="workspace-group-empty-description">
-                                        Launch a preset into this split.
+                                        Create a new AI Coding CLI page in this split.
                                       </div>
                                     </div>
                                   </div>
@@ -3333,22 +3300,17 @@ export function MainLayout() {
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">
                         <div className="terminal-tabs-empty-label">Choose an AI Coding CLI</div>
-                        <div
-                          className="terminal-tabs-actions agent-preset-menu-anchor"
-                          ref={agentPresetMenuRef}
-                        >
+                        <div className="terminal-tabs-actions agent-preset-menu-anchor">
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon-xs"
                             className="terminal-tab-create"
-                            onClick={() => setAgentPresetMenuOpen((openState) => !openState)}
-                            aria-label="Launch AI Coding CLI"
-                            aria-expanded={agentPresetMenuOpen}
+                            onClick={() => handleCreateAgentLauncherTab()}
+                            aria-label="New AI Coding CLI page"
                           >
                             <Plus className="size-3.5" />
                           </Button>
-                          {agentPresetMenu}
                         </div>
                       </div>
                       <div className="terminal-stage">
