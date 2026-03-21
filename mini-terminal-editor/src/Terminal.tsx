@@ -242,12 +242,12 @@ export function TerminalComponent({
 
     const xterm = new Terminal({
       cursorBlink: true,
-      fontFamily: '"IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", monospace',
+      fontFamily: '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
       fontSize: 13,
       lineHeight: 1.5,
       theme: {
         background: "#02070c",
-        foreground: "#c9d8e6",
+        foreground: "#ffffff",
         cursor: "#1fd8ff",
         cursorAccent: "#02070c",
         selectionBackground: "rgba(31, 216, 255, 0.24)",
