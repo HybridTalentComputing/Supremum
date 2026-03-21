@@ -59,6 +59,7 @@ import { shouldReadFileContentForOpen } from "./filePreview";
 type FileTreeProps = {
   workspacePath: string;
   onSelectFile: (path: string, content: string) => void;
+  active?: boolean;
   onAddClaudeContext?: (path: string, kind: "file" | "folder") => void;
   onAddClaudeContextBatch?: (
     entries: Array<{ path: string; kind: "file" | "folder" }>
@@ -538,6 +539,7 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
 export function FileTree({
   workspacePath,
   onSelectFile,
+  active = false,
   onAddClaudeContext,
   onAddClaudeContextBatch,
   canAddClaudeContext = false,
@@ -603,6 +605,18 @@ export function FileTree({
   const syncOpenStateSnapshot = useCallback(() => {
     setOpenStateSnapshot({ ...(treeRef.current?.openState ?? {}) });
   }, []);
+
+  const refreshVisibleTreeDirs = useCallback(async () => {
+    const openDirIds = Object.entries(treeRef.current?.openState ?? openStateSnapshot)
+      .filter(([, isOpen]) => Boolean(isOpen))
+      .map(([id]) => id)
+      .filter(Boolean);
+
+    await loadDir("");
+    for (const dirId of openDirIds) {
+      await loadDir(dirId);
+    }
+  }, [loadDir, openStateSnapshot]);
 
   const updateContainerSize = useCallback(() => {
     const el = containerRef.current;
@@ -690,6 +704,19 @@ export function FileTree({
     const list = treeRef.current?.list.current as { forceUpdate?: () => void } | null;
     list?.forceUpdate?.();
   }, [containerSize]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    void refreshVisibleTreeDirs();
+    const timer = window.setInterval(() => {
+      void refreshVisibleTreeDirs();
+    }, 2500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [active, refreshVisibleTreeDirs]);
 
   // ─── Create file/folder ────────────────────────────────────────────────────
 

@@ -85,6 +85,7 @@ export function EditorPanel({
             <FileTree
               workspacePath={workspacePath}
               onSelectFile={handleSelectFile}
+              active={activeTab === "files"}
               onAddClaudeContext={onAddClaudeContext}
               onAddClaudeContextBatch={onAddClaudeContextBatch}
               canAddClaudeContext={canAddClaudeContext}
