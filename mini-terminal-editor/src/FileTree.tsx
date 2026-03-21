@@ -60,12 +60,18 @@ type FileTreeProps = {
   workspacePath: string;
   onSelectFile: (path: string, content: string) => void;
   onAddClaudeContext?: (path: string, kind: "file" | "folder") => void;
+  onAddClaudeContextBatch?: (
+    entries: Array<{ path: string; kind: "file" | "folder" }>
+  ) => void | Promise<void>;
   canAddClaudeContext?: boolean;
 };
+
+type ClaudeContextEntry = { path: string; kind: "file" | "folder"; name: string };
 
 type ContextTarget =
   | { type: "file"; path: string; name: string }
   | { type: "folder"; path: string; name: string }
+  | { type: "multi"; items: ClaudeContextEntry[] }
   | { type: "blank"; parentDir: string };
 
 type CreateState = { parentDir: string; type: "file" | "dir" } | null;
@@ -102,6 +108,15 @@ function resolveAbsolutePath(workspacePath: string, path: string) {
   if (!path) return workspacePath;
   if (path.startsWith("/")) return path;
   return `${workspacePath.replace(/\/$/, "")}/${path}`;
+}
+
+function createClaudeContextEntry(node: NodeApi<FileNode>): ClaudeContextEntry | null {
+  if (isCreatePlaceholderId(node.id)) return null;
+  return {
+    path: node.id,
+    kind: node.data.isDir ? "folder" : "file",
+    name: node.data.name,
+  };
 }
 
 function resolveCreateParentFromNode(node: NodeApi<FileNode> | null) {
@@ -399,6 +414,19 @@ function FileNodeRenderer({ node, style }: NodeRendererProps<FileNode>) {
           });
           return;
         }
+
+        const selectedNodes = Array.from(node.tree.selectedNodes) as NodeApi<FileNode>[];
+        if (node.isSelected && selectedNodes.length > 1) {
+          const items = selectedNodes
+            .map((selectedNode) => createClaudeContextEntry(selectedNode))
+            .filter((item): item is ClaudeContextEntry => Boolean(item));
+
+          if (items.length > 1) {
+            ctx.setContextTarget({ type: "multi", items });
+            return;
+          }
+        }
+
         ctx.setContextTarget(
           node.data.isDir
             ? { type: "folder", path: node.id, name: node.data.name }
@@ -511,6 +539,7 @@ export function FileTree({
   workspacePath,
   onSelectFile,
   onAddClaudeContext,
+  onAddClaudeContextBatch,
   canAddClaudeContext = false,
 }: FileTreeProps) {
   const treeRef = useRef<TreeApi<FileNode> | undefined>(undefined);
@@ -850,6 +879,19 @@ export function FileTree({
     catch (err) { window.alert(String(err)); }
   }, [workspacePath]);
 
+  const addClaudeContextEntries = useCallback(async (entries: ClaudeContextEntry[]) => {
+    if (entries.length === 0) return;
+    if (onAddClaudeContextBatch) {
+      await onAddClaudeContextBatch(entries.map(({ path, kind }) => ({ path, kind })));
+      return;
+    }
+    if (!onAddClaudeContext) return;
+
+    for (const entry of entries) {
+      await onAddClaudeContext(entry.path, entry.kind);
+    }
+  }, [onAddClaudeContext, onAddClaudeContextBatch]);
+
   const showPathPreview = useCallback((text: string, target: EventTarget | null) => {
     const element = target as HTMLElement | null;
     if (!element) return;
@@ -1107,6 +1149,21 @@ export function FileTree({
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => refreshDir(path)}>Refresh</ContextMenuItem>
                 <ContextMenuItem onSelect={handleCollapseAll}>Collapse All Folders</ContextMenuItem>
+              </>;
+            })()}
+            {contextTarget.type === "multi" && (() => {
+              const { items } = contextTarget;
+              const itemLabel = items.length === 1 ? "Item" : "Items";
+              return <>
+                <ContextMenuLabel>{`Selected ${itemLabel} (${items.length})`}</ContextMenuLabel>
+                <ContextMenuItem
+                  disabled={!canAddClaudeContext}
+                  onSelect={() => {
+                    void addClaudeContextEntries(items);
+                  }}
+                >
+                  {`Add ${items.length} ${itemLabel} to Claude Context`}
+                </ContextMenuItem>
               </>;
             })()}
             {contextTarget.type === "blank" && <>

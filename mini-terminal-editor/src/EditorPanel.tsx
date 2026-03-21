@@ -13,6 +13,9 @@ type EditorPanelProps = {
   workspacePath: string;
   onOpenFile: (path: string, content: string) => void;
   onAddClaudeContext?: (path: string, kind: "file" | "folder") => void;
+  onAddClaudeContextBatch?: (
+    entries: Array<{ path: string; kind: "file" | "folder" }>
+  ) => void | Promise<void>;
   canAddClaudeContext?: boolean;
   onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
   onOpenAllDiffs: () => void;
@@ -25,6 +28,7 @@ export function EditorPanel({
   workspacePath,
   onOpenFile,
   onAddClaudeContext,
+  onAddClaudeContextBatch,
   canAddClaudeContext = false,
   onOpenDiff,
   onOpenAllDiffs,
@@ -82,6 +86,7 @@ export function EditorPanel({
               workspacePath={workspacePath}
               onSelectFile={handleSelectFile}
               onAddClaudeContext={onAddClaudeContext}
+              onAddClaudeContextBatch={onAddClaudeContextBatch}
               canAddClaudeContext={canAddClaudeContext}
             />
           </div>

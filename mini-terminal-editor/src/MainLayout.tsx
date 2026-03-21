@@ -129,6 +129,21 @@ function buildClaudeContextMention(path: string) {
   return `@${path}`;
 }
 
+function buildClaudeContextMentions(
+  entries: Array<{ path: string; kind: "file" | "folder" }>
+) {
+  const uniquePaths = new Set<string>();
+  const mentions: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.path || uniquePaths.has(entry.path)) continue;
+    uniquePaths.add(entry.path);
+    mentions.push(buildClaudeContextMention(entry.path));
+  }
+
+  return mentions.join(" ");
+}
+
 function formatWorkspacePath(path: string | null) {
   if (!path) return "";
   return path.replace(/^\/Users\/[^/]+/, "~");
@@ -896,7 +911,11 @@ export function MainLayout() {
     }
   }, [handleOpenFile, workspacePath]);
 
-  const handleAddClaudeContext = useCallback(async (path: string, _kind: "file" | "folder") => {
+  const handleAddClaudeContextBatch = useCallback(async (
+    entries: Array<{ path: string; kind: "file" | "folder" }>
+  ) => {
+    if (entries.length === 0) return;
+
     const activeAgentTab =
       terminalTabs.find((tab) => tab.id === activeAgentTerminalId && tab.kind === "agent") ?? null;
     if (!activeAgentTab || activeAgentTab.presetId !== "claude") {
@@ -915,14 +934,20 @@ export function MainLayout() {
     setActiveWorkspace("agent");
 
     try {
+      const mentions = buildClaudeContextMentions(entries);
+      if (!mentions) return;
       await invoke("write_terminal", {
         terminalId: activeAgentTab.id,
-        data: `${buildClaudeContextMention(path)} `,
+        data: `${mentions} `,
       });
     } catch (error) {
-      console.error(`Failed to add Claude context for ${path}:`, error);
+      console.error("Failed to add Claude context:", error);
     }
   }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+
+  const handleAddClaudeContext = useCallback(async (path: string, kind: "file" | "folder") => {
+    await handleAddClaudeContextBatch([{ path, kind }]);
+  }, [handleAddClaudeContextBatch]);
 
   const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
     setDiffDirtyState((currentState) => {
@@ -2629,6 +2654,7 @@ export function MainLayout() {
               workspacePath={workspacePath!}
               onOpenFile={handleOpenFile}
               onAddClaudeContext={handleAddClaudeContext}
+              onAddClaudeContextBatch={handleAddClaudeContextBatch}
               canAddClaudeContext={canAddClaudeContext}
               onOpenDiff={handleOpenDiff}
               onOpenAllDiffs={handleOpenAllDiffs}
