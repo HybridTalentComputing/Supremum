@@ -15,6 +15,7 @@ import {
   createContext,
   useContext,
 } from "react";
+import { createPortal } from "react-dom";
 import { Tree, type NodeRendererProps, type TreeApi, type NodeApi } from "react-arborist";
 import {
   FilePlus,
@@ -95,6 +96,12 @@ const FileTreeContext = createContext<FileTreeCtx>({
 
 function parentOf(id: string) {
   return id.includes("/") ? id.substring(0, id.lastIndexOf("/")) : "";
+}
+
+function resolveAbsolutePath(workspacePath: string, path: string) {
+  if (!path) return workspacePath;
+  if (path.startsWith("/")) return path;
+  return `${workspacePath.replace(/\/$/, "")}/${path}`;
 }
 
 function resolveCreateParentFromNode(node: NodeApi<FileNode> | null) {
@@ -516,6 +523,7 @@ export function FileTree({
   const [createState, setCreateState] = useState<CreateState>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<RecentlyCreatedState>(null);
   const [treeVersion, setTreeVersion] = useState(0);
+  const [pathPreview, setPathPreview] = useState<{ text: string; x: number; y: number } | null>(null);
   const recentlyCreatedTimeoutRef = useRef<number | null>(null);
 
   const { treeData, loading, error, loadDir, loadRoot, refreshDir } = useTreeData(workspacePath);
@@ -837,6 +845,26 @@ export function FileTree({
     catch (err) { window.alert(String(err)); }
   }, []);
 
+  const doCopyAbsolutePath = useCallback(async (path: string) => {
+    try { await navigator.clipboard.writeText(resolveAbsolutePath(workspacePath, path)); }
+    catch (err) { window.alert(String(err)); }
+  }, [workspacePath]);
+
+  const showPathPreview = useCallback((text: string, target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    setPathPreview({
+      text,
+      x: rect.right + 12,
+      y: rect.top + rect.height / 2,
+    });
+  }, []);
+
+  const hidePathPreview = useCallback(() => {
+    setPathPreview(null);
+  }, []);
+
   const doReveal = useCallback(async (path: string) => {
     try { await invokeReveal(workspacePath, path); }
     catch (err) { window.alert(String(err)); }
@@ -939,7 +967,13 @@ export function FileTree({
         )}
 
         {/* Tree + context menu */}
-        <ContextMenu>
+        <ContextMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setPathPreview(null);
+            }
+          }}
+        >
           <ContextMenuTrigger asChild>
             <div
               ref={containerRef}
@@ -998,7 +1032,32 @@ export function FileTree({
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doDelete(path, false)}>Delete</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doCopyPath(path)}>Copy Relative Path</ContextMenuItem>
+                <ContextMenuItem
+                  onPointerEnter={(event) => showPathPreview(path, event.currentTarget)}
+                  onPointerMove={(event) => showPathPreview(path, event.currentTarget)}
+                  onPointerLeave={hidePathPreview}
+                  onFocus={(event) => showPathPreview(path, event.currentTarget)}
+                  onBlur={hidePathPreview}
+                  onSelect={() => doCopyPath(path)}
+                >
+                  Copy Relative Path
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onPointerEnter={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onPointerMove={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onPointerLeave={hidePathPreview}
+                  onFocus={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onBlur={hidePathPreview}
+                  onSelect={() => doCopyAbsolutePath(path)}
+                >
+                  Copy Absolute Path
+                </ContextMenuItem>
                 <ContextMenuItem onSelect={() => doReveal(path)}>Reveal in Finder</ContextMenuItem>
               </>;
             })()}
@@ -1018,7 +1077,32 @@ export function FileTree({
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doDelete(path, true)}>Delete</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => doCopyPath(path)}>Copy Relative Path</ContextMenuItem>
+                <ContextMenuItem
+                  onPointerEnter={(event) => showPathPreview(path, event.currentTarget)}
+                  onPointerMove={(event) => showPathPreview(path, event.currentTarget)}
+                  onPointerLeave={hidePathPreview}
+                  onFocus={(event) => showPathPreview(path, event.currentTarget)}
+                  onBlur={hidePathPreview}
+                  onSelect={() => doCopyPath(path)}
+                >
+                  Copy Relative Path
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onPointerEnter={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onPointerMove={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onPointerLeave={hidePathPreview}
+                  onFocus={(event) =>
+                    showPathPreview(resolveAbsolutePath(workspacePath, path), event.currentTarget)
+                  }
+                  onBlur={hidePathPreview}
+                  onSelect={() => doCopyAbsolutePath(path)}
+                >
+                  Copy Absolute Path
+                </ContextMenuItem>
                 <ContextMenuItem onSelect={() => doReveal(path)}>Reveal in Finder</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => refreshDir(path)}>Refresh</ContextMenuItem>
@@ -1055,6 +1139,21 @@ export function FileTree({
             </div>
           </div>
         )}
+
+        {pathPreview && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="file-tree-path-preview"
+                style={{
+                  left: pathPreview.x,
+                  top: pathPreview.y,
+                }}
+              >
+                {pathPreview.text}
+              </div>,
+              document.body
+            )
+          : null}
 
       </div>
     </FileTreeContext.Provider>

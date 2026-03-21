@@ -4220,6 +4220,22 @@ body.file-tree-dragging * {
   white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+.file-tree-path-preview {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 0.42rem 0.58rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(10, 10, 10, 0.96);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+  transform: translateY(-50%);
+}
 .file-tree-chevron,
 .file-tree-spacer {
   width: 1.05rem;
