@@ -125,6 +125,10 @@ function getTabDir(path: string) {
   return parts.slice(0, -1);
 }
 
+function buildClaudeContextMention(path: string) {
+  return `@${path}`;
+}
+
 function formatWorkspacePath(path: string | null) {
   if (!path) return "";
   return path.replace(/^\/Users\/[^/]+/, "~");
@@ -891,6 +895,34 @@ export function MainLayout() {
       console.error(`Failed to open file ${path}:`, error);
     }
   }, [handleOpenFile, workspacePath]);
+
+  const handleAddClaudeContext = useCallback(async (path: string, _kind: "file" | "folder") => {
+    const activeAgentTab =
+      terminalTabs.find((tab) => tab.id === activeAgentTerminalId && tab.kind === "agent") ?? null;
+    if (!activeAgentTab || activeAgentTab.presetId !== "claude") {
+      return;
+    }
+
+    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, activeAgentTab.id);
+    if (targetGroup) {
+      setAgentWorkspaceGroups((currentGroups) =>
+        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, activeAgentTab.id)
+      );
+      setActiveAgentWorkspaceGroupId(targetGroup.id);
+    }
+
+    setActiveAgentTerminalId(activeAgentTab.id);
+    setActiveWorkspace("agent");
+
+    try {
+      await invoke("write_terminal", {
+        terminalId: activeAgentTab.id,
+        data: `${buildClaudeContextMention(path)} `,
+      });
+    } catch (error) {
+      console.error(`Failed to add Claude context for ${path}:`, error);
+    }
+  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
 
   const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
     setDiffDirtyState((currentState) => {
@@ -2080,6 +2112,9 @@ export function MainLayout() {
     activeDiffTab?.kind === "file" ? (diffChromeState[activeDiffTab.id] ?? null) : null;
   const agentTerminalTabs = terminalTabs.filter((tab) => tab.kind === "agent");
   const nativeTerminalTabs = terminalTabs.filter((tab) => tab.kind === "native");
+  const activeClaudeAgentTab =
+    agentTerminalTabs.find((tab) => tab.id === activeAgentTerminalId && tab.presetId === "claude") ?? null;
+  const canAddClaudeContext = Boolean(activeClaudeAgentTab);
   const agentTerminalTabsById = useMemo(
     () => new Map(agentTerminalTabs.map((tab) => [tab.id, tab])),
     [agentTerminalTabs]
@@ -2593,6 +2628,8 @@ export function MainLayout() {
             <EditorPanel
               workspacePath={workspacePath!}
               onOpenFile={handleOpenFile}
+              onAddClaudeContext={handleAddClaudeContext}
+              canAddClaudeContext={canAddClaudeContext}
               onOpenDiff={handleOpenDiff}
               onOpenAllDiffs={handleOpenAllDiffs}
               git={git}

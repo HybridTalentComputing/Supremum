@@ -12,6 +12,8 @@ import type { UseGitChangesResult } from "./useGitChanges";
 type EditorPanelProps = {
   workspacePath: string;
   onOpenFile: (path: string, content: string) => void;
+  onAddClaudeContext?: (path: string, kind: "file" | "folder") => void;
+  canAddClaudeContext?: boolean;
   onOpenDiff: (file: GitChangedFile, category: GitDiffCategory) => void;
   onOpenAllDiffs: () => void;
   git: UseGitChangesResult;
@@ -22,6 +24,8 @@ type EditorPanelProps = {
 export function EditorPanel({
   workspacePath,
   onOpenFile,
+  onAddClaudeContext,
+  canAddClaudeContext = false,
   onOpenDiff,
   onOpenAllDiffs,
   git,
@@ -77,6 +81,8 @@ export function EditorPanel({
             <FileTree
               workspacePath={workspacePath}
               onSelectFile={handleSelectFile}
+              onAddClaudeContext={onAddClaudeContext}
+              canAddClaudeContext={canAddClaudeContext}
             />
           </div>
         </TabsContent>

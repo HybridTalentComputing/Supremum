@@ -58,6 +58,8 @@ import { shouldReadFileContentForOpen } from "./filePreview";
 type FileTreeProps = {
   workspacePath: string;
   onSelectFile: (path: string, content: string) => void;
+  onAddClaudeContext?: (path: string, kind: "file" | "folder") => void;
+  canAddClaudeContext?: boolean;
 };
 
 type ContextTarget =
@@ -498,7 +500,12 @@ function RenameInput({ node }: { node: NodeApi<FileNode> }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
+export function FileTree({
+  workspacePath,
+  onSelectFile,
+  onAddClaudeContext,
+  canAddClaudeContext = false,
+}: FileTreeProps) {
   const treeRef = useRef<TreeApi<FileNode> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 320, height: 400 });
@@ -981,6 +988,12 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
               return <>
                 <ContextMenuLabel>File</ContextMenuLabel>
                 <ContextMenuItem onSelect={() => doOpenFile(path)}>Open</ContextMenuItem>
+                <ContextMenuItem
+                  disabled={!canAddClaudeContext}
+                  onSelect={() => onAddClaudeContext?.(path, "file")}
+                >
+                  Add to Claude Context
+                </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doDelete(path, false)}>Delete</ContextMenuItem>
@@ -995,6 +1008,12 @@ export function FileTree({ workspacePath, onSelectFile }: FileTreeProps) {
                 <ContextMenuLabel>Folder</ContextMenuLabel>
                 <ContextMenuItem onSelect={() => startCreate("file", path)}>New File</ContextMenuItem>
                 <ContextMenuItem onSelect={() => startCreate("dir",  path)}>New Folder</ContextMenuItem>
+                <ContextMenuItem
+                  disabled={!canAddClaudeContext}
+                  onSelect={() => onAddClaudeContext?.(path, "folder")}
+                >
+                  Add to Claude Context
+                </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
                 <ContextMenuItem onSelect={() => doDelete(path, true)}>Delete</ContextMenuItem>
