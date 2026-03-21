@@ -1004,6 +1004,43 @@ export function MainLayout() {
     }
   }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
 
+  const handleSendTerminalSelectionToClaude = useCallback(async (
+    selection: string,
+    sourceTerminalId: string,
+  ) => {
+    const normalizedSelection = selection.trim();
+    if (!normalizedSelection) return;
+
+    const targetClaudeTab =
+      terminalTabs.find((tab) => tab.id === activeAgentTerminalId && tab.kind === "agent" && tab.presetId === "claude") ??
+      terminalTabs.find((tab) => tab.kind === "agent" && tab.presetId === "claude") ??
+      null;
+    if (!targetClaudeTab) return;
+
+    const sourceTab = terminalTabs.find((tab) => tab.id === sourceTerminalId) ?? null;
+    const sourceLabel = sourceTab?.title?.trim() || sourceTab?.defaultTitle?.trim() || "Terminal";
+
+    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, targetClaudeTab.id);
+    if (targetGroup) {
+      setAgentWorkspaceGroups((currentGroups) =>
+        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, targetClaudeTab.id)
+      );
+      setActiveAgentWorkspaceGroupId(targetGroup.id);
+    }
+
+    setActiveAgentTerminalId(targetClaudeTab.id);
+    setActiveWorkspace("agent");
+
+    try {
+      await invoke("write_terminal", {
+        terminalId: targetClaudeTab.id,
+        data: `Terminal output from ${sourceLabel}:\n\`\`\`\n${normalizedSelection}\n\`\`\`\n`,
+      });
+    } catch (error) {
+      console.error("Failed to send terminal selection to Claude:", error);
+    }
+  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+
   const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
     setDiffDirtyState((currentState) => {
       if (dirty) {
@@ -3019,6 +3056,10 @@ export function MainLayout() {
                                             defaultTitle={tab.defaultTitle}
                                             startupCommands={tab.startupCommands}
                                             onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                                            canSendSelectionToClaude={canAddClaudeContext}
+                                            onSendSelectionToClaude={(selection) =>
+                                              handleSendTerminalSelectionToClaude(selection, tab.id)
+                                            }
                                           />
                                         </div>
                                       ))}
@@ -3280,6 +3321,10 @@ export function MainLayout() {
                                             }
                                             defaultTitle={tab.defaultTitle}
                                             onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                                            canSendSelectionToClaude={canAddClaudeContext}
+                                            onSendSelectionToClaude={(selection) =>
+                                              handleSendTerminalSelectionToClaude(selection, tab.id)
+                                            }
                                           />
                                         </div>
                                       ))}

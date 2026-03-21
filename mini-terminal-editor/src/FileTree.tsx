@@ -1068,7 +1068,7 @@ export function FileTree({
                   disabled={!canAddClaudeContext}
                   onSelect={() => onAddClaudeContext?.(path, "file")}
                 >
-                  Add to Claude Context
+                  Add to Claude Code Context
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
@@ -1113,7 +1113,7 @@ export function FileTree({
                   disabled={!canAddClaudeContext}
                   onSelect={() => onAddClaudeContext?.(path, "folder")}
                 >
-                  Add to Claude Context
+                  Add to Claude Code Context
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => doRename(path)}>Rename</ContextMenuItem>
@@ -1162,7 +1162,7 @@ export function FileTree({
                     void addClaudeContextEntries(items);
                   }}
                 >
-                  {`Add ${items.length} ${itemLabel} to Claude Context`}
+                  {`Add ${items.length} ${itemLabel} to Claude Code Context`}
                 </ContextMenuItem>
               </>;
             })()}

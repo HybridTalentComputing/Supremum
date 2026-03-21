@@ -362,7 +362,7 @@ export function CodeEditor({
                   setContextMenuPosition(null);
                 }}
               >
-                Add Selection to Claude Context
+                Add Selection to Claude Code Context
               </button>
               <div className="code-editor-context-menu-separator" />
               <button

@@ -3,7 +3,8 @@
  * Uses Tauri Channel for PTY output streaming (dispatcher pattern).
  */
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 /* xterm.css 由 index.css 统一导入，确保覆盖样式生效 */
@@ -82,6 +83,8 @@ type TerminalComponentProps = {
   active?: boolean;
   defaultTitle?: string;
   onTitleChange?: (title: string) => void;
+  canSendSelectionToClaude?: boolean;
+  onSendSelectionToClaude?: (selection: string) => void | Promise<void>;
   startupCommands?: string[];
 };
 
@@ -91,6 +94,8 @@ export function TerminalComponent({
   active = true,
   defaultTitle = "Terminal",
   onTitleChange,
+  canSendSelectionToClaude = false,
+  onSendSelectionToClaude,
   startupCommands,
 }: TerminalComponentProps) {
   const terminalSurfaceRef = useRef<HTMLDivElement | null>(null);
@@ -108,6 +113,8 @@ export function TerminalComponent({
   const startupCommandsRef = useRef(startupCommands);
   const startupCommandsExecutedRef = useRef(false);
   const startupTimeoutRef = useRef<number | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenuSelection, setContextMenuSelection] = useState("");
 
   useEffect(() => {
     defaultTitleRef.current = defaultTitle;
@@ -123,6 +130,40 @@ export function TerminalComponent({
   useEffect(() => {
     startupCommandsRef.current = startupCommands;
   }, [startupCommands]);
+
+  useEffect(() => {
+    if (!contextMenuPosition) return;
+
+    const closeMenu = () => {
+      setContextMenuPosition(null);
+    };
+
+    const handlePointerDown = () => {
+      closeMenu();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      closeMenu();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("resize", closeMenu);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("resize", closeMenu);
+    };
+  }, [contextMenuPosition]);
 
   const emitTitle = useCallback(
     (nextTitle: string) => {
@@ -353,15 +394,124 @@ export function TerminalComponent({
     return () => cancelAnimationFrame(rafId);
   }, [active, fit, syncDerivedTitle]);
 
+  const handleCopySelection = useCallback(async () => {
+    const xterm = xtermRef.current;
+    if (!xterm) return;
+    const selection = xterm.getSelection();
+    if (!selection) return;
+
+    try {
+      await navigator.clipboard.writeText(selection);
+    } catch (error) {
+      console.error(`Failed to copy terminal selection for ${terminalId}:`, error);
+    }
+  }, [terminalId]);
+
+  const handlePaste = useCallback(async () => {
+    try {
+      const clipboardText = await invoke<string>("read_clipboard_text").catch(async (invokeError) => {
+        console.warn(`Falling back to navigator clipboard for terminal ${terminalId}:`, invokeError);
+        return navigator.clipboard.readText();
+      });
+      if (!clipboardText) return;
+      await invoke("write_terminal", { terminalId, data: clipboardText });
+    } catch (error) {
+      console.error(`Failed to paste into terminal ${terminalId}:`, error);
+    }
+  }, [terminalId]);
+
+  const handleSelectAll = useCallback(() => {
+    xtermRef.current?.selectAll();
+  }, []);
+
+  const handleSendSelection = useCallback(() => {
+    if (!contextMenuSelection || !onSendSelectionToClaude) return;
+    void onSendSelectionToClaude(contextMenuSelection);
+  }, [contextMenuSelection, onSendSelectionToClaude]);
+
   return (
-    <div
-      ref={terminalSurfaceRef}
-      className="terminal-surface"
-      role="application"
-      aria-label="Terminal"
-      onMouseDown={() => xtermRef.current?.focus()}
-    >
-      <div ref={terminalRootRef} className="xterm-root" />
-    </div>
+    <>
+      <div
+        ref={terminalSurfaceRef}
+        className="terminal-surface"
+        role="application"
+        aria-label="Terminal"
+        onMouseDown={() => xtermRef.current?.focus()}
+        onContextMenuCapture={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const xterm = xtermRef.current;
+          setContextMenuSelection(xterm?.getSelection() ?? "");
+          setContextMenuPosition({ x: event.clientX, y: event.clientY });
+        }}
+      >
+        <div ref={terminalRootRef} className="xterm-root" />
+      </div>
+      {contextMenuPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="terminal-context-menu"
+              style={{
+                left: contextMenuPosition.x,
+                top: contextMenuPosition.y,
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <div className="terminal-context-menu-label">Terminal</div>
+              <button
+                type="button"
+                className="terminal-context-menu-item"
+                disabled={!contextMenuSelection || !canSendSelectionToClaude}
+                onClick={() => {
+                  handleSendSelection();
+                  setContextMenuPosition(null);
+                }}
+              >
+                Send to Claude Code
+              </button>
+              <div className="terminal-context-menu-separator" />
+              <button
+                type="button"
+                className="terminal-context-menu-item"
+                disabled={!contextMenuSelection}
+                onClick={() => {
+                  void handleCopySelection();
+                  setContextMenuPosition(null);
+                }}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="terminal-context-menu-item"
+                onClick={() => {
+                  void handlePaste();
+                  setContextMenuPosition(null);
+                }}
+              >
+                Paste
+              </button>
+              <div className="terminal-context-menu-separator" />
+              <button
+                type="button"
+                className="terminal-context-menu-item"
+                onClick={() => {
+                  handleSelectAll();
+                  setContextMenuPosition(null);
+                }}
+              >
+                Select All
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }

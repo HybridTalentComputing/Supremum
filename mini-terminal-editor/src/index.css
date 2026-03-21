@@ -4088,6 +4088,59 @@ body.diff-tab-dragging * {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.terminal-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 210px;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(14, 14, 14, 0.97);
+  color: rgba(244, 244, 244, 0.94);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(10px);
+}
+
+.terminal-context-menu-label {
+  padding: 0.4rem 0.55rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(170, 170, 170, 0.72);
+}
+
+.terminal-context-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 0.46rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.terminal-context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.terminal-context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.terminal-context-menu-item:disabled:hover {
+  background: transparent;
+}
+
+.terminal-context-menu-separator {
+  height: 1px;
+  margin: 0.2rem 0.25rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .code-workspace .cm-content,
 .code-workspace .cm-line {
   background-color: transparent !important;
