@@ -1,5 +1,5 @@
 [package]
-name = "subset"
+name = "supremum"
 version = "0.1.0"
 description = "Minimal Tauri xterm terminal app"
 authors = ["htcmax"]
@@ -10,7 +10,7 @@ name = "mini_terminal_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "Subset"
+name = "Supremum"
 path = "src/main.rs"
 
 [build-dependencies]

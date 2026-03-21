@@ -762,7 +762,7 @@ fn create_terminal(
     cmd.cwd(&cwd_path);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "Subset");
+    cmd.env("TERM_PROGRAM", "Supremum");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     cmd.env("CLICOLOR", "1");
     cmd.env("CLICOLOR_FORCE", "1");

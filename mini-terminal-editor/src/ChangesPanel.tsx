@@ -471,7 +471,7 @@ export function ChangesPanel({
 
   const handleDiscardFile = async (path: string) => {
     const confirmed = await confirm(`Discard changes for "${path}"?`, {
-      title: "Subset",
+      title: "Supremum",
       kind: "warning",
       okLabel: "OK",
       cancelLabel: "Cancel",
@@ -482,7 +482,7 @@ export function ChangesPanel({
 
   const handleDiscardAll = async () => {
     const confirmed = await confirm("Discard all unstaged changes and remove untracked files?", {
-      title: "Subset",
+      title: "Supremum",
       kind: "warning",
       okLabel: "OK",
       cancelLabel: "Cancel",

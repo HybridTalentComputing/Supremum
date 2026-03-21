@@ -11,7 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FolderOpen, FolderPlus, History } from "lucide-react";
 
-const CREATE_PROJECT_LOCATION_STORAGE_KEY = "subset.create-project-location";
+const CREATE_PROJECT_LOCATION_STORAGE_KEY = "supremum.create-project-location";
 
 function getProjectName(path: string) {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -197,7 +197,7 @@ export function WorkspaceGate() {
               draggable={false}
             />
           </div>
-          <h2 className="workspace-gate-title">Welcome to Subset</h2>
+          <h2 className="workspace-gate-title">Welcome to Supremum</h2>
           <p className="workspace-gate-desc">
             Open a project to start working with terminal and editor in one focused workspace.
           </p>

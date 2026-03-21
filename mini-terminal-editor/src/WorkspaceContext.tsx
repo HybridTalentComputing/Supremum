@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-const RECENT_PROJECTS_STORAGE_KEY = "subset.recent-projects";
+const RECENT_PROJECTS_STORAGE_KEY = "supremum.recent-projects";
 const MAX_RECENT_PROJECTS = 8;
 
 type WorkspaceContextValue = {

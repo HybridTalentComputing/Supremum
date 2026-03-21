@@ -1,4 +1,4 @@
-# Subset
+# Supremum
 
 Minimal Tauri + xterm.js terminal application. Single session, full PTY support.
 

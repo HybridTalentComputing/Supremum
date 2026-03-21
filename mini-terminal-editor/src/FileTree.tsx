@@ -824,7 +824,7 @@ export function FileTree({
     const msg = hasDir
       ? `Delete ${ids.length} item(s)? Folders will be removed recursively.`
       : `Delete ${ids.length} file(s)?`;
-    if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
+    if (!(await confirm(msg, { title: "Supremum", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       for (let i = 0; i < ids.length; i++) {
         await invokeDelete(workspacePath, ids[i], nodes[i].data.isDir);
@@ -889,7 +889,7 @@ export function FileTree({
 
   const doDelete = useCallback(async (path: string, isDir: boolean) => {
     const msg = isDir ? "Delete this folder recursively?" : "Delete this file?";
-    if (!(await confirm(msg, { title: "Subset", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
+    if (!(await confirm(msg, { title: "Supremum", kind: "warning", okLabel: "OK", cancelLabel: "Cancel" }))) return;
     try {
       await invokeDelete(workspacePath, path, isDir);
       await refreshDir(parentOf(path));
