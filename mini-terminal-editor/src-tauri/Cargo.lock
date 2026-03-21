@@ -3320,6 +3320,7 @@ dependencies = [
  "portable-pty",
  "raw-window-handle",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

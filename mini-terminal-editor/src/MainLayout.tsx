@@ -109,6 +109,16 @@ type EditorSelectionContext = {
   toLine: number;
 };
 
+type ClaudeSessionSummary = {
+  sessionId: string;
+  title: string;
+  cwd: string;
+  updatedAt: string;
+  turnCount: number;
+  cliType: "claude";
+  cliLabel: string;
+};
+
 function getTabName(path: string) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
@@ -166,6 +176,47 @@ function buildClaudeSelectionPrompt(path: string, selection: EditorSelectionCont
 function formatWorkspacePath(path: string | null) {
   if (!path) return "";
   return path.replace(/^\/Users\/[^/]+/, "~");
+}
+
+function formatSessionTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  const now = new Date();
+  const isSameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+
+  const timeLabel = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+
+  if (isSameDay) return `Today ${timeLabel}`;
+  if (isYesterday) return `Yesterday ${timeLabel}`;
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatSessionCwd(cwd: string, workspacePath?: string | null) {
+  if (!cwd) return "";
+  if (workspacePath && cwd === workspacePath) {
+    return "Current workspace";
+  }
+  return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
 
 function createWorkspaceTabGroup(id: string): WorkspaceTabGroup {
@@ -489,9 +540,20 @@ function WorkspaceEmptyState({
 
 function AgentPresetLauncher({
   onSelectPreset,
+  workspacePath,
+  recentClaudeSessions,
+  recentClaudeSessionsLoading,
+  recentClaudeSessionsError,
+  onResumeClaudeSession,
 }: {
   onSelectPreset: (preset: AgentPreset) => void;
+  workspacePath?: string | null;
+  recentClaudeSessions: ClaudeSessionSummary[];
+  recentClaudeSessionsLoading: boolean;
+  recentClaudeSessionsError: string | null;
+  onResumeClaudeSession: (session: ClaudeSessionSummary) => void;
 }) {
+  const [sessionQuery, setSessionQuery] = useState("");
   const presetRows = AGENT_PRESETS.reduce<AgentPreset[][]>((rows, preset, index) => {
     const rowIndex = Math.floor(index / 2);
     if (!rows[rowIndex]) {
@@ -500,6 +562,16 @@ function AgentPresetLauncher({
     rows[rowIndex].push(preset);
     return rows;
   }, []);
+  const filteredClaudeSessions = useMemo(() => {
+    const normalizedQuery = sessionQuery.trim().toLowerCase();
+    if (!normalizedQuery) return recentClaudeSessions;
+
+    return recentClaudeSessions.filter((session) =>
+      [session.title, session.cliLabel, session.cwd, session.sessionId]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(normalizedQuery))
+    );
+  }, [recentClaudeSessions, sessionQuery]);
 
   return (
     <div className="agent-launcher-shell">
@@ -539,6 +611,73 @@ function AgentPresetLauncher({
               ))}
             </div>
           ))}
+        </div>
+        <div className="agent-session-panel">
+          <div className="agent-session-panel-header">
+            <div className="agent-session-panel-copy">
+              <h3 className="agent-session-panel-title">Recent Sessions</h3>
+              <p className="agent-session-panel-description">
+                Resume previous Claude Code conversations for this workspace.
+              </p>
+            </div>
+          </div>
+          <div className="agent-session-search-wrap">
+            <input
+              type="text"
+              value={sessionQuery}
+              onChange={(event) => setSessionQuery(event.target.value)}
+              className="agent-session-search"
+              placeholder="Search by title, CLI, path, or session id"
+            />
+          </div>
+          <div className="agent-session-list">
+            {!workspacePath ? (
+              <div className="agent-session-empty">Open a workspace to load resumable Claude Code sessions.</div>
+            ) : recentClaudeSessionsLoading ? (
+              <div className="agent-session-empty">Loading recent Claude Code sessions…</div>
+            ) : recentClaudeSessionsError ? (
+              <div className="agent-session-empty">{recentClaudeSessionsError}</div>
+            ) : filteredClaudeSessions.length === 0 ? (
+              <div className="agent-session-empty">No recent Claude Code sessions found for this workspace.</div>
+            ) : (
+              filteredClaudeSessions.map((session) => (
+                (() => {
+                  const preset = AGENT_PRESETS.find((candidate) => candidate.id === session.cliType);
+                  const sessionIconPath = preset?.iconPath ?? null;
+
+                  return (
+                    <button
+                      key={session.sessionId}
+                      type="button"
+                      className="agent-session-item"
+                      onClick={() => onResumeClaudeSession(session)}
+                      title={`${session.cliLabel}\n${session.sessionId}\n${session.cwd}`}
+                    >
+                      <div className="agent-session-item-top">
+                        <span className="agent-session-item-title">{session.title}</span>
+                        <span className="agent-session-item-action">Resume</span>
+                      </div>
+                      <div className="agent-session-item-meta">
+                        {sessionIconPath ? (
+                          <img
+                            src={sessionIconPath}
+                            alt=""
+                            className="agent-session-item-icon"
+                            draggable={false}
+                          />
+                        ) : null}
+                        <span>{session.cliLabel}</span>
+                        <span>·</span>
+                        <span>{formatSessionTimestamp(session.updatedAt)}</span>
+                        <span>·</span>
+                        <span>{Math.max(session.turnCount, 1)} turns</span>
+                      </div>
+                    </button>
+                  );
+                })()
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -629,6 +768,9 @@ export function MainLayout() {
   const [branchMenuLoading, setBranchMenuLoading] = useState(false);
   const [branchMenuError, setBranchMenuError] = useState<string | null>(null);
   const [branchList, setBranchList] = useState<GitBranchList | null>(null);
+  const [recentClaudeSessions, setRecentClaudeSessions] = useState<ClaudeSessionSummary[]>([]);
+  const [recentClaudeSessionsLoading, setRecentClaudeSessionsLoading] = useState(false);
+  const [recentClaudeSessionsError, setRecentClaudeSessionsError] = useState<string | null>(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [branchCreateMode, setBranchCreateMode] = useState<BranchCreateMode>("none");
   const [branchCreateName, setBranchCreateName] = useState("");
@@ -663,6 +805,43 @@ export function MainLayout() {
     setBranchCreateName("");
     setBranchCreateSource("");
     setBranchActionPending(null);
+  }, [workspacePath]);
+
+  useEffect(() => {
+    if (!workspacePath) {
+      setRecentClaudeSessions([]);
+      setRecentClaudeSessionsLoading(false);
+      setRecentClaudeSessionsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setRecentClaudeSessionsLoading(true);
+    setRecentClaudeSessionsError(null);
+
+    void invoke<ClaudeSessionSummary[]>("list_claude_sessions", {
+      payload: {
+        workspacePath,
+        limit: 12,
+      },
+    })
+      .then((sessions) => {
+        if (cancelled) return;
+        setRecentClaudeSessions(sessions);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setRecentClaudeSessions([]);
+        setRecentClaudeSessionsError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRecentClaudeSessionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [workspacePath]);
 
   const loadBranchList = useCallback(async () => {
@@ -1297,8 +1476,8 @@ export function MainLayout() {
     setActiveWorkspace("terminal");
   }, [activeNativeTerminalGroupId, createNativeTerminalGroup, workspacePath]);
 
-  const handleCreateAgentTerminal = useCallback(
-    (preset: AgentPreset) => {
+  const handleCreateAgentTerminalWithCommands = useCallback(
+    (preset: AgentPreset, startupCommands: string[]) => {
       const nextIndex = terminalCounterRef.current;
       terminalCounterRef.current += 1;
       const id = `term-${nextIndex}`;
@@ -1309,7 +1488,7 @@ export function MainLayout() {
         defaultTitle: preset.label,
         cwd: workspacePath ?? undefined,
         presetId: preset.id,
-        startupCommands: [preset.command],
+        startupCommands,
       };
 
       setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
@@ -1329,6 +1508,25 @@ export function MainLayout() {
       setAgentPresetMenuOpen(false);
     },
     [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, workspacePath]
+  );
+
+  const handleCreateAgentTerminal = useCallback(
+    (preset: AgentPreset) => {
+      handleCreateAgentTerminalWithCommands(preset, [preset.command]);
+    },
+    [handleCreateAgentTerminalWithCommands]
+  );
+
+  const handleResumeClaudeSession = useCallback(
+    (session: ClaudeSessionSummary) => {
+      const claudePreset = AGENT_PRESETS.find((preset) => preset.id === "claude");
+      if (!claudePreset) return;
+
+      handleCreateAgentTerminalWithCommands(claudePreset, [
+        `${claudePreset.command} --resume ${session.sessionId}`,
+      ]);
+    },
+    [handleCreateAgentTerminalWithCommands]
   );
 
   const handleCloseTerminal = useCallback((terminalId: string) => {
@@ -3154,7 +3352,14 @@ export function MainLayout() {
                         </div>
                       </div>
                       <div className="terminal-stage">
-                        <AgentPresetLauncher onSelectPreset={handleCreateAgentTerminal} />
+                        <AgentPresetLauncher
+                          onSelectPreset={handleCreateAgentTerminal}
+                          workspacePath={workspacePath}
+                          recentClaudeSessions={recentClaudeSessions}
+                          recentClaudeSessionsLoading={recentClaudeSessionsLoading}
+                          recentClaudeSessionsError={recentClaudeSessionsError}
+                          onResumeClaudeSession={handleResumeClaudeSession}
+                        />
                       </div>
                     </div>
                   )}

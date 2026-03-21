@@ -13,10 +13,11 @@ use git_backend::{
 };
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Deserialize;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     env, fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex},
@@ -46,6 +47,13 @@ struct WriteFilePayload {
 struct ListDirPayload {
     workspace_path: String,
     path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListClaudeSessionsPayload {
+    workspace_path: String,
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -106,6 +114,193 @@ struct ListDirEntry {
     name: String,
     path: String,
     is_dir: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeSessionSummary {
+    session_id: String,
+    title: String,
+    cwd: String,
+    updated_at: String,
+    turn_count: usize,
+    cli_type: String,
+    cli_label: String,
+}
+
+fn claude_project_dir_name(workspace_path: &str) -> String {
+    workspace_path.replace(['/', '\\'], "-")
+}
+
+fn extract_text_from_json(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) => Some(text.clone()),
+        Value::Array(items) => {
+            let combined = items
+                .iter()
+                .filter_map(|item| match item {
+                    Value::Object(object) => object
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .map(|text| text.to_string()),
+                    Value::String(text) => Some(text.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if combined.trim().is_empty() {
+                None
+            } else {
+                Some(combined)
+            }
+        }
+        _ => None,
+    }
+}
+
+fn summarize_session_title(title: &str) -> String {
+    let collapsed = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    let trimmed = collapsed.trim();
+    if trimmed.is_empty() {
+        return "Untitled session".to_string();
+    }
+
+    const MAX_LEN: usize = 88;
+    if trimmed.chars().count() <= MAX_LEN {
+        return trimmed.to_string();
+    }
+
+    trimmed.chars().take(MAX_LEN - 1).collect::<String>() + "…"
+}
+
+fn parse_claude_session_file(file_path: &Path) -> Option<ClaudeSessionSummary> {
+    let file = fs::File::open(file_path).ok()?;
+    let reader = BufReader::new(file);
+
+    let mut session_id = file_path.file_stem()?.to_string_lossy().to_string();
+    let mut cwd = String::new();
+    let mut updated_at = String::new();
+    let mut first_user_prompt = String::new();
+    let mut last_prompt = String::new();
+    let mut turn_count = 0usize;
+
+    for line_result in reader.lines() {
+        let line = match line_result {
+            Ok(line) => line,
+            Err(_) => continue,
+        };
+        let value = match serde_json::from_str::<Value>(&line) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        if let Some(found_session_id) = value.get("sessionId").and_then(Value::as_str) {
+            if !found_session_id.is_empty() {
+                session_id = found_session_id.to_string();
+            }
+        }
+
+        if let Some(found_cwd) = value.get("cwd").and_then(Value::as_str) {
+            if cwd.is_empty() && !found_cwd.is_empty() {
+                cwd = found_cwd.to_string();
+            }
+        }
+
+        let timestamp = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                value.get("snapshot")
+                    .and_then(Value::as_object)
+                    .and_then(|snapshot| snapshot.get("timestamp"))
+                    .and_then(Value::as_str)
+            });
+
+        if let Some(found_timestamp) = timestamp {
+            if found_timestamp > updated_at.as_str() {
+                updated_at = found_timestamp.to_string();
+            }
+        }
+
+        if value.get("type").and_then(Value::as_str) == Some("user") {
+            turn_count += 1;
+            if first_user_prompt.is_empty() {
+                if let Some(prompt) = value
+                    .get("message")
+                    .and_then(Value::as_object)
+                    .and_then(|message| message.get("content"))
+                    .and_then(extract_text_from_json)
+                {
+                    first_user_prompt = prompt;
+                }
+            }
+        }
+
+        if value.get("type").and_then(Value::as_str) == Some("last-prompt") {
+            if let Some(prompt) = value.get("lastPrompt").and_then(Value::as_str) {
+                if !prompt.trim().is_empty() {
+                    last_prompt = prompt.to_string();
+                }
+            }
+        }
+    }
+
+    if updated_at.is_empty() {
+        return None;
+    }
+
+    let title_source = if !first_user_prompt.trim().is_empty() {
+        first_user_prompt.as_str()
+    } else if !last_prompt.trim().is_empty() {
+        last_prompt.as_str()
+    } else {
+        "Untitled session"
+    };
+
+    Some(ClaudeSessionSummary {
+        session_id,
+        title: summarize_session_title(title_source),
+        cwd,
+        updated_at,
+        turn_count,
+        cli_type: "claude".to_string(),
+        cli_label: "Claude Code".to_string(),
+    })
+}
+
+#[tauri::command]
+fn list_claude_sessions(payload: ListClaudeSessionsPayload) -> Result<Vec<ClaudeSessionSummary>, String> {
+    let home = env::var("HOME").map_err(|e| format!("failed to resolve home directory: {e}"))?;
+    let project_dir = PathBuf::from(home)
+        .join(".claude")
+        .join("projects")
+        .join(claude_project_dir_name(&payload.workspace_path));
+
+    if !project_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let limit = payload.limit.unwrap_or(12).clamp(1, 50);
+    let mut sessions = Vec::new();
+
+    for entry_result in fs::read_dir(&project_dir).map_err(|e| format!("failed to read Claude projects directory: {e}"))? {
+        let entry = match entry_result {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+
+        if let Some(summary) = parse_claude_session_file(&path) {
+            sessions.push(summary);
+        }
+    }
+
+    sessions.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    sessions.truncate(limit);
+    Ok(sessions)
 }
 
 fn safe_workspace_child(workspace_path: &Path, relative_path: &str) -> Result<PathBuf, String> {
@@ -731,6 +926,7 @@ pub fn run() {
             delete_entry,
             move_entry,
             reveal_in_file_manager,
+            list_claude_sessions,
             toggle_window_zoom,
             open_external_url,
             git_get_capability,
