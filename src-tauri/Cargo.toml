@@ -1,6 +1,6 @@
 [package]
 name = "supremum"
-version = "0.1.0"
+version = "0.0.1"
 description = "Simple, lightweight, but powerful AI code editor for the AI era"
 authors = ["htcmax"]
 edition = "2021"
