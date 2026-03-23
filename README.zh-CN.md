@@ -1,18 +1,17 @@
-# Supremum
-
-[English README](./README.md)
-
-**面向 AI 时代的简单、轻量但强大的 AI 代码编辑器。**
-
-Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成 review 流设计的本地桌面工作区。
-
-它不替代 CLI，而是在 CLI 工作流外层补上一层必要的 UI。
-
 <div align="center">
-  <img alt="Supremum 主视觉" src="docs/images/readme-hero.png" />
+
+<img width="full" alt="Supremum" src="docs/images/workspace-overview-ai-editor-terminal.png" />
+
+### 面向 AI 时代的简单、轻量但强大的 AI 代码编辑器。
+
 </div>
 
-## 为什么是 Supremum
+
+## 为什么选择 Supremum？
+
+Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成代码审查打造的本地桌面工作区。
+
+它保留 CLI 原本的工作流，再在外层补上缺失的 UI。
 
 | 问题 | Supremum 的做法 |
 | --- | --- |
@@ -36,6 +35,10 @@ Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成
 | AI / Terminal 分栏 | 并行工作时保持多个会话可见且清晰 |
 
 目前 Claude Code 的集成深度最高。
+
+<div align="center">
+  <img alt="从工作区把选中的文件和代码加入 CLI 上下文" src="docs/images/add-to-cli-context.png" width="1200" />
+</div>
 
 ## 核心工作区
 
@@ -68,6 +71,7 @@ Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成
 | OpenCode | 支持 preset 启动 |
 | Copilot | 支持 preset 启动 |
 | Cursor Agent | 支持 preset 启动 |
+| Customization | 后续支持 |
 
 ## 快速开始
 

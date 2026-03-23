@@ -1,18 +1,17 @@
-# Supremum
+<div align="center">
 
-[中文文档](./README.zh-CN.md)
+<img width="full" alt="Supremum" src="docs/images/workspace-overview-ai-editor-terminal.png" />
 
-**Simple, lightweight, but powerful AI code editor for the AI era.**
+### Simple, lightweight, but powerful AI code editor for the AI era.
+
+</div>
+
+
+## Why Supremum?
 
 Supremum is a local desktop workspace built around real coding CLIs, real terminals, local files, and integrated code review.
 
 It keeps the CLI workflow intact, then adds the missing UI layer around it.
-
-<div align="center">
-  <img alt="Supremum hero" src="docs/images/readme-hero.png" />
-</div>
-
-## Why Supremum
 
 | Problem | What Supremum does |
 | --- | --- |
@@ -36,6 +35,10 @@ It keeps the CLI workflow intact, then adds the missing UI layer around it.
 | Split AI / Terminal panes | Keep multiple sessions visible and manageable |
 
 Claude Code currently has the deepest workflow integration.
+
+<div align="center">
+  <img alt="Adding selected files and code to CLI context from the workspace" src="docs/images/add-to-cli-context.png" width="1200" />
+</div>
 
 ## Core Workspaces
 
@@ -68,6 +71,7 @@ Claude Code currently has the deepest workflow integration.
 | OpenCode | Preset launch |
 | Copilot | Preset launch |
 | Cursor Agent | Preset launch |
+| Customization| support later |
 
 ## Getting Started
 
