@@ -111,11 +111,51 @@ bun install
 bun run tauri dev
 ```
 
-### Build
+### Build Web Assets
 
 ```bash
 bun run build
 ```
+
+### Package macOS Installers
+
+```bash
+bun run build:dmg:all
+```
+
+Available commands:
+
+- `bun run build:dmg:arm64` for Apple Silicon
+- `bun run build:dmg:x64` for Intel
+- `bun run build:dmg:universal` for a universal macOS build
+- `bun run build:dmg:all` for all three variants
+
+Built DMGs are collected under:
+
+`src-tauri/target/release-artifacts/<version>/macos`
+
+### macOS Install Note
+
+**Warning**
+
+Current GitHub Release builds are not notarized yet.
+If macOS blocks the installer or says the app is damaged, use the steps below.
+
+1. Open the DMG and drag `Supremum.app` into `Applications`
+2. If the installed app is blocked on first launch, remove quarantine from the app first:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Supremum.app"
+```
+
+3. If step 2 does not fix it, or macOS blocks the downloaded DMG before you can open it, also remove quarantine from the DMG and try again:
+
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/Supremum_0.0.1_aarch64.dmg
+```
+
+**In most cases, step 2 is the only step required.**
+Step 3 is a fallback for cases where the app command alone is not enough, or the DMG itself is blocked.
 
 ## Design Philosophy
 

@@ -109,11 +109,51 @@ bun install
 bun run tauri dev
 ```
 
-### 构建
+### 构建前端产物
 
 ```bash
 bun run build
 ```
+
+### 打包 macOS 安装包
+
+```bash
+bun run build:dmg:all
+```
+
+可用命令：
+
+- `bun run build:dmg:arm64` 用于 Apple Silicon
+- `bun run build:dmg:x64` 用于 Intel
+- `bun run build:dmg:universal` 用于通用 macOS 版本
+- `bun run build:dmg:all` 一次构建三个版本
+
+构建后的 DMG 会统一收集到：
+
+`src-tauri/target/release-artifacts/<version>/macos`
+
+### macOS 安装提醒
+
+**警告**
+
+当前 GitHub Release 提供的 macOS 安装包还没有完成 notarization。
+如果 macOS 提示安装包或应用“已损坏”或阻止打开，请按下面步骤处理。
+
+1. 打开 DMG，把 `Supremum.app` 拖到 `Applications`
+2. 如果第一次启动时拦的是安装后的应用，先给应用本体移除 quarantine：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Supremum.app"
+```
+
+3. 如果第 2 步还不行，或者 DMG 还没打开就被系统拦截，再给 DMG 移除 quarantine 后重试：
+
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/Supremum_0.0.1_aarch64.dmg
+```
+
+**大多数情况下，只需要执行第 2 步。**
+第 3 步是补充兜底，用在 app 命令仍然无效，或者 DMG 本身先被系统拦截的情况。
 
 ## 设计哲学
 
