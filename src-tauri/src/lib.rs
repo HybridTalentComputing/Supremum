@@ -25,6 +25,13 @@ use std::{
 };
 use tauri::{ipc::Channel, Manager, State};
 
+#[cfg(target_os = "macos")]
+use objc::{
+    msg_send,
+    runtime::{Object, BOOL, NO, YES},
+    sel, sel_impl,
+};
+
 // ----- File operations (path-constrained to workspace) -----
 
 #[derive(Deserialize)]
@@ -114,6 +121,34 @@ struct ListDirEntry {
     name: String,
     path: String,
     is_dir: bool,
+}
+
+#[cfg(target_os = "macos")]
+const NS_WINDOW_TITLE_HIDDEN: isize = 1;
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
+unsafe fn set_titlebar_appears_transparent(ns_window: *mut Object, value: BOOL) {
+    let _: () = msg_send![ns_window, setTitlebarAppearsTransparent: value];
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
+unsafe fn set_title_visibility(ns_window: *mut Object, value: isize) {
+    let _: () = msg_send![ns_window, setTitleVisibility: value];
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
+unsafe fn set_movable_by_window_background(ns_window: *mut Object, value: BOOL) {
+    let _: () = msg_send![ns_window, setMovableByWindowBackground: value];
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
+unsafe fn perform_window_zoom(ns_window: *mut Object) {
+    let sender = std::ptr::null_mut::<Object>();
+    let _: () = msg_send![ns_window, performZoom: sender];
 }
 
 #[derive(serde::Serialize)]
@@ -651,17 +686,12 @@ fn open_external_url(url: String) -> Result<(), String> {
 fn toggle_window_zoom(window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        use cocoa::{
-            appkit::NSWindow,
-            base::{id, nil},
-        };
-
         let ns_window = window
             .ns_window()
             .map_err(|e| format!("failed to access native window: {e}"))?;
-        let ns_window = ns_window as id;
+        let ns_window = ns_window as *mut Object;
         unsafe {
-            ns_window.performZoom_(nil);
+            perform_window_zoom(ns_window);
         }
         return Ok(());
     }
@@ -959,19 +989,13 @@ pub fn run() {
 
                 #[cfg(target_os = "macos")]
                 {
-                    use cocoa::{
-                        appkit::{NSWindow, NSWindowTitleVisibility},
-                        base::{id, NO, YES},
-                    };
-
                     if let Ok(ns_window) = win.ns_window() {
-                        let ns_window = ns_window as id;
+                        let ns_window = ns_window as *mut Object;
                         unsafe {
-                            ns_window.setTitlebarAppearsTransparent_(YES);
-                            ns_window
-                                .setTitleVisibility_(NSWindowTitleVisibility::NSWindowTitleHidden);
+                            set_titlebar_appears_transparent(ns_window, YES);
+                            set_title_visibility(ns_window, NS_WINDOW_TITLE_HIDDEN);
                             // Only our explicit drag regions should move the window.
-                            ns_window.setMovableByWindowBackground_(NO);
+                            set_movable_by_window_background(ns_window, NO);
                         }
                     }
                 }
