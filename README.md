@@ -4,6 +4,8 @@
 
 ### Simple, lightweight, but powerful AI code editor for the AI era.
 
+🌐 **English** | [**中文**](./README.zh-CN.md)
+
 </div>
 
 
@@ -20,6 +22,21 @@ It keeps the CLI workflow intact, then adds the missing UI layer around it.
 | Files, terminal output, and diffs are fragmented | Brings Files, Editor, Changes, Diff, and AI sessions into one place |
 | Context passing is repetitive | Lets you send files, folders, code selections, and terminal output directly into Claude Code |
 | Multi-session work gets messy fast | Supports split panes for AI Coding CLI and Terminal |
+
+## Installer Size Snapshot
+
+Based on locally built/downloaded macOS installers:
+
+| App | Package | Size |
+| --- | --- | --- |
+| **Supremum** | **macOS ARM64 DMG** | **`4.71 MB`** |
+| Cursor | macOS ARM64 DMG | `248.91 MB` |
+| VS Code | macOS Universal DMG | `252.38 MB` |
+
+**Supremum ships in under 5 MB.**  
+That makes the current installer roughly **`53x` smaller** than the Cursor and VS Code installers used for this comparison.
+
+This comparison reflects installer file size only, not runtime memory usage or full extracted app size.
 
 ## CLI Workflow Optimizations
 

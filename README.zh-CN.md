@@ -21,6 +21,21 @@ Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成
 | 上下文传递太重复 | 可以直接把文件、文件夹、代码选区、终端输出发给 Claude Code |
 | 多会话很容易乱 | AI Coding CLI 和 Terminal 都支持横向分栏 |
 
+## 安装包体积对比
+
+基于当前本地构建/下载的 macOS 安装包：
+
+| 应用 | 安装包 | 体积 |
+| --- | --- | --- |
+| **Supremum** | **macOS ARM64 DMG** | **`4.71 MB`** |
+| Cursor | macOS ARM64 DMG | `248.91 MB` |
+| VS Code | macOS Universal DMG | `252.38 MB` |
+
+**Supremum 当前安装包不到 5 MB。**  
+按这组对比数据看，当前 Supremum 安装包体积大约只有 Cursor 和 VS Code 的 **`1/53`**。
+
+这里对比的是安装包文件大小，不代表运行时内存占用或解压后的完整应用体积。
+
 ## 与 Coding CLI 的工作流集成
 
 | 优化点 | 解决什么问题 |
