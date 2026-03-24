@@ -4,7 +4,9 @@
 
 ### 面向 AI 时代的简单、轻量但强大的 AI 代码编辑器。
 
-> <sub><strong>macOS 提醒：</strong> 如果 macOS 提示 `Supremum.app` 已损坏，或阻止它打开，请直接查看下方的 <a href="#macos-安装提醒">macOS 安装提醒</a> 获取解决方法。</sub>
+<sub><strong>Supremum v0.0.1 已发布。</strong> 可在 <a href="https://github.com/HybridTalentComputing/Supremum/releases">Releases</a> 下载。</sub>
+
+> <sub><strong>macOS 提醒：</strong> 如果 macOS 提示 `Supremum.app` 已损坏，或阻止它打开，请直接查看下方的 <a href="#macos-安装提醒">macOS 安装提醒</a> 获取说明。</sub>
 
 </div>
 
