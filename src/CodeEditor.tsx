@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { ImgHTMLAttributes } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
@@ -44,6 +45,82 @@ type CodeEditorProps = {
   onChange: (path: string, content: string) => void;
   onSave: (path: string, content: string) => void | Promise<void>;
 };
+
+function isExternalPreviewSrc(src: string): boolean {
+  return /^(?:[a-z]+:)?\/\//i.test(src) || src.startsWith("data:") || src.startsWith("blob:");
+}
+
+function resolveMarkdownAssetPath(markdownPath: string, assetPath: string): string {
+  const normalizedAssetPath = assetPath.replace(/\\/g, "/");
+  if (normalizedAssetPath.startsWith("/")) {
+    return normalizedAssetPath.replace(/^\/+/, "");
+  }
+
+  const baseParts = markdownPath.replace(/\\/g, "/").split("/").slice(0, -1);
+  for (const part of normalizedAssetPath.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      baseParts.pop();
+      continue;
+    }
+    baseParts.push(part);
+  }
+  return baseParts.join("/");
+}
+
+type MarkdownImageProps = ImgHTMLAttributes<HTMLImageElement> & {
+  markdownPath: string;
+  workspacePath: string | null;
+};
+
+function MarkdownImage({ src, alt, markdownPath, workspacePath, ...props }: MarkdownImageProps) {
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!src) {
+      setResolvedSrc(null);
+      return;
+    }
+
+    if (isExternalPreviewSrc(src)) {
+      setResolvedSrc(src);
+      return;
+    }
+
+    if (!workspacePath) {
+      setResolvedSrc(null);
+      return;
+    }
+
+    const assetPath = resolveMarkdownAssetPath(markdownPath, src);
+    let cancelled = false;
+
+    void invoke<string>("read_image_data_url", {
+      payload: { workspacePath, path: assetPath },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) {
+          setResolvedSrc(dataUrl);
+        }
+      })
+      .catch((error) => {
+        console.error(`Failed to load markdown image ${assetPath}:`, error);
+        if (!cancelled) {
+          setResolvedSrc(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [markdownPath, src, workspacePath]);
+
+  if (!resolvedSrc) {
+    return <span className="image-preview-empty">Image preview is unavailable.</span>;
+  }
+
+  return <img {...props} src={resolvedSrc} alt={alt} draggable={false} />;
+}
 
 function getSelectionContext(viewUpdate: ViewUpdate): SelectionContext | null {
   const selection = viewUpdate.state.selection.main;
@@ -297,6 +374,15 @@ export function CodeEditor({
             source={content}
             className="markdown-preview"
             wrapperElement={{ "data-color-mode": "dark" }}
+            components={{
+              img: (props) => (
+                <MarkdownImage
+                  {...props}
+                  markdownPath={path}
+                  workspacePath={workspacePath}
+                />
+              ),
+            }}
           />
         </div>
       </div>

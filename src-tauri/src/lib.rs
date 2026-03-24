@@ -788,6 +788,11 @@ fn create_terminal(
         .or_else(|| env::current_dir().ok())
         .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
+    let shell_name = std::path::Path::new(&shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .to_string();
     let mut cmd = CommandBuilder::new(shell);
     cmd.cwd(&cwd_path);
     cmd.env("TERM", "xterm-256color");
@@ -801,7 +806,18 @@ fn create_terminal(
         "LS_COLORS",
         "di=1;36:ln=1;35:so=1;32:pi=33:ex=1;32:bd=1;33:cd=1;33:su=37;41:sg=30;43:tw=30;42:ow=34;42",
     );
-    cmd.arg("-i");
+
+    for key in ["PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "SHELL"] {
+        if let Ok(value) = env::var(key) {
+            cmd.env(key, value);
+        }
+    }
+
+    if matches!(shell_name.as_str(), "zsh" | "bash") {
+        cmd.arg("-il");
+    } else {
+        cmd.arg("-i");
+    }
 
     let child = pair
         .slave
