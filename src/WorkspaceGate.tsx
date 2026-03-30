@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useWorkspace } from "./WorkspaceContext";
 import { MainLayout } from "./MainLayout";
 import { invoke } from "@tauri-apps/api/core";
+import { WindowControls } from "@/WindowControls";
+import { isWindows } from "@/platform";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FolderOpen, FolderPlus, History } from "lucide-react";
 
@@ -187,7 +189,10 @@ export function WorkspaceGate() {
           onMouseMove={handleTitlebarMouseMove}
           onMouseUp={handleTitlebarMouseUp}
           onMouseLeave={handleTitlebarMouseUp}
-        />
+        >
+          <div className="workspace-gate-titlebar-drag" />
+          {isWindows && <WindowControls />}
+        </div>
         <div className="workspace-gate-content">
           <div className="workspace-gate-visual" aria-hidden>
             <img

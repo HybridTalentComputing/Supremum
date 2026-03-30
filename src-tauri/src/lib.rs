@@ -714,6 +714,29 @@ fn toggle_window_zoom(window: tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn window_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|e| format!("failed to minimize: {e}"))
+}
+
+#[tauri::command]
+fn window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String> {
+    let is_maximized = window
+        .is_maximized()
+        .map_err(|e| format!("failed to query window state: {e}"))?;
+    if is_maximized {
+        window.unmaximize().map_err(|e| format!("failed to restore: {e}"))?;
+    } else {
+        window.maximize().map_err(|e| format!("failed to maximize: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| format!("failed to close: {e}"))
+}
+
 #[derive(Clone, serde::Serialize)]
 struct TerminalOutput {
     terminal_id: String,
@@ -982,6 +1005,9 @@ pub fn run() {
             reveal_in_file_manager,
             list_claude_sessions,
             toggle_window_zoom,
+            window_minimize,
+            window_toggle_maximize,
+            window_close,
             open_external_url,
             git_get_capability,
             git_init_repository,
@@ -1010,6 +1036,11 @@ pub fn run() {
                 use tauri::window::Color;
                 let color = Color(9, 9, 9, 255);
                 let _ = win.set_background_color(Some(color));
+
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = win.set_decorations(false);
+                }
 
                 #[cfg(target_os = "macos")]
                 {

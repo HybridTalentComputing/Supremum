@@ -28,6 +28,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { Fragment, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { WindowControls } from "@/WindowControls";
+import { isWindows } from "@/platform";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -2968,6 +2970,7 @@ export function MainLayout() {
           ) : null}
         </div>
         <div className="app-titlebar-drag-region" />
+        {isWindows && <WindowControls />}
       </div>
 
       <ResizablePanelGroup
