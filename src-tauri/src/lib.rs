@@ -781,12 +781,18 @@ fn create_terminal(
         })
         .map_err(|e| format!("failed to open PTY: {e}"))?;
 
-    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = if cfg!(target_os = "windows") {
+        env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+    } else {
+        env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+    };
     let cwd_path = cwd
         .filter(|d| !d.is_empty())
         .map(std::path::PathBuf::from)
         .or_else(|| env::current_dir().ok())
-        .unwrap_or_else(|| std::path::PathBuf::from("/"));
+        .unwrap_or_else(|| std::path::PathBuf::from(
+            if cfg!(target_os = "windows") { "\\" } else { "/" }
+        ));
 
     let shell_name = std::path::Path::new(&shell)
         .file_name()
@@ -813,7 +819,9 @@ fn create_terminal(
         }
     }
 
-    if matches!(shell_name.as_str(), "zsh" | "bash") {
+    if cfg!(target_os = "windows") {
+        // cmd.exe / powershell don't need these flags
+    } else if matches!(shell_name.as_str(), "zsh" | "bash") {
         cmd.arg("-il");
     } else {
         cmd.arg("-i");
