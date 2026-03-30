@@ -27,16 +27,15 @@ Supremum 是一个围绕真实 coding CLI、真实终端、本地文件和集成
 
 ## 安装包体积对比
 
-基于当前本地构建/下载的 macOS 安装包：
+基于当前本地构建/下载的安装包：
 
-| 应用 | 安装包 | 体积 |
+| 应用 | macOS ARM64 DMG | Windows x64 Setup |
 | --- | --- | --- |
-| **Supremum** | **macOS ARM64 DMG** | **`4.71 MB`** |
-| Cursor | macOS ARM64 DMG | `248.91 MB` |
-| VS Code | macOS Universal DMG | `252.38 MB` |
+| **Supremum** | **`4.71 MB`** | **`3.3 MB`** |
+| Cursor | `248.91 MB` | — |
+| VS Code | `252.38 MB` | — |
 
-**Supremum 当前安装包不到 5 MB。**  
-按这组对比数据看，当前 Supremum 安装包体积大约只有 Cursor 和 VS Code 的 **`1/53`**。
+**Supremum 在两个平台上的安装包均不到 5 MB。**
 
 这里对比的是安装包文件大小，不代表运行时内存占用或解压后的完整应用体积。
 
@@ -136,6 +135,17 @@ bun run build:dmg:all
 
 `src-tauri/target/release-artifacts/<version>/macos`
 
+### 打包 Windows 安装包
+
+```bash
+bun run tauri build
+```
+
+构建产物位于：
+
+- NSIS 安装包：`src-tauri/target/release/bundle/nsis/Supremum_<version>_x64-setup.exe`
+- MSI 安装包：`src-tauri/target/release/bundle/msi/Supremum_<version>_x64_en-US.msi`
+
 ### macOS 安装提醒
 
 **警告**
@@ -158,6 +168,13 @@ xattr -dr com.apple.quarantine ~/Downloads/Supremum_0.0.1_aarch64.dmg
 
 **大多数情况下，只需要执行第 2 步。**
 第 3 步是补充兜底，用在 app 命令仍然无效，或者 DMG 本身先被系统拦截的情况。
+
+### Windows 安装提醒
+
+**警告**
+
+当前 GitHub Release 提供的 Windows 安装包未进行代码签名。
+如果 Windows 运行安装程序时弹出"Windows 已保护你的电脑"的 SmartScreen 提示，点击 **更多信息** → **仍要运行**。
 
 ## 设计哲学
 

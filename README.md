@@ -29,16 +29,15 @@ It keeps the CLI workflow intact, then adds the missing UI layer around it.
 
 ## Installer Size Snapshot
 
-Based on locally built/downloaded macOS installers:
+Based on locally built/downloaded installers:
 
-| App | Package | Size |
+| App | macOS ARM64 DMG | Windows x64 Setup |
 | --- | --- | --- |
-| **Supremum** | **macOS ARM64 DMG** | **`4.71 MB`** |
-| Cursor | macOS ARM64 DMG | `248.91 MB` |
-| VS Code | macOS Universal DMG | `252.38 MB` |
+| **Supremum** | **`4.71 MB`** | **`3.3 MB`** |
+| Cursor | `248.91 MB` | — |
+| VS Code | `252.38 MB` | — |
 
-**Supremum ships in under 5 MB.**  
-That makes the current installer roughly **`53x` smaller** than the Cursor and VS Code installers used for this comparison.
+**Supremum ships in under 5 MB on both platforms.**
 
 This comparison reflects installer file size only, not runtime memory usage or full extracted app size.
 
@@ -138,6 +137,17 @@ Built DMGs are collected under:
 
 `src-tauri/target/release-artifacts/<version>/macos`
 
+### Package Windows Installers
+
+```bash
+bun run tauri build
+```
+
+Built installers are located at:
+
+- NSIS: `src-tauri/target/release/bundle/nsis/Supremum_<version>_x64-setup.exe`
+- MSI: `src-tauri/target/release/bundle/msi/Supremum_<version>_x64_en-US.msi`
+
 ### macOS Install Note
 
 **Warning**
@@ -160,6 +170,13 @@ xattr -dr com.apple.quarantine ~/Downloads/Supremum_0.0.1_aarch64.dmg
 
 **In most cases, step 2 is the only step required.**
 Step 3 is a fallback for cases where the app command alone is not enough, or the DMG itself is blocked.
+
+### Windows Install Note
+
+**Warning**
+
+Current GitHub Release builds are not code-signed.
+If Windows shows a "Windows protected your PC" SmartScreen warning when running the installer, click **More info** → **Run anyway**.
 
 ## Design Philosophy
 
