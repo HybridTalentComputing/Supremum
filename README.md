@@ -6,9 +6,11 @@
 
 🌐 **English** | [**中文**](./README.zh-CN.md)
 
-<sub><strong>Supremum v0.0.1 is out.</strong> Download it from <a href="https://github.com/HybridTalentComputing/Supremum/releases">Releases</a>.</sub>
+<sub><strong>Supremum v0.0.1 is out.</strong> Supports macOS and Windows. Download it from <a href="https://github.com/HybridTalentComputing/Supremum/releases">Releases</a>.</sub>
 
 > <sub><strong>macOS note:</strong> If macOS says `Supremum.app` is damaged or blocks it from opening, see the <a href="#macos-install-note">macOS Install Note</a> section below for instructions.</sub>
+>
+> <sub><strong>Windows note:</strong> If Windows shows a "Windows protected your PC" SmartScreen warning when running the installer, see the <a href="#windows-install-note">Windows Install Note</a> section below for instructions.</sub>
 
 </div>
 
