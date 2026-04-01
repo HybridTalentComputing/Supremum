@@ -7,7 +7,19 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 /* xterm.css 由 index.css 统一导入，确保覆盖样式生效 */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): (...args: Parameters<T>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return (...args) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { timer = null; fn(...args); }, ms);
+  };
+}
+
+const PASTE_CHUNK_SIZE = 16 * 1024; // 16KB
 
 type TerminalOutputPayload = { terminal_id: string; data: string };
 
@@ -242,7 +254,7 @@ export function TerminalComponent({
 
     const xterm = new Terminal({
       cursorBlink: true,
-      fontFamily: '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+      fontFamily: '"MesloLGM Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
       fontSize: 13,
       lineHeight: 1.5,
       theme: {
@@ -269,6 +281,17 @@ export function TerminalComponent({
     // Defer fit + PTY creation to next frame so container has layout
     const rafId = requestAnimationFrame(() => {
       fit();
+
+      // WebGL GPU-accelerated renderer — load after fit() so canvas has correct dimensions
+      try {
+        const webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          webglAddon.dispose();
+        });
+        xterm.loadAddon(webglAddon);
+      } catch {
+        // WebGL unavailable — DOM renderer is already active
+      }
 
       const channel = new Channel<TerminalOutputPayload>();
       channel.onmessage = (msg) => {
@@ -339,10 +362,14 @@ export function TerminalComponent({
       emitTitle(nextTitle);
     });
 
-    const resizeDisposable = xterm.onResize(({ cols, rows }) => {
+    const debouncedBackendResize = debounce((cols: number, rows: number) => {
       invoke("resize_terminal", { terminalId, cols, rows }).catch(() => {
         statusRef.current = "error";
       });
+    }, 150);
+
+    const resizeDisposable = xterm.onResize(({ cols, rows }) => {
+      debouncedBackendResize(cols, rows);
     });
 
     return () => {
@@ -366,7 +393,7 @@ export function TerminalComponent({
   useEffect(() => {
     const el = terminalSurfaceRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => fit());
+    const ro = new ResizeObserver(debounce(() => fit(), 150));
     ro.observe(el);
     return () => ro.disconnect();
   }, [fit]);
@@ -401,7 +428,11 @@ export function TerminalComponent({
     if (!selection) return;
 
     try {
-      await navigator.clipboard.writeText(selection);
+      const trimmed = selection
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .join("\n");
+      await navigator.clipboard.writeText(trimmed);
     } catch (error) {
       console.error(`Failed to copy terminal selection for ${terminalId}:`, error);
     }
@@ -414,7 +445,18 @@ export function TerminalComponent({
         return navigator.clipboard.readText();
       });
       if (!clipboardText) return;
-      await invoke("write_terminal", { terminalId, data: clipboardText });
+
+      if (clipboardText.length <= PASTE_CHUNK_SIZE) {
+        await invoke("write_terminal", { terminalId, data: clipboardText });
+        return;
+      }
+
+      // Chunk large paste to prevent PTY pipe stall
+      for (let i = 0; i < clipboardText.length; i += PASTE_CHUNK_SIZE) {
+        const chunk = clipboardText.slice(i, i + PASTE_CHUNK_SIZE);
+        await invoke("write_terminal", { terminalId, data: chunk });
+        await new Promise((r) => setTimeout(r, 16));
+      }
     } catch (error) {
       console.error(`Failed to paste into terminal ${terminalId}:`, error);
     }
