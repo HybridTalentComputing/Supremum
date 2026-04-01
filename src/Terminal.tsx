@@ -258,10 +258,10 @@ export function TerminalComponent({
       fontSize: 13,
       lineHeight: 1.5,
       theme: {
-        background: "#02070c",
+        background: "#090909",
         foreground: "#ffffff",
         cursor: "#1fd8ff",
-        cursorAccent: "#02070c",
+        cursorAccent: "#090909",
         selectionBackground: "rgba(31, 216, 255, 0.24)",
       },
     });
