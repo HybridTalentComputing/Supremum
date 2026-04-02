@@ -620,6 +620,36 @@ function removeTabFromNativeTerminalPaneTree(
   };
 }
 
+function replaceTabInPaneTree(
+  node: NativeTerminalPaneNode | null,
+  paneId: string,
+  sourceTabId: string,
+  nextTabId: string
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    if (node.id !== paneId || !node.tabIds.includes(sourceTabId)) return node;
+
+    return {
+      ...node,
+      tabIds: node.tabIds.map((tabId) => (tabId === sourceTabId ? nextTabId : tabId)),
+      activeTabId: node.activeTabId === sourceTabId ? nextTabId : node.activeTabId,
+    };
+  }
+
+  const left = replaceTabInPaneTree(node.children[0], paneId, sourceTabId, nextTabId);
+  const right = replaceTabInPaneTree(node.children[1], paneId, sourceTabId, nextTabId);
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left ?? node.children[0], right ?? node.children[1]],
+  };
+}
+
 function splitNativeTerminalPane(
   node: NativeTerminalPaneNode | null,
   paneId: string,
@@ -1044,15 +1074,15 @@ export function MainLayout() {
   const titlebarDragStartRef = useRef<{ x: number; y: number } | null>(null);
   const titlebarDraggingRef = useRef(false);
   const terminalCounterRef = useRef(1);
-  const agentWorkspaceGroupCounterRef = useRef(1);
+  const agentWorkspacePaneCounterRef = useRef(1);
   const nativeTerminalPaneCounterRef = useRef(1);
   const editorWorkspaceGroupCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
-  const [agentWorkspaceGroups, setAgentWorkspaceGroups] = useState<WorkspaceTabGroup[]>([]);
+  const [agentWorkspacePaneTree, setAgentWorkspacePaneTree] = useState<NativeTerminalPaneNode | null>(null);
   const [nativeTerminalPaneTree, setNativeTerminalPaneTree] = useState<NativeTerminalPaneNode | null>(null);
   const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
   const [activeAgentTerminalId, setActiveAgentTerminalId] = useState<string | null>(null);
-  const [activeAgentWorkspaceGroupId, setActiveAgentWorkspaceGroupId] = useState<string | null>(null);
+  const [activeAgentWorkspacePaneId, setActiveAgentWorkspacePaneId] = useState<string | null>(null);
   const [activeNativeTerminalPaneId, setActiveNativeTerminalPaneId] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor" | "diff">("agent");
   const [openTabs, setOpenTabs] = useState<FileEditorTab[]>([]);
@@ -1210,10 +1240,21 @@ export function MainLayout() {
     }
   }, [branchCreateSource, git.capability?.status, workspacePath]);
 
-  const createAgentWorkspaceGroup = useCallback(() => {
-    const nextIndex = agentWorkspaceGroupCounterRef.current;
-    agentWorkspaceGroupCounterRef.current += 1;
-    return createWorkspaceTabGroup(`agent-group-${nextIndex}`);
+  const createAgentWorkspacePaneLeaf = useCallback((tabIds: string[] = [], activeTabId: string | null = null) => {
+    const nextIndex = agentWorkspacePaneCounterRef.current;
+    agentWorkspacePaneCounterRef.current += 1;
+    return {
+      id: `agent-pane-${nextIndex}`,
+      type: "leaf" as const,
+      tabIds,
+      activeTabId,
+    };
+  }, []);
+
+  const createAgentWorkspaceSplitId = useCallback(() => {
+    const nextIndex = agentWorkspacePaneCounterRef.current;
+    agentWorkspacePaneCounterRef.current += 1;
+    return `agent-split-${nextIndex}`;
   }, []);
 
   const createNativeTerminalPaneLeaf = useCallback((tabIds: string[] = [], activeTabId: string | null = null) => {
@@ -1428,12 +1469,12 @@ export function MainLayout() {
       return;
     }
 
-    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, activeAgentTab.id);
-    if (targetGroup) {
-      setAgentWorkspaceGroups((currentGroups) =>
-        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, activeAgentTab.id)
+    const targetPane = findNativeTerminalLeafContainingTab(agentWorkspacePaneTree, activeAgentTab.id);
+    if (targetPane) {
+      setAgentWorkspacePaneTree((currentTree) =>
+        setActiveTabInNativeTerminalPane(currentTree, targetPane.id, activeAgentTab.id)
       );
-      setActiveAgentWorkspaceGroupId(targetGroup.id);
+      setActiveAgentWorkspacePaneId(targetPane.id);
     }
 
     setActiveAgentTerminalId(activeAgentTab.id);
@@ -1449,7 +1490,7 @@ export function MainLayout() {
     } catch (error) {
       console.error("Failed to add Claude context:", error);
     }
-  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+  }, [activeAgentTerminalId, agentWorkspacePaneTree, terminalTabs]);
 
   const handleAddClaudeContext = useCallback(async (path: string, kind: "file" | "folder") => {
     await handleAddClaudeContextBatch([{ path, kind }]);
@@ -1465,12 +1506,12 @@ export function MainLayout() {
       return;
     }
 
-    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, activeAgentTab.id);
-    if (targetGroup) {
-      setAgentWorkspaceGroups((currentGroups) =>
-        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, activeAgentTab.id)
+    const targetPane = findNativeTerminalLeafContainingTab(agentWorkspacePaneTree, activeAgentTab.id);
+    if (targetPane) {
+      setAgentWorkspacePaneTree((currentTree) =>
+        setActiveTabInNativeTerminalPane(currentTree, targetPane.id, activeAgentTab.id)
       );
-      setActiveAgentWorkspaceGroupId(targetGroup.id);
+      setActiveAgentWorkspacePaneId(targetPane.id);
     }
 
     setActiveAgentTerminalId(activeAgentTab.id);
@@ -1484,7 +1525,7 @@ export function MainLayout() {
     } catch (error) {
       console.error("Failed to add Claude selection context:", error);
     }
-  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+  }, [activeAgentTerminalId, agentWorkspacePaneTree, terminalTabs]);
 
   const handleSendTerminalSelectionToClaude = useCallback(async (
     selection: string,
@@ -1502,12 +1543,12 @@ export function MainLayout() {
     const sourceTab = terminalTabs.find((tab) => tab.id === sourceTerminalId) ?? null;
     const sourceLabel = sourceTab?.title?.trim() || sourceTab?.defaultTitle?.trim() || "Terminal";
 
-    const targetGroup = findWorkspaceGroupByTabId(agentWorkspaceGroups, targetClaudeTab.id);
-    if (targetGroup) {
-      setAgentWorkspaceGroups((currentGroups) =>
-        setWorkspaceGroupActiveTab(currentGroups, targetGroup.id, targetClaudeTab.id)
+    const targetPane = findNativeTerminalLeafContainingTab(agentWorkspacePaneTree, targetClaudeTab.id);
+    if (targetPane) {
+      setAgentWorkspacePaneTree((currentTree) =>
+        setActiveTabInNativeTerminalPane(currentTree, targetPane.id, targetClaudeTab.id)
       );
-      setActiveAgentWorkspaceGroupId(targetGroup.id);
+      setActiveAgentWorkspacePaneId(targetPane.id);
     }
 
     setActiveAgentTerminalId(targetClaudeTab.id);
@@ -1521,7 +1562,7 @@ export function MainLayout() {
     } catch (error) {
       console.error("Failed to send terminal selection to Claude:", error);
     }
-  }, [activeAgentTerminalId, agentWorkspaceGroups, terminalTabs]);
+  }, [activeAgentTerminalId, agentWorkspacePaneTree, terminalTabs]);
 
   const setDiffTabDirty = useCallback((tabId: string, dirty: boolean) => {
     setDiffDirtyState((currentState) => {
@@ -1801,26 +1842,33 @@ export function MainLayout() {
       };
 
       setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
-      setAgentWorkspaceGroups((currentGroups) => {
-        const resolvedTargetGroupId =
-          targetGroupId ??
-          activeAgentWorkspaceGroupId ??
-          currentGroups.find((group) => group.tabIds.length === 0)?.id ??
+      setAgentWorkspacePaneTree((currentTree) => {
+        if (!currentTree) {
+          const nextPane = createAgentWorkspacePaneLeaf([id], id);
+          setActiveAgentWorkspacePaneId(nextPane.id);
+          return nextPane;
+        }
+
+        const targetPane =
+          (targetGroupId && findNativeTerminalLeafById(currentTree, targetGroupId)) ??
+          (activeAgentWorkspacePaneId && findNativeTerminalLeafById(currentTree, activeAgentWorkspacePaneId)) ??
+          collectNativeTerminalLeafPanes(currentTree).find((pane) => pane.tabIds.length === 0) ??
+          collectNativeTerminalLeafPanes(currentTree)[0] ??
           null;
-        const fallbackGroup = createAgentWorkspaceGroup();
-        const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
-          currentGroups,
-          resolvedTargetGroupId,
-          id,
-          fallbackGroup
-        );
-        setActiveAgentWorkspaceGroupId(effectiveGroupId);
-        return nextGroups;
+
+        if (!targetPane) {
+          const nextPane = createAgentWorkspacePaneLeaf([id], id);
+          setActiveAgentWorkspacePaneId(nextPane.id);
+          return nextPane;
+        }
+
+        setActiveAgentWorkspacePaneId(targetPane.id);
+        return appendTabToNativeTerminalPane(currentTree, targetPane.id, id);
       });
       setActiveAgentTerminalId(id);
       setActiveWorkspace("agent");
     },
-    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, workspacePath]
+    [activeAgentWorkspacePaneId, createAgentWorkspacePaneLeaf, workspacePath]
   );
 
   const handleCreateAgentTerminalWithCommands = useCallback(
@@ -1852,27 +1900,37 @@ export function MainLayout() {
           ? currentTabs.map((tab) => (tab.id === source.tabId ? nextTab : tab))
           : [...currentTabs, nextTab]
       );
-      setAgentWorkspaceGroups((currentGroups) => {
-        if (shouldReplaceLauncher && source?.groupId && source?.tabId) {
-          const nextGroups = replaceWorkspaceGroupTab(currentGroups, source.groupId, source.tabId, id);
-          setActiveAgentWorkspaceGroupId(source.groupId);
-          return nextGroups;
+      setAgentWorkspacePaneTree((currentTree) => {
+        if (!currentTree) {
+          const nextPane = createAgentWorkspacePaneLeaf([id], id);
+          setActiveAgentWorkspacePaneId(nextPane.id);
+          return nextPane;
         }
 
-        const fallbackGroup = createAgentWorkspaceGroup();
-        const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
-          currentGroups,
-          source?.groupId ?? activeAgentWorkspaceGroupId,
-          id,
-          fallbackGroup
-        );
-        setActiveAgentWorkspaceGroupId(effectiveGroupId);
-        return nextGroups;
+        if (shouldReplaceLauncher && source?.groupId && source?.tabId) {
+          setActiveAgentWorkspacePaneId(source.groupId);
+          return replaceTabInPaneTree(currentTree, source.groupId, source.tabId, id);
+        }
+
+        const targetPane =
+          (source?.groupId && findNativeTerminalLeafById(currentTree, source.groupId)) ??
+          (activeAgentWorkspacePaneId && findNativeTerminalLeafById(currentTree, activeAgentWorkspacePaneId)) ??
+          collectNativeTerminalLeafPanes(currentTree)[0] ??
+          null;
+
+        if (!targetPane) {
+          const nextPane = createAgentWorkspacePaneLeaf([id], id);
+          setActiveAgentWorkspacePaneId(nextPane.id);
+          return nextPane;
+        }
+
+        setActiveAgentWorkspacePaneId(targetPane.id);
+        return appendTabToNativeTerminalPane(currentTree, targetPane.id, id);
       });
       setActiveAgentTerminalId(id);
       setActiveWorkspace("agent");
     },
-    [activeAgentWorkspaceGroupId, createAgentWorkspaceGroup, terminalTabs, workspacePath]
+    [activeAgentWorkspacePaneId, createAgentWorkspacePaneLeaf, terminalTabs, workspacePath]
   );
 
   const handleCreateAgentTerminal = useCallback(
@@ -1908,21 +1966,8 @@ export function MainLayout() {
       return;
     }
 
-    setAgentWorkspaceGroups((currentGroups) => {
-      const nextGroups = removeTabFromWorkspaceGroups(currentGroups, terminalId);
-      const nextActiveGroup =
-        nextGroups.find((group) => group.id === activeAgentWorkspaceGroupId) ??
-        nextGroups[0] ??
-        null;
-
-      setActiveAgentWorkspaceGroupId(nextActiveGroup?.id ?? null);
-      setActiveAgentTerminalId((currentActiveId) =>
-        currentActiveId === terminalId ? nextActiveGroup?.activeTabId ?? null : currentActiveId
-      );
-
-      return nextGroups;
-    });
-  }, [activeAgentWorkspaceGroupId, terminalTabs]);
+    setAgentWorkspacePaneTree((currentTree) => removeTabFromNativeTerminalPaneTree(currentTree, terminalId));
+  }, [terminalTabs]);
 
   const handleTerminalTitleChange = useCallback((terminalId: string, title: string) => {
     setTerminalTabs((currentTabs) =>
@@ -1980,11 +2025,11 @@ export function MainLayout() {
       );
 
       setTerminalTabs([]);
-      setAgentWorkspaceGroups([]);
+      setAgentWorkspacePaneTree(null);
       setNativeTerminalPaneTree(null);
       setActiveNativeTerminalId(null);
       setActiveAgentTerminalId(null);
-      setActiveAgentWorkspaceGroupId(null);
+      setActiveAgentWorkspacePaneId(null);
       setActiveNativeTerminalPaneId(null);
       setOpenTabs([]);
       setEditorWorkspaceGroups([]);
@@ -2012,10 +2057,10 @@ export function MainLayout() {
   }, []);
 
   const handleActivateAgentWorkspaceTab = useCallback((groupId: string, tabId: string) => {
-    setAgentWorkspaceGroups((currentGroups) =>
-      setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
+    setAgentWorkspacePaneTree((currentTree) =>
+      setActiveTabInNativeTerminalPane(currentTree, groupId, tabId)
     );
-    setActiveAgentWorkspaceGroupId(groupId);
+    setActiveAgentWorkspacePaneId(groupId);
     setActiveAgentTerminalId(tabId);
   }, []);
 
@@ -2086,12 +2131,26 @@ export function MainLayout() {
       const start = agentTabDragStartRef.current;
       const dropTarget = agentTabDropTargetRef.current;
       if (start && dropTarget?.groupId === start.groupId && dropTarget.tabId !== start.tabId) {
-        setAgentWorkspaceGroups((currentGroups) =>
-          currentGroups.map((group) => {
-            if (group.id !== start.groupId) return group;
-            const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
-            return nextTabIds === group.tabIds ? group : { ...group, tabIds: nextTabIds };
-          })
+        setAgentWorkspacePaneTree((currentTree) =>
+          currentTree
+            ? ((function reorderInPane(node: NativeTerminalPaneNode): NativeTerminalPaneNode {
+                if (node.type === "leaf") {
+                  if (node.id !== start.groupId) return node;
+                  const nextTabIds = reorderTabIds(node.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
+                  return nextTabIds === node.tabIds ? node : { ...node, tabIds: nextTabIds };
+                }
+
+                const left = reorderInPane(node.children[0]);
+                const right = reorderInPane(node.children[1]);
+                if (left === node.children[0] && right === node.children[1]) {
+                  return node;
+                }
+                return {
+                  ...node,
+                  children: [left, right],
+                };
+              })(currentTree))
+            : currentTree
         );
       }
 
@@ -2412,11 +2471,27 @@ export function MainLayout() {
   }, []);
 
   const handleSplitAgentWorkspaceGroup = useCallback((groupId: string) => {
-    const nextGroup = createAgentWorkspaceGroup();
-    setAgentWorkspaceGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
-    setActiveAgentWorkspaceGroupId(nextGroup.id);
+    const nextPane = createAgentWorkspacePaneLeaf();
+    const splitId = createAgentWorkspaceSplitId();
+    setAgentWorkspacePaneTree((currentTree) =>
+      splitNativeTerminalPane(currentTree, groupId, "horizontal", splitId, nextPane)
+    );
+    setActiveAgentWorkspacePaneId(nextPane.id);
     setActiveAgentTerminalId(null);
-  }, [createAgentWorkspaceGroup]);
+  }, [createAgentWorkspacePaneLeaf, createAgentWorkspaceSplitId]);
+
+  const handleSplitAgentWorkspacePane = useCallback((
+    paneId: string,
+    orientation: WorkspaceSplitOrientation
+  ) => {
+    const nextPane = createAgentWorkspacePaneLeaf();
+    const splitId = createAgentWorkspaceSplitId();
+    setAgentWorkspacePaneTree((currentTree) =>
+      splitNativeTerminalPane(currentTree, paneId, orientation, splitId, nextPane)
+    );
+    setActiveAgentWorkspacePaneId(nextPane.id);
+    setActiveAgentTerminalId(null);
+  }, [createAgentWorkspacePaneLeaf, createAgentWorkspaceSplitId]);
 
   const handleSplitNativeTerminalGroup = useCallback((
     paneId: string,
@@ -2478,23 +2553,8 @@ export function MainLayout() {
   }, [activeTabId, createEditorWorkspaceGroup, editorLayoutMode, editorWorkspaceGroups, openTabs]);
 
   const handleCloseAgentWorkspaceGroup = useCallback((groupId: string) => {
-    setAgentWorkspaceGroups((currentGroups) => {
-      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
-      const resolvedActiveGroupId =
-        activeAgentWorkspaceGroupId === groupId
-          ? nextActiveGroupId
-          : nextGroups.find((group) => group.id === activeAgentWorkspaceGroupId)?.id ??
-            nextActiveGroupId;
-      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
-      setActiveAgentWorkspaceGroupId(resolvedActiveGroupId);
-      setActiveAgentTerminalId((currentActiveId) =>
-        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
-          ? resolvedActiveGroup?.activeTabId ?? null
-          : currentActiveId
-      );
-      return nextGroups;
-    });
-  }, [activeAgentWorkspaceGroupId]);
+    setAgentWorkspacePaneTree((currentTree) => closeNativeTerminalPane(currentTree, groupId));
+  }, []);
 
   const handleCloseNativeTerminalGroup = useCallback((paneId: string) => {
     setNativeTerminalPaneTree((currentTree) => closeNativeTerminalPane(currentTree, paneId));
@@ -2586,19 +2646,6 @@ export function MainLayout() {
   const handleLeaveEditorWorkspace = useCallback(() => {
     setActiveWorkspace(diffTabs.length > 0 ? "diff" : "terminal");
   }, [diffTabs.length]);
-
-  useEffect(() => {
-    if (agentWorkspaceGroups.length === 0) {
-      if (activeAgentWorkspaceGroupId !== null) {
-        setActiveAgentWorkspaceGroupId(null);
-      }
-      return;
-    }
-
-    if (!activeAgentWorkspaceGroupId || !agentWorkspaceGroups.some((group) => group.id === activeAgentWorkspaceGroupId)) {
-      setActiveAgentWorkspaceGroupId(agentWorkspaceGroups[0].id);
-    }
-  }, [activeAgentWorkspaceGroupId, agentWorkspaceGroups]);
 
   useEffect(() => {
     if (editorLayoutMode !== "split") {
@@ -2841,20 +2888,66 @@ export function MainLayout() {
 
   useEffect(() => {
     const agentTabs = terminalTabs.filter((tab) => tab.kind === "agent");
+    const validTabIds = new Set(agentTabs.map((tab) => tab.id));
     if (agentTabs.length === 0) {
       if (activeAgentTerminalId !== null) {
         setActiveAgentTerminalId(null);
       }
+      if (agentWorkspacePaneTree !== null) {
+        setAgentWorkspacePaneTree(null);
+      }
+      if (activeAgentWorkspacePaneId !== null) {
+        setActiveAgentWorkspacePaneId(null);
+      }
       return;
     }
 
-    if (
-      !activeAgentTerminalId ||
-      !agentTabs.some((tab) => tab.id === activeAgentTerminalId)
-    ) {
-      setActiveAgentTerminalId(agentTabs[0].id);
+    setAgentWorkspacePaneTree((currentTree) => {
+      const sanitizedTree = sanitizeNativeTerminalPaneTree(currentTree, validTabIds);
+      if (sanitizedTree) return sanitizedTree;
+
+      return createAgentWorkspacePaneLeaf(
+        agentTabs.map((tab) => tab.id),
+        agentTabs[0]?.id ?? null
+      );
+    });
+
+    const paneForActiveTab =
+      activeAgentTerminalId
+        ? findNativeTerminalLeafContainingTab(agentWorkspacePaneTree, activeAgentTerminalId)
+        : null;
+    const leafPanes = collectNativeTerminalLeafPanes(agentWorkspacePaneTree);
+    const selectedActivePane =
+      activeAgentWorkspacePaneId
+        ? leafPanes.find((pane) => pane.id === activeAgentWorkspacePaneId) ?? null
+        : null;
+    const activePane =
+      selectedActivePane ??
+      paneForActiveTab ??
+      leafPanes.find((pane) => pane.tabIds.length > 0) ??
+      leafPanes[0] ??
+      null;
+
+    if (activePane && activeAgentWorkspacePaneId !== activePane.id) {
+      setActiveAgentWorkspacePaneId(activePane.id);
     }
-  }, [activeAgentTerminalId, terminalTabs]);
+
+    const nextActiveTerminalId =
+      activePane?.activeTabId ??
+      activePane?.tabIds[0] ??
+      agentTabs[0]?.id ??
+      null;
+
+    if (nextActiveTerminalId && activeAgentTerminalId !== nextActiveTerminalId) {
+      setActiveAgentTerminalId(nextActiveTerminalId);
+    }
+  }, [
+    activeAgentTerminalId,
+    activeAgentWorkspacePaneId,
+    agentWorkspacePaneTree,
+    createAgentWorkspacePaneLeaf,
+    terminalTabs,
+  ]);
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? null;
   const activeEditorMode =
@@ -2887,16 +2980,11 @@ export function MainLayout() {
     () => new Map(openTabs.map((tab) => [tab.id, tab])),
     [openTabs]
   );
-  const agentWorkspaceGroupsForRender = useMemo(
-    () =>
-      agentWorkspaceGroups.map((group) => ({
-        ...group,
-        tabs: group.tabIds
-          .map((tabId) => agentTerminalTabsById.get(tabId))
-          .filter((tab): tab is TerminalTab => Boolean(tab)),
-      })),
-    [agentTerminalTabsById, agentWorkspaceGroups]
+  const agentWorkspaceLeafPanes = useMemo(
+    () => collectNativeTerminalLeafPanes(agentWorkspacePaneTree),
+    [agentWorkspacePaneTree]
   );
+  const agentWorkspacePaneCount = agentWorkspaceLeafPanes.length;
   const nativeTerminalLeafPanes = useMemo(
     () => collectNativeTerminalLeafPanes(nativeTerminalPaneTree),
     [nativeTerminalPaneTree]
@@ -3247,6 +3335,290 @@ export function MainLayout() {
           document.body
         )
       : null;
+
+  const renderAgentWorkspacePane = useCallback((paneNode: NativeTerminalPaneNode): ReactNode => {
+    if (paneNode.type === "split") {
+      return (
+        <ResizablePanelGroup orientation={paneNode.orientation} className="workspace-split-layout">
+          {paneNode.children.map((child, childIndex) => (
+            <Fragment key={child.id}>
+              <ResizablePanel
+                defaultSize={50}
+                minSize={paneNode.orientation === "vertical" ? 16 : 20}
+                className="workspace-split-panel"
+              >
+                {renderAgentWorkspacePane(child)}
+              </ResizablePanel>
+              {childIndex < paneNode.children.length - 1 ? (
+                <ResizableHandle withHandle className="workspace-split-handle" />
+              ) : null}
+            </Fragment>
+          ))}
+        </ResizablePanelGroup>
+      );
+    }
+
+    const paneTabs = paneNode.tabIds
+      .map((tabId) => agentTerminalTabsById.get(tabId))
+      .filter((tab): tab is TerminalTab => Boolean(tab));
+    const activePaneTab =
+      paneTabs.find((tab) => tab.id === paneNode.activeTabId) ?? paneTabs[0] ?? null;
+
+    return (
+      <div
+        className="workspace-split-group"
+        data-active={paneNode.id === activeAgentWorkspacePaneId ? "true" : undefined}
+        onMouseDown={() => setActiveAgentWorkspacePaneId(paneNode.id)}
+      >
+        {activePaneTab ? (
+          <Tabs
+            value={activePaneTab.id}
+            onValueChange={(tabId) => {
+              handleActivateAgentWorkspaceTab(paneNode.id, tabId);
+            }}
+            className="terminal-shell terminal-group-shell"
+          >
+            <div className="terminal-tabs-bar">
+              <ScrollArea
+                className="terminal-tabs-scroll min-w-0 flex-1"
+                onWheel={handleTabsWheel}
+              >
+                <TabsList
+                  variant="line"
+                  className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                >
+                  {paneTabs.map((tab) => (
+                    <Tooltip key={tab.id}>
+                      <TooltipTrigger
+                        render={
+                          <TabsTrigger
+                            value={tab.id}
+                            className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                            data-draggable="true"
+                            data-agent-group-id={paneNode.id}
+                            data-agent-tab-id={tab.id}
+                            data-dragging={
+                              draggedAgentTab?.groupId === paneNode.id &&
+                              draggedAgentTab?.tabId === tab.id
+                                ? "true"
+                                : undefined
+                            }
+                            data-drop-target={
+                              agentTabDropTarget?.groupId === paneNode.id &&
+                              agentTabDropTarget?.tabId === tab.id
+                                ? "true"
+                                : undefined
+                            }
+                            data-drop-edge={
+                              agentTabDropTarget?.groupId === paneNode.id &&
+                              agentTabDropTarget?.tabId === tab.id
+                                ? agentTabDropTarget.edge
+                                : undefined
+                            }
+                            onPointerDown={(event) => {
+                              handleAgentTabPointerDown(paneNode.id, tab.id, event);
+                            }}
+                            onClickCapture={handleAgentTabClickCapture}
+                          >
+                            <span className="terminal-tab-label truncate">{tab.title}</span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="terminal-tab-close"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCloseTerminal(tab.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCloseTerminal(tab.id);
+                              }}
+                              aria-label={`Close ${tab.title}`}
+                            >
+                              <X className="size-3.5" />
+                            </span>
+                          </TabsTrigger>
+                        }
+                      />
+                      <TooltipContent>{tab.title}</TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TabsList>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+              <div className="terminal-tabs-actions agent-preset-menu-anchor">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitAgentWorkspacePane(paneNode.id, "horizontal")}
+                  aria-label="Split AI Coding CLI pane left and right"
+                >
+                  <Columns2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitAgentWorkspacePane(paneNode.id, "vertical")}
+                  aria-label="Split AI Coding CLI pane top and bottom"
+                >
+                  <Rows2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleCreateAgentLauncherTab(paneNode.id)}
+                  aria-label="New AI Coding CLI page"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+                {agentWorkspacePaneCount > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="terminal-tab-create"
+                    onClick={() => handleCloseAgentWorkspaceGroup(paneNode.id)}
+                    aria-label="Close AI Coding CLI pane"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="terminal-stage">
+              {paneTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className="terminal-tab-panel"
+                  data-active={tab.id === activePaneTab.id ? "true" : undefined}
+                >
+                  {tab.isLauncher ? (
+                    <AgentPresetLauncher
+                      onSelectPreset={handleCreateAgentTerminal}
+                      workspacePath={workspacePath}
+                      recentClaudeSessions={recentClaudeSessions}
+                      recentClaudeSessionsLoading={recentClaudeSessionsLoading}
+                      recentClaudeSessionsError={recentClaudeSessionsError}
+                      onResumeClaudeSession={handleResumeClaudeSession}
+                      launcherGroupId={paneNode.id}
+                      launcherTabId={tab.id}
+                    />
+                  ) : (
+                    <TerminalComponent
+                      terminalId={tab.id}
+                      cwd={tab.cwd}
+                      active={
+                        activeWorkspace === "agent" &&
+                        paneNode.id === activeAgentWorkspacePaneId &&
+                        tab.id === activePaneTab.id
+                      }
+                      defaultTitle={tab.defaultTitle}
+                      startupCommands={tab.startupCommands}
+                      onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                      canSendSelectionToClaude={canAddClaudeContext}
+                      onSendSelectionToClaude={(selection) =>
+                        handleSendTerminalSelectionToClaude(selection, tab.id)
+                      }
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </Tabs>
+        ) : (
+          <div className="terminal-shell terminal-group-shell">
+            <div className="terminal-tabs-bar">
+              <div className="terminal-tabs-empty-label">Empty split</div>
+              <div className="terminal-tabs-actions agent-preset-menu-anchor">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitAgentWorkspacePane(paneNode.id, "horizontal")}
+                  aria-label="Split AI Coding CLI pane left and right"
+                >
+                  <Columns2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitAgentWorkspacePane(paneNode.id, "vertical")}
+                  aria-label="Split AI Coding CLI pane top and bottom"
+                >
+                  <Rows2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleCreateAgentLauncherTab(paneNode.id)}
+                  aria-label="New AI Coding CLI page"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+                {agentWorkspacePaneCount > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="terminal-tab-create"
+                    onClick={() => handleCloseAgentWorkspaceGroup(paneNode.id)}
+                    aria-label="Close AI Coding CLI pane"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="workspace-group-empty-state">
+              <div className="workspace-group-empty-title">Empty AI Coding CLI pane</div>
+              <div className="workspace-group-empty-description">
+                Create a new AI Coding CLI page in this split.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }, [
+    activeAgentWorkspacePaneId,
+    activeWorkspace,
+    agentTabDropTarget,
+    agentTerminalTabsById,
+    agentWorkspacePaneCount,
+    canAddClaudeContext,
+    draggedAgentTab,
+    handleActivateAgentWorkspaceTab,
+    handleAgentTabClickCapture,
+    handleAgentTabPointerDown,
+    handleCloseAgentWorkspaceGroup,
+    handleCloseTerminal,
+    handleCreateAgentLauncherTab,
+    handleCreateAgentTerminal,
+    handleResumeClaudeSession,
+    handleSendTerminalSelectionToClaude,
+    handleSplitAgentWorkspacePane,
+    handleTabsWheel,
+    handleTerminalTitleChange,
+    recentClaudeSessions,
+    recentClaudeSessionsError,
+    recentClaudeSessionsLoading,
+    workspacePath,
+  ]);
 
   const renderNativeTerminalPane = useCallback((paneNode: NativeTerminalPaneNode): ReactNode => {
     if (paneNode.type === "split") {
@@ -3693,237 +4065,7 @@ export function MainLayout() {
                   data-active={activeWorkspace === "agent" ? "true" : undefined}
                 >
                   {agentTerminalTabs.length > 0 ? (
-                    <ResizablePanelGroup orientation="horizontal" className="workspace-split-layout">
-                      {agentWorkspaceGroupsForRender.map((group, groupIndex) => {
-                        const activeGroupTab =
-                          group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
-                        const groupPanelTabs = agentTerminalTabs.filter((tab) =>
-                          group.tabIds.includes(tab.id)
-                        );
-
-                        return (
-                          <Fragment key={group.id}>
-                            <ResizablePanel
-                              defaultSize={100 / agentWorkspaceGroupsForRender.length}
-                              minSize={20}
-                              className="workspace-split-panel"
-                            >
-                              <div
-                                className="workspace-split-group"
-                                data-active={group.id === activeAgentWorkspaceGroupId ? "true" : undefined}
-                                onMouseDown={() => setActiveAgentWorkspaceGroupId(group.id)}
-                              >
-                                {activeGroupTab ? (
-                                  <Tabs
-                                    value={activeGroupTab.id}
-                                    onValueChange={(tabId) => {
-                                      handleActivateAgentWorkspaceTab(group.id, tabId);
-                                    }}
-                                    className="terminal-shell terminal-group-shell"
-                                  >
-                                    <div className="terminal-tabs-bar">
-                                      <ScrollArea
-                                        className="terminal-tabs-scroll min-w-0 flex-1"
-                                        onWheel={handleTabsWheel}
-                                      >
-                                        <TabsList
-                                          variant="line"
-                                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                                        >
-                                          {group.tabs.map((tab) => (
-                                            <Tooltip key={tab.id}>
-                                              <TooltipTrigger
-                                                render={
-                                                  <TabsTrigger
-                                                    value={tab.id}
-                                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                                    data-draggable="true"
-                                                    data-agent-group-id={group.id}
-                                                    data-agent-tab-id={tab.id}
-                                                    data-dragging={
-                                                      draggedAgentTab?.groupId === group.id &&
-                                                      draggedAgentTab?.tabId === tab.id
-                                                        ? "true"
-                                                        : undefined
-                                                    }
-                                                    data-drop-target={
-                                                      agentTabDropTarget?.groupId === group.id &&
-                                                      agentTabDropTarget?.tabId === tab.id
-                                                        ? "true"
-                                                        : undefined
-                                                    }
-                                                    data-drop-edge={
-                                                      agentTabDropTarget?.groupId === group.id &&
-                                                      agentTabDropTarget?.tabId === tab.id
-                                                        ? agentTabDropTarget.edge
-                                                        : undefined
-                                                    }
-                                                    onPointerDown={(event) => {
-                                                      handleAgentTabPointerDown(group.id, tab.id, event);
-                                                    }}
-                                                    onClickCapture={handleAgentTabClickCapture}
-                                                  >
-                                                    <span className="terminal-tab-label truncate">{tab.title}</span>
-                                                    <span
-                                                      role="button"
-                                                      tabIndex={0}
-                                                      className="terminal-tab-close"
-                                                      onClick={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleCloseTerminal(tab.id);
-                                                      }}
-                                                      onKeyDown={(event) => {
-                                                        if (event.key !== "Enter" && event.key !== " ") return;
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleCloseTerminal(tab.id);
-                                                      }}
-                                                      aria-label={`Close ${tab.title}`}
-                                                    >
-                                                      <X className="size-3.5" />
-                                                    </span>
-                                                  </TabsTrigger>
-                                                }
-                                              />
-                                              <TooltipContent>{tab.title}</TooltipContent>
-                                            </Tooltip>
-                                          ))}
-                                        </TabsList>
-                                        <ScrollBar orientation="horizontal" />
-                                      </ScrollArea>
-                                      <div className="terminal-tabs-actions agent-preset-menu-anchor">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleSplitAgentWorkspaceGroup(group.id)}
-                                          aria-label="Split AI Coding CLI group"
-                                        >
-                                          <Columns2 className="size-3.5" />
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleCreateAgentLauncherTab(group.id)}
-                                          aria-label="New AI Coding CLI page"
-                                        >
-                                          <Plus className="size-3.5" />
-                                        </Button>
-                                        {agentWorkspaceGroupsForRender.length > 1 ? (
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon-xs"
-                                            className="terminal-tab-create"
-                                            onClick={() => handleCloseAgentWorkspaceGroup(group.id)}
-                                            aria-label="Close AI Coding CLI group"
-                                          >
-                                            <X className="size-3.5" />
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
-
-                                    <div className="terminal-stage">
-                                      {groupPanelTabs.map((tab) => (
-                                        <div
-                                          key={tab.id}
-                                          className="terminal-tab-panel"
-                                          data-active={tab.id === activeGroupTab.id ? "true" : undefined}
-                                        >
-                                          {tab.isLauncher ? (
-                                            <AgentPresetLauncher
-                                              onSelectPreset={handleCreateAgentTerminal}
-                                              workspacePath={workspacePath}
-                                              recentClaudeSessions={recentClaudeSessions}
-                                              recentClaudeSessionsLoading={recentClaudeSessionsLoading}
-                                              recentClaudeSessionsError={recentClaudeSessionsError}
-                                              onResumeClaudeSession={handleResumeClaudeSession}
-                                              launcherGroupId={group.id}
-                                              launcherTabId={tab.id}
-                                            />
-                                          ) : (
-                                            <TerminalComponent
-                                              terminalId={tab.id}
-                                              cwd={tab.cwd}
-                                              active={
-                                                activeWorkspace === "agent" &&
-                                                group.id === activeAgentWorkspaceGroupId &&
-                                                tab.id === activeGroupTab.id
-                                              }
-                                              defaultTitle={tab.defaultTitle}
-                                              startupCommands={tab.startupCommands}
-                                              onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                                              canSendSelectionToClaude={canAddClaudeContext}
-                                              onSendSelectionToClaude={(selection) =>
-                                                handleSendTerminalSelectionToClaude(selection, tab.id)
-                                              }
-                                            />
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </Tabs>
-                                ) : (
-                                  <div className="terminal-shell terminal-group-shell">
-                                    <div className="terminal-tabs-bar">
-                                      <div className="terminal-tabs-empty-label">Empty split</div>
-                                      <div className="terminal-tabs-actions agent-preset-menu-anchor">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleSplitAgentWorkspaceGroup(group.id)}
-                                          aria-label="Split AI Coding CLI group"
-                                        >
-                                          <Columns2 className="size-3.5" />
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleCreateAgentLauncherTab(group.id)}
-                                          aria-label="New AI Coding CLI page"
-                                        >
-                                          <Plus className="size-3.5" />
-                                        </Button>
-                                        {agentWorkspaceGroupsForRender.length > 1 ? (
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon-xs"
-                                            className="terminal-tab-create"
-                                            onClick={() => handleCloseAgentWorkspaceGroup(group.id)}
-                                            aria-label="Close AI Coding CLI group"
-                                          >
-                                            <X className="size-3.5" />
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                    <div className="workspace-group-empty-state">
-                                      <div className="workspace-group-empty-title">Empty AI Coding CLI pane</div>
-                                      <div className="workspace-group-empty-description">
-                                        Create a new AI Coding CLI page in this split.
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </ResizablePanel>
-                            {groupIndex < agentWorkspaceGroupsForRender.length - 1 ? (
-                              <ResizableHandle withHandle className="workspace-split-handle" />
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </ResizablePanelGroup>
+                    agentWorkspacePaneTree ? renderAgentWorkspacePane(agentWorkspacePaneTree) : null
                   ) : (
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">
