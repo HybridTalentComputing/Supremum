@@ -20,6 +20,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): (...ar
 }
 
 const PASTE_CHUNK_SIZE = 16 * 1024; // 16KB
+const ENABLE_XTERM_WEBGL = false;
 
 type TerminalOutputPayload = { terminal_id: string; data: string };
 
@@ -228,11 +229,16 @@ export function TerminalComponent({
   const fit = useCallback(() => {
     const fitAddon = fitAddonRef.current;
     const xterm = xtermRef.current;
+    const surface = terminalSurfaceRef.current;
     if (!fitAddon || !xterm) return;
+    if (!surface) return;
+    const rect = surface.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 24) return;
     const dimensions = fitAddon.proposeDimensions();
     if (!dimensions) return;
 
-    const { cols, rows } = dimensions;
+    const cols = Math.max(dimensions.cols, 2);
+    const rows = Math.max(dimensions.rows, 1);
     if (xterm.cols !== cols || xterm.rows !== rows) {
       xterm.resize(cols, rows);
     }
@@ -283,14 +289,16 @@ export function TerminalComponent({
       fit();
 
       // WebGL GPU-accelerated renderer — load after fit() so canvas has correct dimensions
-      try {
-        const webglAddon = new WebglAddon();
-        webglAddon.onContextLoss(() => {
-          webglAddon.dispose();
-        });
-        xterm.loadAddon(webglAddon);
-      } catch {
-        // WebGL unavailable — DOM renderer is already active
+      if (ENABLE_XTERM_WEBGL) {
+        try {
+          const webglAddon = new WebglAddon();
+          webglAddon.onContextLoss(() => {
+            webglAddon.dispose();
+          });
+          xterm.loadAddon(webglAddon);
+        } catch {
+          // WebGL unavailable — DOM renderer is already active
+        }
       }
 
       const channel = new Channel<TerminalOutputPayload>();

@@ -48,6 +48,7 @@ import {
   List,
   PanelLeft,
   Plus,
+  Rows2,
   Sparkles,
   SquareTerminal,
   X,
@@ -99,6 +100,23 @@ type TerminalTab = {
 };
 
 type BranchCreateMode = "none" | "current" | "from";
+type WorkspaceSplitOrientation = "horizontal" | "vertical";
+
+type NativeTerminalPaneLeaf = {
+  id: string;
+  type: "leaf";
+  tabIds: string[];
+  activeTabId: string | null;
+};
+
+type NativeTerminalPaneSplit = {
+  id: string;
+  type: "split";
+  orientation: WorkspaceSplitOrientation;
+  children: [NativeTerminalPaneNode, NativeTerminalPaneNode];
+};
+
+type NativeTerminalPaneNode = NativeTerminalPaneLeaf | NativeTerminalPaneSplit;
 
 type WorkspaceTabGroup = {
   id: string;
@@ -419,6 +437,312 @@ function reorderItemsById<T extends { id: string }>(
     .filter((item): item is T => Boolean(item));
 }
 
+function collectNativeTerminalLeafPanes(node: NativeTerminalPaneNode | null): NativeTerminalPaneLeaf[] {
+  if (!node) return [];
+  if (node.type === "leaf") return [node];
+  return node.children.flatMap((child) => collectNativeTerminalLeafPanes(child));
+}
+
+function countNativeTerminalLeafPanes(node: NativeTerminalPaneNode | null) {
+  return collectNativeTerminalLeafPanes(node).length;
+}
+
+function findNativeTerminalLeafById(
+  node: NativeTerminalPaneNode | null,
+  paneId: string
+): NativeTerminalPaneLeaf | null {
+  if (!node) return null;
+  if (node.type === "leaf") {
+    return node.id === paneId ? node : null;
+  }
+
+  for (const child of node.children) {
+    const match = findNativeTerminalLeafById(child, paneId);
+    if (match) return match;
+  }
+
+  return null;
+}
+
+function findNativeTerminalLeafContainingTab(
+  node: NativeTerminalPaneNode | null,
+  tabId: string
+): NativeTerminalPaneLeaf | null {
+  if (!node) return null;
+  if (node.type === "leaf") {
+    return node.tabIds.includes(tabId) ? node : null;
+  }
+
+  for (const child of node.children) {
+    const match = findNativeTerminalLeafContainingTab(child, tabId);
+    if (match) return match;
+  }
+
+  return null;
+}
+
+function sanitizeNativeTerminalPaneTree(
+  node: NativeTerminalPaneNode | null,
+  validTabIds: Set<string>
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    let changed = false;
+    const tabIds = node.tabIds.filter((tabId) => {
+      const keep = validTabIds.has(tabId);
+      if (!keep) changed = true;
+      return keep;
+    });
+    const activeTabId =
+      node.activeTabId && tabIds.includes(node.activeTabId)
+        ? node.activeTabId
+        : tabIds[tabIds.length - 1] ?? null;
+
+    if (!changed && activeTabId === node.activeTabId) {
+      return node;
+    }
+
+    return {
+      ...node,
+      tabIds,
+      activeTabId,
+    };
+  }
+
+  const left = sanitizeNativeTerminalPaneTree(node.children[0], validTabIds);
+  const right = sanitizeNativeTerminalPaneTree(node.children[1], validTabIds);
+
+  if (!left && !right) return null;
+  if (!left) return right;
+  if (!right) return left;
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left, right],
+  };
+}
+
+function setActiveTabInNativeTerminalPane(
+  node: NativeTerminalPaneNode | null,
+  paneId: string,
+  tabId: string
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    if (node.id !== paneId || !node.tabIds.includes(tabId) || node.activeTabId === tabId) {
+      return node;
+    }
+
+    return {
+      ...node,
+      activeTabId: tabId,
+    };
+  }
+
+  const left = setActiveTabInNativeTerminalPane(node.children[0], paneId, tabId);
+  const right = setActiveTabInNativeTerminalPane(node.children[1], paneId, tabId);
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left ?? node.children[0], right ?? node.children[1]],
+  };
+}
+
+function appendTabToNativeTerminalPane(
+  node: NativeTerminalPaneNode | null,
+  paneId: string,
+  tabId: string
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    if (node.id !== paneId) return node;
+    if (node.tabIds.includes(tabId)) {
+      return node.activeTabId === tabId ? node : { ...node, activeTabId: tabId };
+    }
+
+    return {
+      ...node,
+      tabIds: [...node.tabIds, tabId],
+      activeTabId: tabId,
+    };
+  }
+
+  const left = appendTabToNativeTerminalPane(node.children[0], paneId, tabId);
+  const right = appendTabToNativeTerminalPane(node.children[1], paneId, tabId);
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left ?? node.children[0], right ?? node.children[1]],
+  };
+}
+
+function removeTabFromNativeTerminalPaneTree(
+  node: NativeTerminalPaneNode | null,
+  tabId: string
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    if (!node.tabIds.includes(tabId)) return node;
+
+    const tabIds = node.tabIds.filter((currentTabId) => currentTabId !== tabId);
+    const activeTabId =
+      node.activeTabId === tabId ? tabIds[tabIds.length - 1] ?? null : node.activeTabId;
+
+    return {
+      ...node,
+      tabIds,
+      activeTabId,
+    };
+  }
+
+  const left = removeTabFromNativeTerminalPaneTree(node.children[0], tabId);
+  const right = removeTabFromNativeTerminalPaneTree(node.children[1], tabId);
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left ?? node.children[0], right ?? node.children[1]],
+  };
+}
+
+function splitNativeTerminalPane(
+  node: NativeTerminalPaneNode | null,
+  paneId: string,
+  orientation: WorkspaceSplitOrientation,
+  splitId: string,
+  nextLeaf: NativeTerminalPaneLeaf
+): NativeTerminalPaneNode | null {
+  if (!node) return null;
+
+  if (node.type === "leaf") {
+    if (node.id !== paneId) return node;
+    return {
+      id: splitId,
+      type: "split",
+      orientation,
+      children: [node, nextLeaf],
+    };
+  }
+
+  const left = splitNativeTerminalPane(node.children[0], paneId, orientation, splitId, nextLeaf);
+  const right = splitNativeTerminalPane(node.children[1], paneId, orientation, splitId, nextLeaf);
+  if (left === node.children[0] && right === node.children[1]) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: [left ?? node.children[0], right ?? node.children[1]],
+  };
+}
+
+function collectTabsFromNativeTerminalPane(node: NativeTerminalPaneNode): {
+  tabIds: string[];
+  activeTabId: string | null;
+} {
+  if (node.type === "leaf") {
+    return {
+      tabIds: node.tabIds,
+      activeTabId: node.activeTabId,
+    };
+  }
+
+  const left = collectTabsFromNativeTerminalPane(node.children[0]);
+  const right = collectTabsFromNativeTerminalPane(node.children[1]);
+  return {
+    tabIds: [...left.tabIds, ...right.tabIds],
+    activeTabId: right.activeTabId ?? left.activeTabId,
+  };
+}
+
+function mergeTabsIntoNativeTerminalPane(
+  node: NativeTerminalPaneNode,
+  tabIds: string[],
+  activeTabId: string | null
+): NativeTerminalPaneNode {
+  if (node.type === "leaf") {
+    const mergedTabIds = [...node.tabIds];
+    for (const tabId of tabIds) {
+      if (!mergedTabIds.includes(tabId)) {
+        mergedTabIds.push(tabId);
+      }
+    }
+
+    return {
+      ...node,
+      tabIds: mergedTabIds,
+      activeTabId:
+        activeTabId && mergedTabIds.includes(activeTabId)
+          ? activeTabId
+          : node.activeTabId && mergedTabIds.includes(node.activeTabId)
+            ? node.activeTabId
+            : mergedTabIds[0] ?? null,
+    };
+  }
+
+  return {
+    ...node,
+    children: [
+      mergeTabsIntoNativeTerminalPane(node.children[0], tabIds, activeTabId),
+      node.children[1],
+    ],
+  };
+}
+
+function closeNativeTerminalPane(
+  node: NativeTerminalPaneNode | null,
+  paneId: string
+): NativeTerminalPaneNode | null {
+  if (!node || node.type === "leaf") return node;
+
+  const [left, right] = node.children;
+
+  if (left.type === "leaf" && left.id === paneId) {
+    const removed = collectTabsFromNativeTerminalPane(left);
+    return mergeTabsIntoNativeTerminalPane(right, removed.tabIds, removed.activeTabId);
+  }
+
+  if (right.type === "leaf" && right.id === paneId) {
+    const removed = collectTabsFromNativeTerminalPane(right);
+    return mergeTabsIntoNativeTerminalPane(left, removed.tabIds, removed.activeTabId);
+  }
+
+  const nextLeft = closeNativeTerminalPane(left, paneId);
+  if (nextLeft !== left) {
+    if (!nextLeft) return right;
+    return {
+      ...node,
+      children: [nextLeft, right],
+    };
+  }
+
+  const nextRight = closeNativeTerminalPane(right, paneId);
+  if (nextRight !== right) {
+    if (!nextRight) return left;
+    return {
+      ...node,
+      children: [left, nextRight],
+    };
+  }
+
+  return node;
+}
+
 function EditorFileIcon({ path }: { path: string }) {
   const iconUrl = useFileIconUrl(getTabName(path), false, false);
 
@@ -721,15 +1045,15 @@ export function MainLayout() {
   const titlebarDraggingRef = useRef(false);
   const terminalCounterRef = useRef(1);
   const agentWorkspaceGroupCounterRef = useRef(1);
-  const nativeTerminalGroupCounterRef = useRef(1);
+  const nativeTerminalPaneCounterRef = useRef(1);
   const editorWorkspaceGroupCounterRef = useRef(1);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [agentWorkspaceGroups, setAgentWorkspaceGroups] = useState<WorkspaceTabGroup[]>([]);
-  const [nativeTerminalGroups, setNativeTerminalGroups] = useState<WorkspaceTabGroup[]>([]);
+  const [nativeTerminalPaneTree, setNativeTerminalPaneTree] = useState<NativeTerminalPaneNode | null>(null);
   const [activeNativeTerminalId, setActiveNativeTerminalId] = useState<string | null>(null);
   const [activeAgentTerminalId, setActiveAgentTerminalId] = useState<string | null>(null);
   const [activeAgentWorkspaceGroupId, setActiveAgentWorkspaceGroupId] = useState<string | null>(null);
-  const [activeNativeTerminalGroupId, setActiveNativeTerminalGroupId] = useState<string | null>(null);
+  const [activeNativeTerminalPaneId, setActiveNativeTerminalPaneId] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<"agent" | "terminal" | "editor" | "diff">("agent");
   const [openTabs, setOpenTabs] = useState<FileEditorTab[]>([]);
   const [editorLayoutMode, setEditorLayoutMode] = useState<"single" | "split">("single");
@@ -892,10 +1216,21 @@ export function MainLayout() {
     return createWorkspaceTabGroup(`agent-group-${nextIndex}`);
   }, []);
 
-  const createNativeTerminalGroup = useCallback(() => {
-    const nextIndex = nativeTerminalGroupCounterRef.current;
-    nativeTerminalGroupCounterRef.current += 1;
-    return createWorkspaceTabGroup(`native-terminal-group-${nextIndex}`);
+  const createNativeTerminalPaneLeaf = useCallback((tabIds: string[] = [], activeTabId: string | null = null) => {
+    const nextIndex = nativeTerminalPaneCounterRef.current;
+    nativeTerminalPaneCounterRef.current += 1;
+    return {
+      id: `native-terminal-pane-${nextIndex}`,
+      type: "leaf" as const,
+      tabIds,
+      activeTabId,
+    };
+  }, []);
+
+  const createNativeTerminalSplitId = useCallback(() => {
+    const nextIndex = nativeTerminalPaneCounterRef.current;
+    nativeTerminalPaneCounterRef.current += 1;
+    return `native-terminal-split-${nextIndex}`;
   }, []);
 
   const createEditorWorkspaceGroup = useCallback(() => {
@@ -1410,7 +1745,7 @@ export function MainLayout() {
     })();
   }, [diffDirtyState, diffTabs]);
 
-  const handleCreateTerminal = useCallback((targetGroupId?: string) => {
+  const handleCreateTerminal = useCallback((targetPaneId?: string) => {
     const nextIndex = terminalCounterRef.current;
     terminalCounterRef.current += 1;
     const id = `term-${nextIndex}`;
@@ -1424,25 +1759,32 @@ export function MainLayout() {
     };
 
     setTerminalTabs((currentTabs) => [...currentTabs, nextTab]);
-    setNativeTerminalGroups((currentGroups) => {
-      const resolvedTargetGroupId =
-        targetGroupId ??
-        activeNativeTerminalGroupId ??
-        currentGroups.find((group) => group.tabIds.length === 0)?.id ??
+    setNativeTerminalPaneTree((currentTree) => {
+      if (!currentTree) {
+        const nextPane = createNativeTerminalPaneLeaf([id], id);
+        setActiveNativeTerminalPaneId(nextPane.id);
+        return nextPane;
+      }
+
+      const targetPane =
+        (targetPaneId && findNativeTerminalLeafById(currentTree, targetPaneId)) ??
+        (activeNativeTerminalPaneId && findNativeTerminalLeafById(currentTree, activeNativeTerminalPaneId)) ??
+        collectNativeTerminalLeafPanes(currentTree).find((pane) => pane.tabIds.length === 0) ??
+        collectNativeTerminalLeafPanes(currentTree)[0] ??
         null;
-      const fallbackGroup = createNativeTerminalGroup();
-      const { nextGroups, effectiveGroupId } = appendTabToWorkspaceGroup(
-        currentGroups,
-        resolvedTargetGroupId,
-        id,
-        fallbackGroup
-      );
-      setActiveNativeTerminalGroupId(effectiveGroupId);
-      return nextGroups;
+
+      if (!targetPane) {
+        const nextPane = createNativeTerminalPaneLeaf([id], id);
+        setActiveNativeTerminalPaneId(nextPane.id);
+        return nextPane;
+      }
+
+      setActiveNativeTerminalPaneId(targetPane.id);
+      return appendTabToNativeTerminalPane(currentTree, targetPane.id, id);
     });
     setActiveNativeTerminalId(id);
     setActiveWorkspace("terminal");
-  }, [activeNativeTerminalGroupId, createNativeTerminalGroup, workspacePath]);
+  }, [activeNativeTerminalPaneId, createNativeTerminalPaneLeaf, workspacePath]);
 
   const handleCreateAgentLauncherTab = useCallback(
     (targetGroupId?: string | null) => {
@@ -1562,20 +1904,7 @@ export function MainLayout() {
     setTerminalTabs((currentTabs) => currentTabs.filter((tab) => tab.id !== terminalId));
 
     if (targetTab.kind === "native") {
-      setNativeTerminalGroups((currentGroups) => {
-        const nextGroups = removeTabFromWorkspaceGroups(currentGroups, terminalId);
-        const nextActiveGroup =
-          nextGroups.find((group) => group.id === activeNativeTerminalGroupId) ??
-          nextGroups[0] ??
-          null;
-
-        setActiveNativeTerminalGroupId(nextActiveGroup?.id ?? null);
-        setActiveNativeTerminalId((currentActiveId) =>
-          currentActiveId === terminalId ? nextActiveGroup?.activeTabId ?? null : currentActiveId
-        );
-
-        return nextGroups;
-      });
+      setNativeTerminalPaneTree((currentTree) => removeTabFromNativeTerminalPaneTree(currentTree, terminalId));
       return;
     }
 
@@ -1593,7 +1922,7 @@ export function MainLayout() {
 
       return nextGroups;
     });
-  }, [activeAgentWorkspaceGroupId, activeNativeTerminalGroupId, terminalTabs]);
+  }, [activeAgentWorkspaceGroupId, terminalTabs]);
 
   const handleTerminalTitleChange = useCallback((terminalId: string, title: string) => {
     setTerminalTabs((currentTabs) =>
@@ -1652,11 +1981,11 @@ export function MainLayout() {
 
       setTerminalTabs([]);
       setAgentWorkspaceGroups([]);
-      setNativeTerminalGroups([]);
+      setNativeTerminalPaneTree(null);
       setActiveNativeTerminalId(null);
       setActiveAgentTerminalId(null);
       setActiveAgentWorkspaceGroupId(null);
-      setActiveNativeTerminalGroupId(null);
+      setActiveNativeTerminalPaneId(null);
       setOpenTabs([]);
       setEditorWorkspaceGroups([]);
       setActiveTabId(null);
@@ -1849,12 +2178,26 @@ export function MainLayout() {
       const start = nativeTerminalTabDragStartRef.current;
       const dropTarget = nativeTerminalTabDropTargetRef.current;
       if (start && dropTarget?.groupId === start.groupId && dropTarget.tabId !== start.tabId) {
-        setNativeTerminalGroups((currentGroups) =>
-          currentGroups.map((group) => {
-            if (group.id !== start.groupId) return group;
-            const nextTabIds = reorderTabIds(group.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
-            return nextTabIds === group.tabIds ? group : { ...group, tabIds: nextTabIds };
-          })
+        setNativeTerminalPaneTree((currentTree) =>
+          currentTree
+            ? ((function reorderInPane(node: NativeTerminalPaneNode): NativeTerminalPaneNode {
+                if (node.type === "leaf") {
+                  if (node.id !== start.groupId) return node;
+                  const nextTabIds = reorderTabIds(node.tabIds, start.tabId, dropTarget.tabId, dropTarget.edge);
+                  return nextTabIds === node.tabIds ? node : { ...node, tabIds: nextTabIds };
+                }
+
+                const left = reorderInPane(node.children[0]);
+                const right = reorderInPane(node.children[1]);
+                if (left === node.children[0] && right === node.children[1]) {
+                  return node;
+                }
+                return {
+                  ...node,
+                  children: [left, right],
+                };
+              })(currentTree))
+            : currentTree
         );
       }
 
@@ -1874,11 +2217,11 @@ export function MainLayout() {
     event.stopPropagation();
   }, []);
 
-  const handleActivateNativeTerminalTab = useCallback((groupId: string, tabId: string) => {
-    setNativeTerminalGroups((currentGroups) =>
-      setWorkspaceGroupActiveTab(currentGroups, groupId, tabId)
+  const handleActivateNativeTerminalTab = useCallback((paneId: string, tabId: string) => {
+    setNativeTerminalPaneTree((currentTree) =>
+      setActiveTabInNativeTerminalPane(currentTree, paneId, tabId)
     );
-    setActiveNativeTerminalGroupId(groupId);
+    setActiveNativeTerminalPaneId(paneId);
     setActiveNativeTerminalId(tabId);
   }, []);
 
@@ -2075,12 +2418,18 @@ export function MainLayout() {
     setActiveAgentTerminalId(null);
   }, [createAgentWorkspaceGroup]);
 
-  const handleSplitNativeTerminalGroup = useCallback((groupId: string) => {
-    const nextGroup = createNativeTerminalGroup();
-    setNativeTerminalGroups((currentGroups) => insertWorkspaceGroupAfter(currentGroups, groupId, nextGroup));
-    setActiveNativeTerminalGroupId(nextGroup.id);
+  const handleSplitNativeTerminalGroup = useCallback((
+    paneId: string,
+    orientation: WorkspaceSplitOrientation
+  ) => {
+    const nextPane = createNativeTerminalPaneLeaf();
+    const splitId = createNativeTerminalSplitId();
+    setNativeTerminalPaneTree((currentTree) =>
+      splitNativeTerminalPane(currentTree, paneId, orientation, splitId, nextPane)
+    );
+    setActiveNativeTerminalPaneId(nextPane.id);
     setActiveNativeTerminalId(null);
-  }, [createNativeTerminalGroup]);
+  }, [createNativeTerminalPaneLeaf, createNativeTerminalSplitId]);
 
   const handleSplitEditorWorkspaceGroup = useCallback((groupId?: string) => {
     if (editorLayoutMode === "single") {
@@ -2147,24 +2496,9 @@ export function MainLayout() {
     });
   }, [activeAgentWorkspaceGroupId]);
 
-  const handleCloseNativeTerminalGroup = useCallback((groupId: string) => {
-    setNativeTerminalGroups((currentGroups) => {
-      const { nextGroups, nextActiveGroupId } = closeWorkspaceTabGroup(currentGroups, groupId);
-      const resolvedActiveGroupId =
-        activeNativeTerminalGroupId === groupId
-          ? nextActiveGroupId
-          : nextGroups.find((group) => group.id === activeNativeTerminalGroupId)?.id ??
-            nextActiveGroupId;
-      const resolvedActiveGroup = nextGroups.find((group) => group.id === resolvedActiveGroupId) ?? null;
-      setActiveNativeTerminalGroupId(resolvedActiveGroupId);
-      setActiveNativeTerminalId((currentActiveId) =>
-        currentGroups.some((group) => group.id === groupId && group.tabIds.includes(currentActiveId ?? ""))
-          ? resolvedActiveGroup?.activeTabId ?? null
-          : currentActiveId
-      );
-      return nextGroups;
-    });
-  }, [activeNativeTerminalGroupId]);
+  const handleCloseNativeTerminalGroup = useCallback((paneId: string) => {
+    setNativeTerminalPaneTree((currentTree) => closeNativeTerminalPane(currentTree, paneId));
+  }, []);
 
   const handleCloseEditorWorkspaceGroup = useCallback((groupId: string) => {
     setEditorWorkspaceGroups((currentGroups) => {
@@ -2265,19 +2599,6 @@ export function MainLayout() {
       setActiveAgentWorkspaceGroupId(agentWorkspaceGroups[0].id);
     }
   }, [activeAgentWorkspaceGroupId, agentWorkspaceGroups]);
-
-  useEffect(() => {
-    if (nativeTerminalGroups.length === 0) {
-      if (activeNativeTerminalGroupId !== null) {
-        setActiveNativeTerminalGroupId(null);
-      }
-      return;
-    }
-
-    if (!activeNativeTerminalGroupId || !nativeTerminalGroups.some((group) => group.id === activeNativeTerminalGroupId)) {
-      setActiveNativeTerminalGroupId(nativeTerminalGroups[0].id);
-    }
-  }, [activeNativeTerminalGroupId, nativeTerminalGroups]);
 
   useEffect(() => {
     if (editorLayoutMode !== "split") {
@@ -2454,29 +2775,67 @@ export function MainLayout() {
 
   useEffect(() => {
     const nativeTabs = terminalTabs.filter((tab) => tab.kind === "native");
+    const validTabIds = new Set(nativeTabs.map((tab) => tab.id));
     if (nativeTabs.length === 0) {
       if (activeNativeTerminalId !== null) {
         setActiveNativeTerminalId(null);
       }
-      if (nativeTerminalGroups.length > 0) {
-        setNativeTerminalGroups([]);
+      if (nativeTerminalPaneTree !== null) {
+        setNativeTerminalPaneTree(null);
       }
-      if (activeNativeTerminalGroupId !== null) {
-        setActiveNativeTerminalGroupId(null);
+      if (activeNativeTerminalPaneId !== null) {
+        setActiveNativeTerminalPaneId(null);
       }
       return;
     }
 
+    setNativeTerminalPaneTree((currentTree) => {
+      const sanitizedTree = sanitizeNativeTerminalPaneTree(currentTree, validTabIds);
+      if (sanitizedTree) return sanitizedTree;
+
+      return createNativeTerminalPaneLeaf(
+        nativeTabs.map((tab) => tab.id),
+        nativeTabs[0]?.id ?? null
+      );
+    });
+
+    const paneForActiveTab =
+      activeNativeTerminalId
+        ? findNativeTerminalLeafContainingTab(nativeTerminalPaneTree, activeNativeTerminalId)
+        : null;
+    const leafPanes = collectNativeTerminalLeafPanes(nativeTerminalPaneTree);
+    const selectedActivePane =
+      activeNativeTerminalPaneId
+        ? leafPanes.find((pane) => pane.id === activeNativeTerminalPaneId) ?? null
+        : null;
+    const activePane =
+      selectedActivePane ??
+      paneForActiveTab ??
+      leafPanes.find((pane) => pane.tabIds.length > 0) ??
+      leafPanes[0] ??
+      null;
+
+    if (activePane && activeNativeTerminalPaneId !== activePane.id) {
+      setActiveNativeTerminalPaneId(activePane.id);
+    }
+
+    const nextActiveTerminalId =
+      activePane?.activeTabId ??
+      activePane?.tabIds[0] ??
+      nativeTabs[0]?.id ??
+      null;
+
     if (
-      !activeNativeTerminalId ||
-      !nativeTabs.some((tab) => tab.id === activeNativeTerminalId)
+      nextActiveTerminalId &&
+      activeNativeTerminalId !== nextActiveTerminalId
     ) {
-      setActiveNativeTerminalId(nativeTabs[0].id);
+      setActiveNativeTerminalId(nextActiveTerminalId);
     }
   }, [
-    activeNativeTerminalGroupId,
     activeNativeTerminalId,
-    nativeTerminalGroups.length,
+    activeNativeTerminalPaneId,
+    createNativeTerminalPaneLeaf,
+    nativeTerminalPaneTree,
     terminalTabs,
   ]);
 
@@ -2538,16 +2897,11 @@ export function MainLayout() {
       })),
     [agentTerminalTabsById, agentWorkspaceGroups]
   );
-  const nativeTerminalGroupsForRender = useMemo(
-    () =>
-      nativeTerminalGroups.map((group) => ({
-        ...group,
-        tabs: group.tabIds
-          .map((tabId) => nativeTerminalTabsById.get(tabId))
-          .filter((tab): tab is TerminalTab => Boolean(tab)),
-      })),
-    [nativeTerminalGroups, nativeTerminalTabsById]
+  const nativeTerminalLeafPanes = useMemo(
+    () => collectNativeTerminalLeafPanes(nativeTerminalPaneTree),
+    [nativeTerminalPaneTree]
   );
+  const nativeTerminalPaneCount = nativeTerminalLeafPanes.length;
   const editorWorkspaceGroupsForRender = useMemo(
     () =>
       editorWorkspaceGroups.map((group) => ({
@@ -2893,6 +3247,277 @@ export function MainLayout() {
           document.body
         )
       : null;
+
+  const renderNativeTerminalPane = useCallback((paneNode: NativeTerminalPaneNode): ReactNode => {
+    if (paneNode.type === "split") {
+      return (
+        <ResizablePanelGroup orientation={paneNode.orientation} className="workspace-split-layout">
+          {paneNode.children.map((child, childIndex) => (
+            <Fragment key={child.id}>
+              <ResizablePanel
+                defaultSize={50}
+                minSize={paneNode.orientation === "vertical" ? 16 : 20}
+                className="workspace-split-panel"
+              >
+                {renderNativeTerminalPane(child)}
+              </ResizablePanel>
+              {childIndex < paneNode.children.length - 1 ? (
+                <ResizableHandle withHandle className="workspace-split-handle" />
+              ) : null}
+            </Fragment>
+          ))}
+        </ResizablePanelGroup>
+      );
+    }
+
+    const paneTabs = paneNode.tabIds
+      .map((tabId) => nativeTerminalTabsById.get(tabId))
+      .filter((tab): tab is TerminalTab => Boolean(tab));
+    const activePaneTab =
+      paneTabs.find((tab) => tab.id === paneNode.activeTabId) ?? paneTabs[0] ?? null;
+
+    return (
+      <div
+        className="workspace-split-group"
+        data-active={paneNode.id === activeNativeTerminalPaneId ? "true" : undefined}
+        onMouseDown={() => setActiveNativeTerminalPaneId(paneNode.id)}
+      >
+        {activePaneTab ? (
+          <Tabs
+            value={activePaneTab.id}
+            onValueChange={(tabId) => {
+              handleActivateNativeTerminalTab(paneNode.id, tabId);
+            }}
+            className="terminal-shell terminal-group-shell"
+          >
+            <div className="terminal-tabs-bar">
+              <ScrollArea
+                className="terminal-tabs-scroll min-w-0 flex-1"
+                onWheel={handleTabsWheel}
+              >
+                <TabsList
+                  variant="line"
+                  className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
+                >
+                  {paneTabs.map((tab) => (
+                    <Tooltip key={tab.id}>
+                      <TooltipTrigger
+                        render={
+                          <TabsTrigger
+                            value={tab.id}
+                            className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
+                            data-draggable="true"
+                            data-native-terminal-group-id={paneNode.id}
+                            data-native-terminal-tab-id={tab.id}
+                            data-dragging={
+                              draggedNativeTerminalTab?.groupId === paneNode.id &&
+                              draggedNativeTerminalTab?.tabId === tab.id
+                                ? "true"
+                                : undefined
+                            }
+                            data-drop-target={
+                              nativeTerminalTabDropTarget?.groupId === paneNode.id &&
+                              nativeTerminalTabDropTarget?.tabId === tab.id
+                                ? "true"
+                                : undefined
+                            }
+                            data-drop-edge={
+                              nativeTerminalTabDropTarget?.groupId === paneNode.id &&
+                              nativeTerminalTabDropTarget?.tabId === tab.id
+                                ? nativeTerminalTabDropTarget.edge
+                                : undefined
+                            }
+                            onPointerDown={(event) => {
+                              handleNativeTerminalTabPointerDown(paneNode.id, tab.id, event);
+                            }}
+                            onClickCapture={handleNativeTerminalTabClickCapture}
+                          >
+                            <SquareTerminal className="size-3.5" />
+                            <span className="terminal-tab-label truncate">{tab.title}</span>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="terminal-tab-close"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCloseTerminal(tab.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCloseTerminal(tab.id);
+                              }}
+                              aria-label={`Close ${tab.title}`}
+                            >
+                              <X className="size-3.5" />
+                            </span>
+                          </TabsTrigger>
+                        }
+                      />
+                      <TooltipContent>{tab.title}</TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TabsList>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+              <div className="terminal-tabs-actions">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitNativeTerminalGroup(paneNode.id, "horizontal")}
+                  aria-label="Split terminal pane left and right"
+                >
+                  <Columns2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitNativeTerminalGroup(paneNode.id, "vertical")}
+                  aria-label="Split terminal pane top and bottom"
+                >
+                  <Rows2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => {
+                    setActiveNativeTerminalPaneId(paneNode.id);
+                    handleCreateTerminal(paneNode.id);
+                  }}
+                  aria-label="New terminal"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+                {nativeTerminalPaneCount > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="terminal-tab-create"
+                    onClick={() => handleCloseNativeTerminalGroup(paneNode.id)}
+                    aria-label="Close terminal pane"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="terminal-stage">
+              {paneTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className="terminal-tab-panel"
+                  data-active={tab.id === activePaneTab.id ? "true" : undefined}
+                >
+                  <TerminalComponent
+                    terminalId={tab.id}
+                    cwd={tab.cwd}
+                    active={
+                      activeWorkspace === "terminal" &&
+                      paneNode.id === activeNativeTerminalPaneId &&
+                      tab.id === activePaneTab.id
+                    }
+                    defaultTitle={tab.defaultTitle}
+                    onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
+                    canSendSelectionToClaude={canAddClaudeContext}
+                    onSendSelectionToClaude={(selection) =>
+                      handleSendTerminalSelectionToClaude(selection, tab.id)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </Tabs>
+        ) : (
+          <div className="terminal-shell terminal-group-shell">
+            <div className="terminal-tabs-bar">
+              <div className="terminal-tabs-empty-label">Empty split</div>
+              <div className="terminal-tabs-actions">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitNativeTerminalGroup(paneNode.id, "horizontal")}
+                  aria-label="Split terminal pane left and right"
+                >
+                  <Columns2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => handleSplitNativeTerminalGroup(paneNode.id, "vertical")}
+                  aria-label="Split terminal pane top and bottom"
+                >
+                  <Rows2 className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="terminal-tab-create"
+                  onClick={() => {
+                    setActiveNativeTerminalPaneId(paneNode.id);
+                    handleCreateTerminal(paneNode.id);
+                  }}
+                  aria-label="New terminal"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+                {nativeTerminalPaneCount > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="terminal-tab-create"
+                    onClick={() => handleCloseNativeTerminalGroup(paneNode.id)}
+                    aria-label="Close terminal pane"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="workspace-group-empty-state">
+              <div className="workspace-group-empty-title">Empty terminal pane</div>
+              <div className="workspace-group-empty-description">
+                Create a terminal in this split.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }, [
+    activeNativeTerminalPaneId,
+    activeWorkspace,
+    canAddClaudeContext,
+    handleActivateNativeTerminalTab,
+    handleCloseNativeTerminalGroup,
+    handleCloseTerminal,
+    handleCreateTerminal,
+    handleNativeTerminalTabClickCapture,
+    handleNativeTerminalTabPointerDown,
+    handleSendTerminalSelectionToClaude,
+    handleSplitNativeTerminalGroup,
+    handleTabsWheel,
+    handleTerminalTitleChange,
+    nativeTerminalPaneCount,
+    nativeTerminalTabDropTarget,
+    draggedNativeTerminalTab,
+    nativeTerminalTabsById,
+  ]);
 
   return (
     <div className="main-layout-shell">
@@ -3335,230 +3960,7 @@ export function MainLayout() {
                   data-active={activeWorkspace === "terminal" ? "true" : undefined}
                 >
                   {nativeTerminalTabs.length > 0 ? (
-                    <ResizablePanelGroup orientation="horizontal" className="workspace-split-layout">
-                      {nativeTerminalGroupsForRender.map((group, groupIndex) => {
-                        const activeGroupTab =
-                          group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
-                        const groupPanelTabs = nativeTerminalTabs.filter((tab) =>
-                          group.tabIds.includes(tab.id)
-                        );
-
-                        return (
-                          <Fragment key={group.id}>
-                            <ResizablePanel
-                              defaultSize={100 / nativeTerminalGroupsForRender.length}
-                              minSize={20}
-                              className="workspace-split-panel"
-                            >
-                              <div
-                                className="workspace-split-group"
-                                data-active={group.id === activeNativeTerminalGroupId ? "true" : undefined}
-                                onMouseDown={() => setActiveNativeTerminalGroupId(group.id)}
-                              >
-                                {activeGroupTab ? (
-                                  <Tabs
-                                    value={activeGroupTab.id}
-                                    onValueChange={(tabId) => {
-                                      handleActivateNativeTerminalTab(group.id, tabId);
-                                    }}
-                                    className="terminal-shell terminal-group-shell"
-                                  >
-                                    <div className="terminal-tabs-bar">
-                                      <ScrollArea
-                                        className="terminal-tabs-scroll min-w-0 flex-1"
-                                        onWheel={handleTabsWheel}
-                                      >
-                                        <TabsList
-                                          variant="line"
-                                          className="terminal-tabs-list min-w-max rounded-none border-0 bg-transparent p-0"
-                                        >
-                                          {group.tabs.map((tab) => (
-                                            <Tooltip key={tab.id}>
-                                              <TooltipTrigger
-                                                render={
-                                                  <TabsTrigger
-                                                    value={tab.id}
-                                                    className="terminal-tab group !flex-none justify-start gap-1.5 rounded-none border-0 px-2.5 py-0.5 after:hidden"
-                                                    data-draggable="true"
-                                                    data-native-terminal-group-id={group.id}
-                                                    data-native-terminal-tab-id={tab.id}
-                                                    data-dragging={
-                                                      draggedNativeTerminalTab?.groupId === group.id &&
-                                                      draggedNativeTerminalTab?.tabId === tab.id
-                                                        ? "true"
-                                                        : undefined
-                                                    }
-                                                    data-drop-target={
-                                                      nativeTerminalTabDropTarget?.groupId === group.id &&
-                                                      nativeTerminalTabDropTarget?.tabId === tab.id
-                                                        ? "true"
-                                                        : undefined
-                                                    }
-                                                    data-drop-edge={
-                                                      nativeTerminalTabDropTarget?.groupId === group.id &&
-                                                      nativeTerminalTabDropTarget?.tabId === tab.id
-                                                        ? nativeTerminalTabDropTarget.edge
-                                                        : undefined
-                                                    }
-                                                    onPointerDown={(event) => {
-                                                      handleNativeTerminalTabPointerDown(group.id, tab.id, event);
-                                                    }}
-                                                    onClickCapture={handleNativeTerminalTabClickCapture}
-                                                  >
-                                                    <SquareTerminal className="size-3.5" />
-                                                    <span className="terminal-tab-label truncate">{tab.title}</span>
-                                                    <span
-                                                      role="button"
-                                                      tabIndex={0}
-                                                      className="terminal-tab-close"
-                                                      onClick={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleCloseTerminal(tab.id);
-                                                      }}
-                                                      onKeyDown={(event) => {
-                                                        if (event.key !== "Enter" && event.key !== " ") return;
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleCloseTerminal(tab.id);
-                                                      }}
-                                                      aria-label={`Close ${tab.title}`}
-                                                    >
-                                                      <X className="size-3.5" />
-                                                    </span>
-                                                  </TabsTrigger>
-                                                }
-                                              />
-                                              <TooltipContent>{tab.title}</TooltipContent>
-                                            </Tooltip>
-                                          ))}
-                                        </TabsList>
-                                        <ScrollBar orientation="horizontal" />
-                                      </ScrollArea>
-                                      <div className="terminal-tabs-actions">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleSplitNativeTerminalGroup(group.id)}
-                                          aria-label="Split terminal group"
-                                        >
-                                          <Columns2 className="size-3.5" />
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => {
-                                            setActiveNativeTerminalGroupId(group.id);
-                                            handleCreateTerminal(group.id);
-                                          }}
-                                          aria-label="New terminal"
-                                        >
-                                          <Plus className="size-3.5" />
-                                        </Button>
-                                        {nativeTerminalGroupsForRender.length > 1 ? (
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon-xs"
-                                            className="terminal-tab-create"
-                                            onClick={() => handleCloseNativeTerminalGroup(group.id)}
-                                            aria-label="Close terminal group"
-                                          >
-                                            <X className="size-3.5" />
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
-
-                                    <div className="terminal-stage">
-                                      {groupPanelTabs.map((tab) => (
-                                        <div
-                                          key={tab.id}
-                                          className="terminal-tab-panel"
-                                          data-active={tab.id === activeGroupTab.id ? "true" : undefined}
-                                        >
-                                          <TerminalComponent
-                                            terminalId={tab.id}
-                                            cwd={tab.cwd}
-                                            active={
-                                              activeWorkspace === "terminal" &&
-                                              group.id === activeNativeTerminalGroupId &&
-                                              tab.id === activeGroupTab.id
-                                            }
-                                            defaultTitle={tab.defaultTitle}
-                                            onTitleChange={(title) => handleTerminalTitleChange(tab.id, title)}
-                                            canSendSelectionToClaude={canAddClaudeContext}
-                                            onSendSelectionToClaude={(selection) =>
-                                              handleSendTerminalSelectionToClaude(selection, tab.id)
-                                            }
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </Tabs>
-                                ) : (
-                                  <div className="terminal-shell terminal-group-shell">
-                                    <div className="terminal-tabs-bar">
-                                      <div className="terminal-tabs-empty-label">Empty split</div>
-                                      <div className="terminal-tabs-actions">
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => handleSplitNativeTerminalGroup(group.id)}
-                                          aria-label="Split terminal group"
-                                        >
-                                          <Columns2 className="size-3.5" />
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          className="terminal-tab-create"
-                                          onClick={() => {
-                                            setActiveNativeTerminalGroupId(group.id);
-                                            handleCreateTerminal(group.id);
-                                          }}
-                                          aria-label="New terminal"
-                                        >
-                                          <Plus className="size-3.5" />
-                                        </Button>
-                                        {nativeTerminalGroupsForRender.length > 1 ? (
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon-xs"
-                                            className="terminal-tab-create"
-                                            onClick={() => handleCloseNativeTerminalGroup(group.id)}
-                                            aria-label="Close terminal group"
-                                          >
-                                            <X className="size-3.5" />
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                    <div className="workspace-group-empty-state">
-                                      <div className="workspace-group-empty-title">Empty terminal pane</div>
-                                      <div className="workspace-group-empty-description">
-                                        Create a terminal in this split.
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </ResizablePanel>
-                            {groupIndex < nativeTerminalGroupsForRender.length - 1 ? (
-                              <ResizableHandle withHandle className="workspace-split-handle" />
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </ResizablePanelGroup>
+                    nativeTerminalPaneTree ? renderNativeTerminalPane(nativeTerminalPaneTree) : null
                   ) : (
                     <div className="terminal-shell terminal-shell-empty">
                       <div className="terminal-tabs-bar terminal-tabs-bar-empty">

@@ -852,6 +852,10 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.workspace-split-layout[aria-orientation="vertical"] .workspace-split-handle {
+  min-height: 1px;
+}
+
 .workspace-group-empty-state {
   display: flex;
   flex: 1;
@@ -1525,6 +1529,11 @@ body.diff-tab-dragging * {
   color: rgba(255, 255, 255, 0.48);
   width: 1.5rem;
   height: 1.5rem;
+}
+
+.terminal-tab-create[data-active] {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .agent-preset-menu {
