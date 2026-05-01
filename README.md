@@ -2,7 +2,7 @@
 
 <img width="full" alt="Supremum" src="docs/images/workspace-overview-ai-editor-terminal.png" />
 
-### Simple, lightweight, but powerful AI code editor for the AI era.
+### A better AI Terminal for Vibe Coding.
 
 🌐 **English** | [**中文**](./README.zh-CN.md)
 
